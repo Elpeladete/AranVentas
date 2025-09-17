@@ -1,54 +1,65 @@
 /**
- * Genera un número de orden de servicio basado en timestamp
- * Formato: Últimos 7 dígitos del timestamp + sufijo aleatorio si es necesario
- * Garantiza un mínimo de 7 cifras
+ * Genera un número de orden de servicio basado en fecha actual + números aleatorios
+ * Formato: YYYYMMDD-XXXX (ej: 20250917-9516)
+ * YYYY = año, MM = mes, DD = día, XXXX = 4 números aleatorios
  */
 export function generateOrderNumber(): string {
-  const timestamp = Date.now()
+  const now = new Date()
   
-  // Convertir timestamp a string y tomar los últimos 7 dígitos
-  const timestampStr = timestamp.toString()
-  const baseNumber = timestampStr.slice(-7)
+  // Obtener componentes de fecha
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0') // getMonth() es 0-indexado
+  const day = String(now.getDate()).padStart(2, '0')
   
-  // Si el número tiene menos de 7 dígitos (muy improbable), rellenar con ceros
-  const orderNumber = baseNumber.padStart(7, '0')
+  // Generar 4 números aleatorios
+  const randomNumbers = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+  
+  // Formato: YYYYMMDD-XXXX
+  const orderNumber = `${year}${month}${day}-${randomNumbers}`
   
   return orderNumber
 }
 
 /**
  * Valida si un número de orden tiene el formato correcto
+ * Formato esperado: YYYYMMDD-XXXX (ej: 20250917-9516)
  */
 export function isValidOrderNumber(orderNumber: string): boolean {
-  // Debe ser exactamente 7 dígitos
-  return /^\d{7}$/.test(orderNumber)
+  // Debe tener formato YYYYMMDD-XXXX
+  return /^\d{8}-\d{4}$/.test(orderNumber)
 }
 
 /**
- * Genera un número de orden único basado en timestamp actual
- * Si ya existe, añade un sufijo incremental
+ * Genera un número de orden único basado en fecha actual + números aleatorios
+ * Si ya existe, genera nuevos números aleatorios
  */
 export function generateUniqueOrderNumber(existingNumbers: string[] = []): string {
-  let baseNumber = generateOrderNumber()
+  let orderNumber = generateOrderNumber()
   
-  // Si el número base ya existe, generar uno nuevo con pequeña variación
-  if (existingNumbers.includes(baseNumber)) {
-    // Añadir algunos milisegundos y regenerar
-    const newTimestamp = Date.now() + Math.floor(Math.random() * 1000)
-    baseNumber = newTimestamp.toString().slice(-7).padStart(7, '0')
+  // Si el número ya existe, regenerar solo la parte aleatoria
+  let attempts = 0
+  while (existingNumbers.includes(orderNumber) && attempts < 100) {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const randomNumbers = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+    orderNumber = `${year}${month}${day}-${randomNumbers}`
+    attempts++
   }
   
-  return baseNumber
+  return orderNumber
 }
 
 /**
  * Formatea un número de orden para mostrar
+ * El formato ya viene como YYYYMMDD-XXXX, no necesita formateo adicional
  */
 export function formatOrderNumber(orderNumber: string): string {
-  if (!orderNumber || orderNumber.length !== 7) {
+  if (!orderNumber || !isValidOrderNumber(orderNumber)) {
     return orderNumber
   }
   
-  // Formato: XXX-XXXX (opcional, por ahora devolver sin formato)
+  // El formato ya es correcto: YYYYMMDD-XXXX
   return orderNumber
 }

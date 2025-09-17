@@ -89,6 +89,59 @@ const defaultFormData: FormData = {
 // Campos críticos que requieren validación en tiempo real
 const criticalFields: (keyof FormData)[] = ["numeroOrden", "cuit", "fecha", "telefono", "razonSocial", "contacto"]
 
+// Campos recomendados para una orden completa
+const recommendedFields: (keyof FormData)[] = [
+  "numeroOrden", "fecha", "razonSocial", "cuit", "contacto", "telefono",
+  "maquina", "equipo", "descripcion", "localidad", "provincia", 
+  "tecnicoNombre", "clienteNombre"
+]
+
+// Analizar el progreso del formulario
+export function analyzeFormProgress(formData: FormData) {
+  const allFields = Object.keys(formData) as (keyof FormData)[]
+  
+  // Campos completados
+  const completedFields = allFields.filter(field => {
+    const value = formData[field]
+    return typeof value === 'boolean' ? value : (value && value.toString().trim() !== '')
+  })
+  
+  // Campos críticos faltantes
+  const criticalMissing = criticalFields.filter(field => {
+    const value = formData[field]
+    return typeof value === 'boolean' ? !value : (!value || value.toString().trim() === '')
+  })
+  
+  // Campos recomendados faltantes
+  const recommendedMissing = recommendedFields.filter(field => {
+    const value = formData[field]
+    return typeof value === 'boolean' ? !value : (!value || value.toString().trim() === '')
+  })
+  
+  // Todos los campos faltantes
+  const allMissing = allFields.filter(field => {
+    const value = formData[field]
+    return typeof value === 'boolean' ? !value : (!value || value.toString().trim() === '')
+  })
+  
+  // Calcular progreso basado en campos recomendados
+  const progress = Math.round(
+    ((recommendedFields.length - recommendedMissing.length) / recommendedFields.length) * 100
+  )
+  
+  return {
+    progress,
+    totalFields: allFields.length,
+    completedFields: completedFields.length,
+    criticalMissing,
+    recommendedMissing,
+    allMissing,
+    isComplete: allMissing.length === 0,
+    isRecommendedComplete: recommendedMissing.length === 0,
+    hasCriticalMissing: criticalMissing.length > 0
+  }
+}
+
 export function useFormData() {
   const [formData, setFormData] = useState<FormData>(defaultFormData)
   const [isLoading, setIsLoading] = useState(true)
@@ -219,6 +272,10 @@ export function useFormData() {
     sonnerToast.success(`Nuevo número de orden generado: ${newOrderNumber}`)
   }
 
+  const getDetailedProgress = () => {
+    return analyzeFormProgress(formData)
+  }
+
   return {
     formData,
     updateField,
@@ -230,6 +287,7 @@ export function useFormData() {
     getFieldError,
     hasErrors,
     getFormProgress,
+    getDetailedProgress,
     lastSaveTime,
     regenerateOrderNumber,
   }

@@ -14,6 +14,9 @@ import { useFormData, type FormData } from "@/hooks/use-form-data"
 import { FormActions } from "@/components/form-actions"
 import { toast } from "@/lib/toast"
 import { generateOrderNumber } from "@/lib/order-number"
+import { FormProgressModal } from "@/components/form-progress-modal"
+import { submitFormToGoogle, generatePrefilledUrl, validateFormDataForSubmission } from "@/lib/google-forms"
+import { SignatureCanvas } from "@/components/signature-canvas"
 
 interface ClickableArea {
   id: keyof FormData
@@ -22,7 +25,7 @@ interface ClickableArea {
   width: number
   height: number
   label: string
-  type: "text" | "checkbox" | "textarea"
+  type: "text" | "checkbox" | "textarea" | "signature"
 }
 
 export function ServiceOrderForm() {
@@ -37,6 +40,7 @@ export function ServiceOrderForm() {
     getFieldError,
     hasErrors,
     getFormProgress,
+    getDetailedProgress,
     lastSaveTime,
     regenerateOrderNumber
   } = useFormData()
@@ -44,14 +48,14 @@ export function ServiceOrderForm() {
   const [overlayPosition, setOverlayPosition] = useState({ x: 0, y: 0 })
   const [tempValue, setTempValue] = useState<string | boolean>("")
   const [originalValue, setOriginalValue] = useState<string | boolean>("")
+  const [showProgressModal, setShowProgressModal] = useState(false)
   const imageRef = useRef<HTMLDivElement>(null)
 
-  // Define clickable areas based on the form image layout
+  // Define clickable areas based on the form image layout (campos editables)
   const clickableAreas: ClickableArea[] = [
-    { id: "numeroOrden", x: 610, y: 70, width: 80, height: 30, label: "Número de Orden", type: "text" },
     { id: "fecha", x: 650, y: 127, width: 100, height: 30, label: "Fecha", type: "text" },
-    { id: "razonSocial", x: 185, y: 190, width: 220, height: 22, label: "Razón Social", type: "text" },
-    { id: "cuit", x: 540, y: 190, width: 220, height: 22, label: "CUIT", type: "text" },
+    { id: "razonSocial", x: 185, y: 190, width: 220, height: 21, label: "Razón Social", type: "text" },
+    { id: "cuit", x: 540, y: 190, width: 220, height: 21, label: "CUIT", type: "text" },
     { id: "contacto", x: 185, y: 214, width: 200, height: 21, label: "Contacto", type: "text" },
     { id: "telefono", x: 540, y: 214, width: 220, height: 21, label: "Teléfono", type: "text" },
     { id: "servicioTecnico", x: 110, y: 285, width: 20, height: 20, label: "Servicio Técnico", type: "checkbox" },
@@ -60,6 +64,12 @@ export function ServiceOrderForm() {
     { id: "capacitacion", x: 467, y: 285, width: 20, height: 20, label: "Capacitación", type: "checkbox" },
     { id: "calibracion", x: 586, y: 285, width: 20, height: 20, label: "Calibración", type: "checkbox" },
     { id: "tercero", x: 705, y: 285, width: 20, height: 20, label: "Tercero", type: "checkbox" },
+    { id: "servicioACampo", x: 111, y: 945, width: 20, height: 20, label: "Servicio a Campo", type: "checkbox" },
+    { id: "servicioEnOficina", x: 230, y: 945, width: 20, height: 20, label: "Servicio en Oficina", type: "checkbox" },
+    { id: "conCargo", x: 111, y: 990, width: 20, height: 20, label: "Con Cargo", type: "checkbox" },
+    { id: "sinCargo", x: 230, y: 990, width: 20, height: 20, label: "Sin Cargo", type: "checkbox" },
+    { id: "servicioEnGarantia", x: 111, y: 1037, width: 20, height: 20, label: "Servicio en Garantía", type: "checkbox" },
+    { id: "aConvenir", x: 230, y: 1037, width: 20, height: 20, label: "A Convenir", type: "checkbox" },
     { id: "maquina", x: 135, y: 332, width: 280, height: 21, label: "Máquina", type: "text" },
     { id: "equipo", x: 485, y: 332, width: 280, height: 21, label: "Equipo", type: "text" },
     { id: "descripcion", x: 65, y: 360, width: 700, height: 270, label: "Descripción Completa", type: "textarea" },
@@ -71,6 +81,16 @@ export function ServiceOrderForm() {
     { id: "tipoCambio", x: 660, y: 990, width: 100, height: 21, label: "Tipo de Cambio", type: "text" },
     { id: "iva", x: 660, y: 1014, width: 70, height: 21, label: "IVA", type: "text" },
     { id: "total", x: 660, y: 1038, width: 70, height: 21, label: "Total", type: "text" },
+    { id: "tecnicoNombre", x: 250, y: 1100, width: 160, height: 21, label: "Técnico Asociado", type: "text" },
+    { id: "clienteNombre", x: 607, y: 1100, width: 160, height: 21, label: "Cliente Asociado", type: "text" },
+    { id: "tecnicoFirma", x: 65, y: 1078, width: 150, height: 50, label: "Firma Técnico", type: "signature" },
+    { id: "clienteFirma", x: 425, y: 1078, width: 150, height: 50, label: "Firma Cliente", type: "signature" },
+  ]
+
+  // Define todas las áreas para visualización (incluye campos no editables como numeroOrden)
+  const allDisplayAreas: ClickableArea[] = [
+    { id: "numeroOrden", x: 600, y: 70, width: 150, height: 30, label: "Número de Orden", type: "text" },
+    ...clickableAreas
   ]
 
   const handleAreaClick = (area: ClickableArea, event: React.MouseEvent) => {
@@ -127,56 +147,93 @@ export function ServiceOrderForm() {
   }
 
   const handleSubmit = () => {
-    // Build Google Forms URL with pre-filled data based on the provided URL structure
-    const baseUrl =
-      "https://docs.google.com/forms/d/e/1FAIpQLSdJAZ9JrGyNTXFXI6q5kSr3uyMcTO2AlkCopKU0yN1nSbJJMw/viewform"
-    const params = new URLSearchParams({
-      usp: "pp_url",
-      "entry.372880175": formData.numeroOrden || "",
-      "entry.272882206": formData.fecha || "",
-      "entry.51656733": formData.razonSocial || "",
-      "entry.1027759127": formData.cuit || "",
-      "entry.1341519067": formData.contacto || "",
-      "entry.577931152": formData.telefono || "",
-      "entry.1807472627": formData.servicioTecnico ? "TRUE" : "FALSE",
-      "entry.1866760485": formData.instalacion ? "TRUE" : "FALSE",
-      "entry.1483769432": formData.puestaEnMarcha ? "TRUE" : "FALSE",
-      "entry.2009413697": formData.capacitacion ? "TRUE" : "FALSE",
-      "entry.552164344": formData.calibracion ? "TRUE" : "FALSE",
-      "entry.50477222": formData.tercero ? "TRUE" : "FALSE",
-      "entry.2137289700": formData.maquina || "",
-      "entry.345774046": formData.equipo || "",
-      "entry.530697442": formData.descripcion || "",
-      "entry.1213632366": formData.insumos || "",
-      "entry.2003105797": formData.servicioACampo ? "TRUE" : "FALSE",
-      "entry.52141665": formData.servicioEnOficina ? "TRUE" : "FALSE",
-      "entry.1755189551": formData.conCargo ? "TRUE" : "FALSE",
-      "entry.83013412": formData.sinCargo ? "TRUE" : "FALSE",
-      "entry.67997979": formData.servicioEnGarantia ? "TRUE" : "FALSE",
-      "entry.758707307": formData.aConvenir ? "TRUE" : "FALSE",
-      "entry.1993960771": formData.localidad || "",
-      "entry.1508422004": formData.provincia || "",
-      "entry.1889226445": formData.distancia || "",
-      "entry.990111352": formData.duracion || "",
-      "entry.1638646015": formData.tipoCambio || "",
-      "entry.1689852362": formData.iva || "",
-      "entry.71662572": formData.total || "",
-      "entry.743176313": formData.tecnicoNombre || "",
-      "entry.1089739266": formData.tecnicoFirma || "",
-      "entry.544693955": formData.clienteNombre || "",
-      "entry.271745922": formData.clienteFirma || "",
-      "entry.1799477516": formData.aux1 || "",
-      "entry.1822594865": formData.aux2 || "",
-      "entry.46860826": formData.aux3 || "",
-      "entry.2041327332": formData.aux4 || "",
-    })
+    // Analizar progreso del formulario
+    const progressData = getDetailedProgress()
+    
+    // Si hay campos críticos faltantes o el formulario no está completo, mostrar modal
+    if (progressData.hasCriticalMissing || progressData.progress < 100) {
+      setShowProgressModal(true)
+      return
+    }
+    
+    // Si está completo, enviar directamente
+    submitToGoogleForms()
+  }
 
-    const fullUrl = `${baseUrl}?${params.toString()}`
-    window.open(fullUrl, "_blank")
+  const submitToGoogleForms = async () => {
+    try {
+      // Validar datos antes del envío
+      const validation = validateFormDataForSubmission(formData)
+      if (!validation.isValid) {
+        toast.error("Error de validación", {
+          description: validation.errors.join(", ")
+        })
+        return
+      }
+
+      // Mostrar notificación de envío
+      toast.info("Enviando formulario...", { 
+        description: "Por favor espera mientras se procesa la orden de servicio" 
+      })
+
+      // Enviar el formulario a Google Forms
+      const result = await submitFormToGoogle(formData)
+
+      if (result.success) {
+        toast.success("¡Formulario enviado exitosamente!", {
+          description: `Orden de servicio #${formData.numeroOrden} enviada a ARAN Tecnologías`
+        })
+        console.log("Formulario enviado exitosamente a Google Forms")
+      } else {
+        throw new Error(result.error || "Error al enviar formulario")
+      }
+
+    } catch (error) {
+      console.error("Error al enviar formulario:", error)
+      toast.error("Error al enviar formulario", {
+        description: "Ha ocurrido un error. Se abrirá el formulario manual como alternativa."
+      })
+
+      // Como fallback, abrir Google Forms en una nueva pestaña
+      const fallbackUrl = generatePrefilledUrl(formData)
+      window.open(fallbackUrl, "_blank")
+      toast.info("Formulario manual abierto", {
+        description: "Se ha abierto Google Forms en una nueva pestaña"
+      })
+    }
+  }
+
+  // Función auxiliar para generar URL de Google Forms (fallback)
+  const generateGoogleFormsUrl = (): string => {
+    return generatePrefilledUrl(formData)
+  }
+
+  const handleSubmitIncomplete = () => {
+    setShowProgressModal(false)
+    submitToGoogleForms()
+  }
+
+  const handleContinueEditing = () => {
+    setShowProgressModal(false)
+    // Opcionalmente, podrías enfocar el primer campo crítico faltante
+    const progressData = getDetailedProgress()
+    if (progressData.criticalMissing.length > 0) {
+      toast.info("Campos críticos pendientes", {
+        description: `Completa: ${progressData.criticalMissing.slice(0, 3).join(', ')}${progressData.criticalMissing.length > 3 ? '...' : ''}`
+      })
+    }
+  }
+
+  const handleOpenManualForm = () => {
+    const manualUrl = generatePrefilledUrl(formData)
+    window.open(manualUrl, "_blank")
+    toast.info("Formulario manual abierto", {
+      description: "Se ha abierto Google Forms en una nueva pestaña"
+    })
   }
 
   const renderValueOverlays = () => {
-    return clickableAreas.map((area) => {
+    return allDisplayAreas.map((area) => {
       const value = formData[area.id]
       const hasValue = area.type === 'checkbox' ? true : (value && value.toString().trim() !== '')
       
@@ -205,23 +262,42 @@ export function ServiceOrderForm() {
               </div>
             </div>
           ) : hasValue ? (
-            // Renderizar texto
+            // Renderizar texto o firma
             <div className={`
               value-overlay-text w-full h-full flex px-2 py-1 text-sm font-medium
-              ${area.type === 'textarea' ? 'items-start pt-2' : 'items-center'}
+              ${area.type === 'textarea' ? 'items-start pt-2' : 
+                area.type === 'signature' ? 'items-center justify-center' : 'items-center'}
             `}>
-              <span className={`
-                w-full leading-tight
-                ${area.type === 'textarea' 
-                  ? 'text-xs leading-tight overflow-hidden' 
-                  : 'truncate'
-                }
-              `}>
-                {area.type === 'textarea' 
-                  ? (value as string).substring(0, 100) + ((value as string).length > 100 ? '...' : '')
-                  : value as string
-                }
-              </span>
+              {area.type === 'signature' ? (
+                <div className="w-full h-full flex items-center justify-center">
+                  {(value as string).startsWith('data:image') ? (
+                    <img 
+                      src={value as string} 
+                      alt="Firma" 
+                      className="max-w-full max-h-full object-contain"
+                      style={{ filter: 'contrast(1.2)' }}
+                    />
+                  ) : (value as string) ? (
+                    <div className="text-center text-xs bg-blue-100 px-2 py-1 rounded border">
+                      <div className="font-semibold text-blue-800">✍️ Firmado</div>
+                      <div className="text-blue-600 mt-1">{value as string}</div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <span className={`
+                  w-full leading-tight
+                  ${area.type === 'textarea' 
+                    ? 'text-xs leading-tight overflow-hidden' 
+                    : 'truncate'
+                  }
+                `}>
+                  {area.type === 'textarea' 
+                    ? (value as string).substring(0, 100) + ((value as string).length > 100 ? '...' : '')
+                    : value as string
+                  }
+                </span>
+              )}
             </div>
           ) : (
             // Mostrar placeholder sutil para campos vacíos
@@ -299,55 +375,39 @@ export function ServiceOrderForm() {
                 className="resize-none"
               />
             </div>
+          ) : field.type === "signature" ? (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-muted-foreground">
+                Firma Digital:
+              </Label>
+              <SignatureCanvas
+                value={tempValue as string}
+                onChange={(signature) => handleTempValueChange(signature)}
+                width={350}
+                height={150}
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground text-center">
+                Dibuje su firma usando el mouse o el dedo en pantallas táctiles
+              </p>
+            </div>
           ) : (
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">
                 {field.id === "fecha" ? "Selecciona la fecha:" : "Valor:"}
               </Label>
               
-              {field.id === "numeroOrden" ? (
-                <div className="flex gap-2">
-                  <Input
-                    type="text"
-                    value={tempValue as string}
-                    onChange={(e) => handleTempValueChange(e.target.value)}
-                    placeholder="Ingrese número de orden (7 dígitos)"
-                    className="flex-1"
-                    maxLength={7}
-                    pattern="[0-9]{7}"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const newNumber = generateOrderNumber()
-                      handleTempValueChange(newNumber)
-                    }}
-                    title="Generar nuevo número automático"
-                    className="px-3"
-                  >
-                    🔄
-                  </Button>
-                </div>
-              ) : (
-                <Input
-                  type={field.id === "fecha" ? "date" : "text"}
-                  value={tempValue as string}
-                  onChange={(e) => handleTempValueChange(e.target.value)}
-                  placeholder={field.id === "fecha" ? "yyyy-mm-dd" : `Ingrese ${field.label.toLowerCase()}`}
-                  className="w-full"
-                />
-              )}
+              <Input
+                type={field.id === "fecha" ? "date" : "text"}
+                value={tempValue as string}
+                onChange={(e) => handleTempValueChange(e.target.value)}
+                placeholder={field.id === "fecha" ? "yyyy-mm-dd" : `Ingrese ${field.label.toLowerCase()}`}
+                className="w-full"
+              />
               
               {field.id === "fecha" && (
                 <p className="text-xs text-muted-foreground">
                   Selecciona una fecha usando el calendario
-                </p>
-              )}
-              {field.id === "numeroOrden" && (
-                <p className="text-xs text-muted-foreground">
-                  Debe ser exactamente 7 dígitos. Usa 🔄 para generar automáticamente.
                 </p>
               )}
             </div>
@@ -411,10 +471,7 @@ export function ServiceOrderForm() {
           </div>
           <FormActions
             formData={formData}
-            onSave={handleSave}
             onSubmit={handleSubmit}
-            onExport={exportData}
-            onImport={importData}
             onReset={resetForm}
             hasErrors={hasErrors()}
             lastSaveTime={lastSaveTime}
@@ -453,6 +510,19 @@ export function ServiceOrderForm() {
           </div>
         </Card>
       </div>
+
+      {/* Progress Modal */}
+      <FormProgressModal
+        isOpen={showProgressModal}
+        onClose={() => setShowProgressModal(false)}
+        onSubmitIncomplete={handleSubmitIncomplete}
+        onContinueEditing={handleContinueEditing}
+        onOpenManualForm={handleOpenManualForm}
+        formData={formData}
+        progress={getDetailedProgress().progress}
+        missingFields={getDetailedProgress().allMissing}
+        criticalMissing={getDetailedProgress().criticalMissing}
+      />
     </div>
   )
 }
