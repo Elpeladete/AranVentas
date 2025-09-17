@@ -1,6 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { toast } from "@/lib/toast"
+import { validateField, type FormValidationData } from "@/lib/validations"
+import { generateOrderNumber } from "@/lib/order-number"
+import { toast as sonnerToast } from "sonner"
 
 export interface FormData {
   numeroOrden: string
@@ -43,7 +47,7 @@ export interface FormData {
 }
 
 const defaultFormData: FormData = {
-  numeroOrden: "",
+  numeroOrden: generateOrderNumber(),
   fecha: new Date().toISOString().split("T")[0],
   razonSocial: "",
   cuit: "",
@@ -82,9 +86,14 @@ const defaultFormData: FormData = {
   aux4: "",
 }
 
+// Campos críticos que requieren validación en tiempo real
+const criticalFields: (keyof FormData)[] = ["numeroOrden", "cuit", "fecha", "telefono", "razonSocial", "contacto"]
+
 export function useFormData() {
   const [formData, setFormData] = useState<FormData>(defaultFormData)
   const [isLoading, setIsLoading] = useState(true)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null)
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -93,9 +102,11 @@ export function useFormData() {
       if (savedData) {
         const parsedData = JSON.parse(savedData)
         setFormData({ ...defaultFormData, ...parsedData })
+        toast.info("Datos recuperados", { description: "Se han cargado los datos guardados anteriormente" })
       }
     } catch (error) {
       console.error("Error loading form data:", error)
+      toast.error("Error al cargar datos", { description: "No se pudieron recuperar los datos guardados" })
     } finally {
       setIsLoading(false)
     }
@@ -106,19 +117,48 @@ export function useFormData() {
     if (!isLoading) {
       try {
         localStorage.setItem("aran-form-data", JSON.stringify(formData))
+        setLastSaveTime(new Date())
       } catch (error) {
         console.error("Error saving form data:", error)
+        toast.error("Error al guardar", { description: "No se pudieron guardar los datos automáticamente" })
       }
     }
   }, [formData, isLoading])
 
+  const validateAndUpdateField = (field: keyof FormData, value: string | boolean) => {
+    // Solo validar campos críticos en tiempo real
+    if (criticalFields.includes(field) && typeof value === "string") {
+      const validation = validateField(field as keyof FormValidationData, value)
+      
+      if (!validation.isValid && validation.error) {
+        setFieldErrors(prev => ({ ...prev, [field]: validation.error! }))
+        toast.fieldError(field, validation.error)
+      } else {
+        setFieldErrors(prev => {
+          const newErrors = { ...prev }
+          delete newErrors[field]
+          return newErrors
+        })
+      }
+    }
+  }
+
   const updateField = (field: keyof FormData, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+    validateAndUpdateField(field, value)
   }
 
   const resetForm = () => {
-    setFormData(defaultFormData)
+    const newFormData = {
+      ...defaultFormData,
+      numeroOrden: generateOrderNumber(), // Generar nuevo número de orden
+      fecha: new Date().toISOString().split("T")[0] // Fecha actual
+    }
+    setFormData(newFormData)
+    setFieldErrors({})
     localStorage.removeItem("aran-form-data")
+    setLastSaveTime(null)
+    toast.formReset()
   }
 
   const exportData = () => {
@@ -126,10 +166,12 @@ export function useFormData() {
     const dataBlob = new Blob([dataStr], { type: "application/json" })
     const url = URL.createObjectURL(dataBlob)
     const link = document.createElement("a")
+    const filename = `orden-servicio-${formData.numeroOrden || "nueva"}-${new Date().toISOString().split("T")[0]}.json`
     link.href = url
-    link.download = `orden-servicio-${formData.numeroOrden || "nueva"}-${new Date().toISOString().split("T")[0]}.json`
+    link.download = filename
     link.click()
     URL.revokeObjectURL(url)
+    toast.dataExported(filename)
   }
 
   const importData = (file: File) => {
@@ -139,14 +181,42 @@ export function useFormData() {
         try {
           const importedData = JSON.parse(e.target?.result as string)
           setFormData({ ...defaultFormData, ...importedData })
+          setFieldErrors({}) // Limpiar errores al importar
+          toast.dataImported()
           resolve()
         } catch (error) {
+          toast.error("Error al importar", { description: "El archivo no tiene un formato válido" })
           reject(error)
         }
       }
-      reader.onerror = () => reject(new Error("Error reading file"))
+      reader.onerror = () => {
+        toast.error("Error de archivo", { description: "No se pudo leer el archivo" })
+        reject(new Error("Error reading file"))
+      }
       reader.readAsText(file)
     })
+  }
+
+  const getFieldError = (field: keyof FormData): string | undefined => {
+    return fieldErrors[field]
+  }
+
+  const hasErrors = (): boolean => {
+    return Object.keys(fieldErrors).length > 0
+  }
+
+  const getFormProgress = (): number => {
+    const totalFields = Object.keys(defaultFormData).length
+    const filledFields = Object.values(formData).filter(value => 
+      typeof value === 'boolean' ? true : value.trim() !== ''
+    ).length
+    return Math.round((filledFields / totalFields) * 100)
+  }
+
+  const regenerateOrderNumber = () => {
+    const newOrderNumber = generateOrderNumber()
+    updateField('numeroOrden', newOrderNumber)
+    sonnerToast.success(`Nuevo número de orden generado: ${newOrderNumber}`)
   }
 
   return {
@@ -156,5 +226,11 @@ export function useFormData() {
     exportData,
     importData,
     isLoading,
+    fieldErrors,
+    getFieldError,
+    hasErrors,
+    getFormProgress,
+    lastSaveTime,
+    regenerateOrderNumber,
   }
 }
