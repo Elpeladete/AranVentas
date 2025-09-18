@@ -2,8 +2,9 @@
 
 import type React from "react"
 import { Button } from "@/components/ui/button"
-import { Send, RotateCcw, AlertCircle, CheckCircle, Download, Camera } from "lucide-react"
+import { Send, RotateCcw, AlertCircle, CheckCircle, Download, Camera, Wifi, WifiOff, Clock, AlertTriangle } from "lucide-react"
 import type { FormData } from "@/hooks/use-form-data"
+import { useNetworkStatus } from "@/hooks/use-network-status"
 import { toast } from "@/lib/toast"
 import { validateForm } from "@/lib/validations"
 import html2canvas from "html2canvas"
@@ -25,6 +26,7 @@ export function FormActions({
   lastSaveTime,
   formProgress = 0
 }: FormActionsProps) {
+  const { isOnline, isChecking } = useNetworkStatus()
 
   const handleReset = () => {
     if (confirm("¿Está seguro de que desea limpiar todos los datos del formulario?")) {
@@ -37,11 +39,26 @@ export function FormActions({
     const validation = validateForm(formData)
     
     if (!validation.isValid) {
-      toast.validationError(validation.errors)
-      return
+      // Si hay errores, mostrar confirmación para enviar incompleto
+      const errorArray = Object.entries(validation.errors).map(([field, error]) => `${field}: ${error}`)
+      const errorList = errorArray.join('\n• ')
+      const shouldProceed = confirm(
+        `El formulario tiene los siguientes errores:\n\n• ${errorList}\n\n¿Desea enviar el formulario incompleto de todas formas?`
+      )
+      
+      if (!shouldProceed) {
+        toast.warning("Envío cancelado", {
+          description: "Corrija los errores y vuelva a intentar, o confirme para enviar incompleto"
+        })
+        return
+      }
+      
+      toast.info("Enviando formulario incompleto", {
+        description: "Se enviará con los datos disponibles"
+      })
     }
 
-    // El número de orden se genera automáticamente, no necesita validación manual
+    // Proceder con el envío
     onSubmit()
   }
 
@@ -251,8 +268,8 @@ export function FormActions({
           if (signatureValue && typeof signatureValue === 'string' && signatureValue.trim() !== '') {
             console.log(`✍️ Procesando firma: ${fieldName}`)
             
-            if (signatureValue.startsWith('data:image')) {
-              // Es una firma en formato base64 (imagen)
+            if (signatureValue.startsWith('data:image') || signatureValue.startsWith('http')) {
+              // Es una firma en formato base64 o URL de ImgBB
               try {
                 const signatureImage = new Image()
                 signatureImage.crossOrigin = 'anonymous'
@@ -272,7 +289,8 @@ export function FormActions({
                     ctx.drawImage(signatureImage, pos.x + 2, pos.y + 2, pos.width - 4, pos.height - 4)
                     
                     itemsDrawn++
-                    console.log(`✅ Firma dibujada como imagen: ${fieldName}`)
+                    const sourceType = signatureValue.startsWith('http') ? 'URL de ImgBB' : 'base64'
+                    console.log(`✅ Firma dibujada desde ${sourceType}: ${fieldName}`)
                     resolve(true)
                   }
                   
@@ -287,7 +305,7 @@ export function FormActions({
                     
                     ctx.fillStyle = '#6b7280'
                     ctx.font = 'italic 10px Arial'
-                    ctx.fillText('Firma capturada', pos.x + 5, pos.y + pos.height/2 + 3)
+                    ctx.fillText('Firma no disponible', pos.x + 5, pos.y + pos.height/2 + 3)
                     
                     itemsDrawn++
                     resolve(true)
@@ -376,44 +394,98 @@ export function FormActions({
     return <AlertCircle className="h-4 w-4 text-yellow-500" />
   }
 
+  const getSubmitButtonText = () => {
+    if (isChecking) return "Verificando conexión..."
+    if (!isOnline) return "Guardar localmente"
+    if (hasErrors) return "Guardar y Compartir (incompleto)"
+    return "Guardar y Compartir"
+  }
+
+  const getSubmitButtonIcon = () => {
+    if (isChecking) return <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+    if (!isOnline) return <Clock className="w-4 h-4" />
+    if (hasErrors) return <AlertTriangle className="w-4 h-4" />
+    return <Send className="w-4 h-4" />
+  }
+
   return (
-    <div className="flex items-center gap-4 flex-wrap">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 flex-wrap">
       {/* Estado del formulario */}
       <div className="flex items-center gap-2 text-sm">
         {getStatusIcon()}
         <span className={`font-medium ${getProgressColor()}`}>
           {formProgress}% completo
         </span>
+        
+        {/* Indicador de conectividad */}
+        <div className="flex items-center gap-1 ml-2">
+          {isOnline ? (
+            <>
+              <Wifi className="w-3 h-3 text-green-600" />
+              <span className="text-green-600 text-xs hidden sm:inline">Online</span>
+            </>
+          ) : (
+            <>
+              <WifiOff className="w-3 h-3 text-red-600" />
+              <span className="text-red-600 text-xs hidden sm:inline">Offline</span>
+            </>
+          )}
+        </div>
+        
         {lastSaveTime && (
-          <span className="text-muted-foreground">
+          <span className="text-muted-foreground hidden sm:inline">
             • Guardado automáticamente {lastSaveTime.toLocaleTimeString()}
           </span>
         )}
       </div>
 
       {/* Botones de acción */}
-      <div className="flex gap-2 ml-auto">
-        <Button variant="outline" onClick={handleReset}>
+      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:ml-auto">
+        <Button 
+          variant="outline" 
+          onClick={handleReset}
+          className="w-full sm:w-auto"
+          size="sm"
+        >
           <RotateCcw className="h-4 w-4 mr-2" />
-          Limpiar
+          <span className="hidden sm:inline">Limpiar</span>
+          <span className="sm:hidden">Limpiar Formulario</span>
         </Button>
 
         <Button 
           variant="outline" 
           onClick={handleCaptureOrder}
-          className="border-green-200 text-green-700 hover:bg-green-50"
+          className="border-green-200 text-green-700 hover:bg-green-50 w-full sm:w-auto"
+          size="sm"
         >
           <Camera className="h-4 w-4 mr-2" />
-          Cerrar Orden
+          <span className="hidden sm:inline">Cerrar Orden</span>
+          <span className="sm:hidden">Cerrar y Enviar Orden</span>
         </Button>
 
         <Button 
           onClick={handleSubmit} 
-          disabled={hasErrors}
-          className="bg-primary hover:bg-primary/90"
+          className={`w-full sm:w-auto ${
+            !isOnline 
+              ? 'bg-orange-600 hover:bg-orange-700' 
+              : hasErrors 
+                ? 'bg-yellow-600 hover:bg-yellow-700'
+                : 'bg-primary hover:bg-primary/90'
+          }`}
+          size="sm"
+          title={
+            !isOnline 
+              ? "Sin conexión - Se guardará localmente y se enviará cuando haya internet"
+              : hasErrors
+                ? "Hay errores en el formulario - Se pedirá confirmación para enviar incompleto"
+                : "Enviar formulario a Google Forms"
+          }
         >
-          <Send className="h-4 w-4 mr-2" />
-          Guardar y Compartir
+          {getSubmitButtonIcon()}
+          <span className="ml-2">
+            <span className="hidden sm:inline">{getSubmitButtonText()}</span>
+            <span className="sm:hidden">{isOnline ? "Enviar" : "Guardar"}</span>
+          </span>
         </Button>
       </div>
     </div>

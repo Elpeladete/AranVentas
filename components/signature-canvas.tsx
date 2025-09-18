@@ -2,7 +2,9 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { RotateCcw, Check } from 'lucide-react'
+import { RotateCcw, Check, Upload, Loader2 } from 'lucide-react'
+import { uploadCanvasToImgBB, generateSignatureName } from '@/lib/imgbb-upload'
+import { toast } from '@/lib/toast'
 
 interface SignatureCanvasProps {
   value?: string
@@ -12,6 +14,9 @@ interface SignatureCanvasProps {
   width?: number
   height?: number
   className?: string
+  orderNumber?: string
+  signatureType?: 'tecnico' | 'cliente'
+  autoUpload?: boolean // Si debe subir automáticamente a ImgBB
 }
 
 export function SignatureCanvas({
@@ -21,11 +26,16 @@ export function SignatureCanvas({
   onClear,
   width = 400,
   height = 200,
-  className = ''
+  className = '',
+  orderNumber = '',
+  signatureType = 'tecnico',
+  autoUpload = true
 }: SignatureCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadedUrl, setUploadedUrl] = useState<string>('')
 
   // Configurar el canvas
   useEffect(() => {
@@ -90,6 +100,37 @@ export function SignatureCanvas({
     ctx.moveTo(pos.x, pos.y)
   }, [getEventPos])
 
+  // Subir firma a ImgBB
+  const uploadSignature = useCallback(async (canvas: HTMLCanvasElement) => {
+    if (!autoUpload || !orderNumber) return null
+
+    try {
+      setIsUploading(true)
+      const signatureName = generateSignatureName(orderNumber, signatureType)
+      
+      toast.info("Subiendo firma...", { description: "Guardando en la nube" })
+      
+      const result = await uploadCanvasToImgBB(canvas, signatureName, 0.9)
+      
+      setUploadedUrl(result.data.url)
+      toast.success("✅ Firma guardada", { 
+        description: "Subida a la nube exitosamente",
+        duration: 3000 
+      })
+      
+      return result.data.url
+      
+    } catch (error) {
+      console.error('Error uploading signature:', error)
+      toast.error("Error al subir firma", { 
+        description: "Se guardará localmente" 
+      })
+      return null
+    } finally {
+      setIsUploading(false)
+    }
+  }, [autoUpload, orderNumber, signatureType])
+
   // Dibujar
   const draw = useCallback((e: MouseEvent | TouchEvent) => {
     e.preventDefault()
@@ -104,17 +145,39 @@ export function SignatureCanvas({
     ctx.stroke()
     setHasSignature(true)
 
-    // Llamar onChange en tiempo real si está disponible
-    if (onChange) {
-      const signature = canvas.toDataURL('image/png')
-      onChange(signature)
-    }
-  }, [isDrawing, getEventPos, onChange])
+    // No llamar onChange en tiempo real para evitar subidas múltiples
+    // El onChange se llamará en stopDrawing después de subir a ImgBB
+  }, [isDrawing, getEventPos])
 
-  // Terminar dibujo
-  const stopDrawing = useCallback(() => {
+  // Terminar dibujo y subir automáticamente
+  const stopDrawing = useCallback(async () => {
+    if (!isDrawing) return
+    
     setIsDrawing(false)
-  }, [])
+    
+    // Si hay dibujo y autoUpload está habilitado, subir automáticamente
+    if (hasSignature && autoUpload) {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      
+      // Pequeña pausa para asegurar que el dibujo se complete
+      setTimeout(async () => {
+        try {
+          const uploadedUrl = await uploadSignature(canvas)
+          if (uploadedUrl && onChange) {
+            onChange(uploadedUrl) // Pasar URL directamente
+          }
+        } catch (error) {
+          console.error('Error en subida automática:', error)
+          // Fallback: usar base64 local
+          const localSignature = canvas.toDataURL('image/png')
+          if (onChange) {
+            onChange(localSignature)
+          }
+        }
+      }, 500) // Pausa de 500ms para completar el trazo
+    }
+  }, [isDrawing, hasSignature, autoUpload, uploadSignature, onChange])
 
   // Eventos del mouse
   useEffect(() => {
@@ -167,6 +230,7 @@ export function SignatureCanvas({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     setHasSignature(false)
+    setUploadedUrl('')
     
     if (onChange) {
       onChange('')
@@ -176,16 +240,37 @@ export function SignatureCanvas({
     }
   }, [onChange, onClear])
 
-  // Guardar firma
-  const saveSignature = useCallback(() => {
+  // Guardar firma (con subida automática a ImgBB si está habilitada)
+  const saveSignature = useCallback(async () => {
     const canvas = canvasRef.current
     if (!canvas || !hasSignature) return
 
-    const signature = canvas.toDataURL('image/png')
-    if (onSave) {
-      onSave(signature)
+    const localSignature = canvas.toDataURL('image/png')
+    
+    // Si autoUpload está habilitado, subir a ImgBB
+    let finalSignature = localSignature
+    if (autoUpload) {
+      const uploadedUrl = await uploadSignature(canvas)
+      if (uploadedUrl) {
+        finalSignature = uploadedUrl // Usar URL de ImgBB en lugar de base64
+      }
     }
-  }, [hasSignature, onSave])
+    
+    if (onChange) {
+      onChange(finalSignature)
+    }
+    if (onSave) {
+      onSave(finalSignature)
+    }
+  }, [hasSignature, autoUpload, uploadSignature, onChange, onSave])
+
+  // Subir manualmente a ImgBB
+  const manualUpload = useCallback(async () => {
+    const canvas = canvasRef.current
+    if (!canvas || !hasSignature) return
+
+    await uploadSignature(canvas)
+  }, [hasSignature, uploadSignature])
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -201,11 +286,24 @@ export function SignatureCanvas({
       </div>
 
       {/* Instrucciones */}
-      <div className="text-xs text-gray-500 text-center">
-        {hasSignature ? (
+      <div className="text-xs text-gray-500 text-center space-y-1">
+        {isUploading ? (
+          <span className="text-blue-600 flex items-center justify-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Subiendo a la nube...
+          </span>
+        ) : uploadedUrl ? (
+          <span className="text-green-600">✓ Firma guardada en la nube</span>
+        ) : hasSignature ? (
           <span className="text-green-600">✓ Firma capturada</span>
         ) : (
           <span>Dibuje su firma en el área de arriba</span>
+        )}
+        
+        {autoUpload && orderNumber && (
+          <div className="text-xs text-gray-400">
+            {`${signatureType === 'tecnico' ? 'Técnico' : 'Cliente'} - Orden: ${orderNumber}`}
+          </div>
         )}
       </div>
 
@@ -217,6 +315,7 @@ export function SignatureCanvas({
           size="sm"
           onClick={clearCanvas}
           className="px-3"
+          disabled={isUploading}
         >
           <RotateCcw className="h-4 w-4 mr-1" />
           Limpiar
@@ -227,11 +326,34 @@ export function SignatureCanvas({
             type="button"
             size="sm"
             onClick={saveSignature}
-            disabled={!hasSignature}
+            disabled={!hasSignature || isUploading}
             className="px-3"
           >
-            <Check className="h-4 w-4 mr-1" />
-            Confirmar
+            {isUploading ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4 mr-1" />
+            )}
+            {isUploading ? 'Subiendo...' : 'Confirmar'}
+          </Button>
+        )}
+        
+        {/* Botón de subida manual (solo si autoUpload está deshabilitado) */}
+        {!autoUpload && hasSignature && !uploadedUrl && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={manualUpload}
+            disabled={isUploading}
+            className="px-3"
+          >
+            {isUploading ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4 mr-1" />
+            )}
+            {isUploading ? 'Subiendo...' : 'Subir'}
           </Button>
         )}
       </div>

@@ -1,41 +1,223 @@
 import { z } from "zod"
 
-// Schema para validación de CUIT argentino
-const cuitSchema = z.string()
-  .min(11, "CUIT debe tener 11 dígitos")
-  .max(11, "CUIT debe tener 11 dígitos")
-  .regex(/^\d{11}$/, "CUIT debe contener solo números")
-  .refine((cuit) => {
-    // Validación del dígito verificador del CUIT
-    const multipliers = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
-    const digits = cuit.split('').map(Number)
-    
-    const sum = digits.slice(0, 10).reduce((acc, digit, index) => {
-      return acc + digit * multipliers[index]
-    }, 0)
-    
-    const remainder = sum % 11
-    const checkDigit = remainder < 2 ? remainder : 11 - remainder
-    
-    return checkDigit === digits[10]
-  }, "CUIT inválido - dígito verificador incorrecto")
+// Función para formatear teléfono argentino
+export function formatPhoneNumber(phone: string): string {
+  // Limpiar el teléfono de espacios, guiones y símbolos
+  const cleaned = phone.replace(/\D/g, '')
+  
+  // Si empieza con 54, quitar el prefijo para el formateo
+  const withoutCountryCode = cleaned.startsWith('54') ? cleaned.slice(2) : cleaned
+  
+  // Si tiene 10 dígitos (con 9), formatear como +54 9 XXXX XX-XXXX
+  if (withoutCountryCode.length === 10 && withoutCountryCode.startsWith('9')) {
+    const areaCode = withoutCountryCode.slice(1, 5) // Después del 9
+    const firstPart = withoutCountryCode.slice(5, 7)
+    const secondPart = withoutCountryCode.slice(7)
+    return `+54 9 ${areaCode} ${firstPart}-${secondPart}`
+  }
+  
+  // Si tiene 10 dígitos sin 9, agregar el 9 y formatear
+  if (withoutCountryCode.length === 10) {
+    const areaCode = withoutCountryCode.slice(0, 4)
+    const firstPart = withoutCountryCode.slice(4, 6)
+    const secondPart = withoutCountryCode.slice(6)
+    return `+54 9 ${areaCode} ${firstPart}-${secondPart}`
+  }
+  
+  // Si no cumple el formato, devolver tal como está
+  return phone
+}
 
-// Schema para validación de número de orden
+// Función para formatear CUIT
+export function formatCuit(cuit: string): string {
+  // Limpiar solo números
+  const cleaned = cuit.replace(/\D/g, '')
+  
+  // Si tiene exactamente 11 dígitos, formatear como XX-XXXXXXXX-X
+  if (cleaned.length === 11) {
+    return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 10)}-${cleaned.slice(10)}`
+  }
+  
+  // Si ya tiene guiones pero está bien formateado, devolver tal como está
+  if (cuit.match(/^\d{2}-\d{8}-\d{1}$/)) {
+    return cuit
+  }
+  
+  return cuit
+}
+
+// Validaciones por grupos - actualizadas con los campos reales del formulario
+export function validateServiceGroup1(data: any): { isValid: boolean; message?: string } {
+  // Grupo 1: Tipos de servicio
+  const group1Services = [
+    data.servicioTecnico,
+    data.instalacion,
+    data.puestaEnMarcha,
+    data.capacitacion,
+    data.calibracion,
+    data.tercero
+  ]
+  
+  const hasAnyService = group1Services.some(service => service === true)
+  
+  if (!hasAnyService) {
+    return {
+      isValid: false,
+      message: "Debe seleccionar al menos un tipo de servicio (Servicio Técnico, Instalación, Puesta en Marcha, etc.)"
+    }
+  }
+  
+  return { isValid: true }
+}
+
+export function validateServiceGroup2(data: any): { isValid: boolean; message?: string } {
+  // Grupo 2: Ubicación del servicio
+  const group2Services = [
+    data.servicioACampo,
+    data.servicioEnOficina
+  ]
+  
+  const hasAnyService = group2Services.some(service => service === true)
+  
+  if (!hasAnyService) {
+    return {
+      isValid: false,
+      message: "Debe seleccionar la ubicación del servicio (Campo u Oficina)"
+    }
+  }
+  
+  return { isValid: true }
+}
+
+export function validateServiceGroup3(data: any): { isValid: boolean; message?: string } {
+  // Grupo 3: Tipo de facturación
+  const group3Services = [
+    data.conCargo,
+    data.sinCargo,
+    data.servicioEnGarantia,
+    data.aConvenir
+  ]
+  
+  const hasAnyService = group3Services.some(service => service === true)
+  
+  if (!hasAnyService) {
+    return {
+      isValid: false,
+      message: "Debe seleccionar el tipo de facturación (Con Cargo, Sin Cargo, En Garantía o A Convenir)"
+    }
+  }
+  
+  return { isValid: true }
+}
+
+export function validateSignatureGroup(data: any): { isValid: boolean; message?: string } {
+  const hasClientSignature = data.clientSignature && data.clientSignature.trim() !== ''
+  const hasTechnicianSignature = data.technicianSignature && data.technicianSignature.trim() !== ''
+  
+  if (!hasClientSignature) {
+    return {
+      isValid: false,
+      message: "La firma del cliente es obligatoria"
+    }
+  }
+  
+  if (!hasTechnicianSignature) {
+    return {
+      isValid: false,
+      message: "La firma del técnico es obligatoria"
+    }
+  }
+  
+  return { isValid: true }
+}
+
+// Validación del dígito verificador del CUIT
+export function validateCuitDigit(cuit: string): boolean {
+  const cleaned = cuit.replace(/\D/g, '')
+  if (cleaned.length !== 11) return false
+  
+  const multipliers = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
+  const digits = cleaned.split('').map(Number)
+  
+  const sum = digits.slice(0, 10).reduce((acc, digit, index) => {
+    return acc + digit * multipliers[index]
+  }, 0)
+  
+  const remainder = sum % 11
+  const checkDigit = remainder < 2 ? remainder : 11 - remainder
+  
+  return checkDigit === digits[10]
+}
+
+// Mensajes de ayuda y sugerencias para campos
+export const fieldHints = {
+  phone: "Formato: 3476626662 (se formateará automáticamente como +54 9 3476 62-6662)",
+  cuit: "Ingrese 11 dígitos sin guiones (ejemplo: 20123456789)",
+  email: "Ingrese un email válido (ejemplo: cliente@empresa.com)",
+  clientName: "Nombre completo del cliente",
+  technicianName: "Nombre completo del técnico responsable",
+  address: "Dirección completa donde se realizó el servicio",
+  serviceDescription: "Descripción detallada del trabajo realizado",
+  observations: "Observaciones adicionales o notas importantes",
+  serviceGroup1: "Seleccione al menos un tipo de servicio (Técnico, Instalación, Puesta en Marcha, etc.)",
+  serviceGroup2: "Seleccione la ubicación del servicio (Campo u Oficina)",
+  serviceGroup3: "Seleccione el tipo de facturación (Con Cargo, Sin Cargo, En Garantía o A Convenir)",
+  signatures: "Ambas firmas (cliente y técnico) son obligatorias"
+}
+
+// Validación completa de todos los grupos
+export function validateAllGroups(data: any): { isValid: boolean; errors: string[] } {
+  const errors: string[] = []
+  
+  const group1Validation = validateServiceGroup1(data)
+  if (!group1Validation.isValid && group1Validation.message) {
+    errors.push(group1Validation.message)
+  }
+  
+  const group2Validation = validateServiceGroup2(data)
+  if (!group2Validation.isValid && group2Validation.message) {
+    errors.push(group2Validation.message)
+  }
+  
+  const group3Validation = validateServiceGroup3(data)
+  if (!group3Validation.isValid && group3Validation.message) {
+    errors.push(group3Validation.message)
+  }
+  
+  const signatureValidation = validateSignatureGroup(data)
+  if (!signatureValidation.isValid && signatureValidation.message) {
+    errors.push(signatureValidation.message)
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  }
+}
+
+// Schema para validación de CUIT argentino con formateo automático
+const cuitSchema = z.string()
+  .min(1, "CUIT es requerido")
+  .transform(formatCuit)
+  .refine((cuit) => validateCuitDigit(cuit), "CUIT inválido - dígito verificador incorrecto")
+
+// Schema para validación de número de orden (simplificado - solo string)
 const numeroOrdenSchema = z.string()
-  .min(7, "Número de orden debe tener exactamente 7 dígitos")
-  .max(7, "Número de orden debe tener exactamente 7 dígitos")
-  .regex(/^\d{7}$/, "Número de orden debe ser exactamente 7 dígitos numéricos")
+  .min(1, "Número de orden es requerido")
 
 // Schema para validación de fecha
 const fechaSchema = z.string()
   .min(1, "Fecha es requerida")
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)")
 
-// Schema para validación de teléfono argentino
+// Schema para validación de teléfono argentino con formateo automático
 const telefonoSchema = z.string()
-  .regex(/^[\d\s\-\+\(\)]+$/, "Teléfono debe contener solo números, espacios, guiones y paréntesis")
-  .min(8, "Teléfono muy corto")
-  .max(20, "Teléfono muy largo")
+  .min(1, "Teléfono es requerido")
+  .transform(formatPhoneNumber)
+  .refine((phone) => {
+    const cleaned = phone.replace(/\D/g, '')
+    return cleaned.length >= 10
+  }, "Teléfono debe tener al menos 10 dígitos")
 
 // Schema para validación de números (distancia, duración, etc.)
 const numeroPositivoSchema = z.string()
@@ -139,4 +321,39 @@ export const validations = {
       return { isValid: false, error: "Error de validación" }
     }
   }
+}
+
+// Función mejorada para validar todo el formulario incluyendo grupos
+export function validateFormWithGroups(data: Partial<FormValidationData>): { 
+  isValid: boolean; 
+  errors: Record<string, string>;
+  groupErrors: string[];
+} {
+  // Validación de campos individuales
+  const fieldValidation = validateForm(data)
+  
+  // Validación de grupos
+  const groupValidation = validateAllGroups(data)
+  
+  return {
+    isValid: fieldValidation.isValid && groupValidation.isValid,
+    errors: fieldValidation.errors,
+    groupErrors: groupValidation.errors
+  }
+}
+
+// Función para obtener hints de campos
+export function getFieldHint(fieldName: string): string {
+  const hints: Record<string, string> = {
+    telefono: fieldHints.phone,
+    cuit: fieldHints.cuit,
+    contacto: fieldHints.clientName,
+    tecnicoNombre: fieldHints.technicianName,
+    localidad: fieldHints.address,
+    descripcion: fieldHints.serviceDescription,
+    insumos: fieldHints.observations,
+    // Agregar más hints según sea necesario
+  }
+  
+  return hints[fieldName] || ""
 }

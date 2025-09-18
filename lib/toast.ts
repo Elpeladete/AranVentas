@@ -47,14 +47,24 @@ export const toast = {
     })
   },
   
-  validationError: (errors: Record<string, string>) => {
-    const errorCount = Object.keys(errors).length
-    const firstError = Object.values(errors)[0]
-    
-    sonnerToast.error(`${errorCount} errores de validación`, {
-      description: firstError,
-      duration: 5000,
-    })
+  validationError: (errors: Record<string, string> | string[]) => {
+    if (Array.isArray(errors)) {
+      const errorCount = errors.length
+      const firstError = errors[0]
+      
+      sonnerToast.error(`${errorCount} errores de validación`, {
+        description: firstError,
+        duration: 5000,
+      })
+    } else {
+      const errorCount = Object.keys(errors).length
+      const firstError = Object.values(errors)[0]
+      
+      sonnerToast.error(`${errorCount} errores de validación`, {
+        description: firstError,
+        duration: 5000,
+      })
+    }
   },
   
   formSaved: () => {

@@ -52,7 +52,61 @@ const GOOGLE_FORMS_CONFIG = {
 }
 
 /**
+ * Procesa una firma para envío a Google Forms
+ * @param signature - Firma en formato URL, base64 o texto
+ * @returns String procesado para Google Forms
+ */
+function processSignatureForGoogleForms(signature: string | undefined): string {
+  if (!signature || signature.trim() === '') {
+    return ""
+  }
+  
+  if (signature.startsWith('https://i.ibb.co/')) {
+    // Es una URL de ImgBB - usar directamente
+    return signature
+  } else if (signature.startsWith('http')) {
+    // Es otra URL - usar directamente
+    return signature
+  } else if (signature.startsWith('data:image')) {
+    // Es base64 - crear mensaje descriptivo
+    return '[Firma digital capturada - disponible en PDF exportado]'
+  } else {
+    // Es texto normal - usar tal como está
+    return signature
+  }
+}
+
+/**
+ * Obtiene información detallada de las firmas para logging/debugging
+ */
+export function getSignatureInfo(formData: AranFormData): {
+  tecnicoFirma: { type: 'url' | 'base64' | 'text' | 'empty', value: string }
+  clienteFirma: { type: 'url' | 'base64' | 'text' | 'empty', value: string }
+} {
+  const processSignatureInfo = (sig: string | undefined) => {
+    if (!sig || sig.trim() === '') {
+      return { type: 'empty' as const, value: '' }
+    }
+    
+    if (sig.startsWith('https://i.ibb.co/')) {
+      return { type: 'url' as const, value: sig }
+    } else if (sig.startsWith('http')) {
+      return { type: 'url' as const, value: sig }
+    } else if (sig.startsWith('data:image')) {
+      return { type: 'base64' as const, value: '[Base64 data]' }
+    } else {
+      return { type: 'text' as const, value: sig }
+    }
+  }
+
+  return {
+    tecnicoFirma: processSignatureInfo(formData.tecnicoFirma),
+    clienteFirma: processSignatureInfo(formData.clienteFirma)
+  }
+}
+/**
  * Prepara los datos del formulario para Google Forms
+ * Procesa especialmente las firmas para usar URLs de ImgBB
  */
 export function prepareFormDataForSubmission(formData: AranFormData): FormData {
   const submissionData = new FormData()
@@ -63,6 +117,10 @@ export function prepareFormDataForSubmission(formData: AranFormData): FormData {
     
     if (typeof value === 'boolean') {
       submissionData.append(entryId, value ? "TRUE" : "FALSE")
+    } else if (fieldName === 'tecnicoFirma' || fieldName === 'clienteFirma') {
+      // Usar la función especializada para procesar firmas
+      const processedSignature = processSignatureForGoogleForms(value as string)
+      submissionData.append(entryId, processedSignature)
     } else {
       submissionData.append(entryId, value || "")
     }
@@ -73,6 +131,7 @@ export function prepareFormDataForSubmission(formData: AranFormData): FormData {
 
 /**
  * Genera URL pre-llenada de Google Forms
+ * Incluye URLs de firmas de ImgBB cuando están disponibles
  */
 export function generatePrefilledUrl(formData: AranFormData): string {
   const params = new URLSearchParams()
@@ -84,6 +143,10 @@ export function generatePrefilledUrl(formData: AranFormData): string {
     
     if (typeof value === 'boolean') {
       params.append(entryId, value ? "TRUE" : "FALSE")
+    } else if (fieldName === 'tecnicoFirma' || fieldName === 'clienteFirma') {
+      // Usar la función especializada para procesar firmas
+      const processedSignature = processSignatureForGoogleForms(value as string)
+      params.append(entryId, processedSignature)
     } else {
       params.append(entryId, value || "")
     }

@@ -1,0 +1,135 @@
+/**
+ * Hook para detectar el estado de la conexión a internet
+ * Incluye verificación real de conectividad, no solo si está conectado a red
+ */
+
+import { useState, useEffect, useCallback } from 'react'
+
+interface NetworkStatus {
+  isOnline: boolean
+  isChecking: boolean
+  lastChecked: Date | null
+}
+
+/**
+ * Verifica si realmente hay conexión a internet haciendo una petición de prueba
+ */
+async function checkRealConnectivity(): Promise<boolean> {
+  try {
+    // Usar un endpoint confiable y rápido para verificar conectividad
+    const response = await fetch('https://www.google.com/favicon.ico', {
+      method: 'HEAD',
+      mode: 'no-cors',
+      cache: 'no-cache',
+      signal: AbortSignal.timeout(5000) // 5 segundos timeout
+    })
+    return true
+  } catch {
+    try {
+      // Backup: intentar con otro endpoint
+      const response = await fetch('https://httpbin.org/status/200', {
+        method: 'HEAD',
+        mode: 'no-cors',
+        cache: 'no-cache',
+        signal: AbortSignal.timeout(3000) // 3 segundos timeout
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
+/**
+ * Hook que monitorea el estado de la conexión a internet
+ */
+export function useNetworkStatus() {
+  const [networkStatus, setNetworkStatus] = useState<NetworkStatus>({
+    isOnline: navigator.onLine,
+    isChecking: false,
+    lastChecked: null
+  })
+
+  // Función para verificar conectividad real
+  const checkConnectivity = useCallback(async () => {
+    setNetworkStatus(prev => ({ ...prev, isChecking: true }))
+    
+    try {
+      const isReallyOnline = await checkRealConnectivity()
+      setNetworkStatus({
+        isOnline: isReallyOnline,
+        isChecking: false,
+        lastChecked: new Date()
+      })
+      return isReallyOnline
+    } catch {
+      setNetworkStatus({
+        isOnline: false,
+        isChecking: false,
+        lastChecked: new Date()
+      })
+      return false
+    }
+  }, [])
+
+  // Efectos para monitorear cambios de conectividad
+  useEffect(() => {
+    // Verificación inicial
+    checkConnectivity()
+
+    // Listeners para eventos de red del navegador
+    const handleOnline = () => {
+      console.log('🌐 Navegador reporta: ONLINE')
+      checkConnectivity()
+    }
+
+    const handleOffline = () => {
+      console.log('🌐 Navegador reporta: OFFLINE')
+      setNetworkStatus(prev => ({ 
+        ...prev, 
+        isOnline: false, 
+        lastChecked: new Date() 
+      }))
+    }
+
+    // Listener para cambio de visibilidad (cuando el usuario vuelve a la pestaña)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        checkConnectivity()
+      }
+    }
+
+    // Agregar event listeners
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // Verificar conectividad periódicamente (cada 30 segundos cuando está online)
+    const interval = setInterval(() => {
+      if (navigator.onLine) {
+        checkConnectivity()
+      }
+    }, 30000)
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      clearInterval(interval)
+    }
+  }, [checkConnectivity])
+
+  return {
+    ...networkStatus,
+    checkConnectivity
+  }
+}
+
+/**
+ * Hook simplificado que solo retorna si está online o no
+ */
+export function useIsOnline(): boolean {
+  const { isOnline } = useNetworkStatus()
+  return isOnline
+}

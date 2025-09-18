@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { toast } from "@/lib/toast"
-import { validateField, type FormValidationData } from "@/lib/validations"
+import { validateField, formatPhoneNumber, formatCuit, type FormValidationData } from "@/lib/validations"
 import { generateOrderNumber } from "@/lib/order-number"
 import { toast as sonnerToast } from "sonner"
 
@@ -197,6 +197,15 @@ export function useFormData() {
   }
 
   const updateField = (field: keyof FormData, value: string | boolean) => {
+    // Aplicar formateo automático antes de guardar
+    if (typeof value === "string") {
+      if (field === "telefono") {
+        value = formatPhoneNumber(value)
+      } else if (field === "cuit") {
+        value = formatCuit(value)
+      }
+    }
+    
     setFormData((prev) => ({ ...prev, [field]: value }))
     validateAndUpdateField(field, value)
   }
