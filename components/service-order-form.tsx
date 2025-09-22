@@ -64,7 +64,7 @@ export function ServiceOrderForm() {
   // Inicializar sincronización automática al cargar el componente
   useEffect(() => {
     // Inicializar el sistema de sincronización offline
-    syncManager.startAutoSync(60000) // Cada minuto
+    syncManager.startAutoSync(60000)
     
     console.log('🚀 Sistema de sincronización offline inicializado')
     
@@ -83,7 +83,7 @@ export function ServiceOrderForm() {
        (formData.clienteFirma.startsWith('http') || formData.clienteFirma.startsWith('data:image')))
        
     if (hasValidSignatures) {
-      console.log('� Firmas detectadas, forzando re-render')
+      console.log('✅ Firmas detectadas, forzando re-render')
       setForceRender(prev => prev + 1)
     }
   }, [formData.tecnicoFirma, formData.clienteFirma])
@@ -149,27 +149,11 @@ export function ServiceOrderForm() {
   const handleApplyValue = () => {
     if (activeField) {
       updateField(activeField, tempValue)
-      
-      // Feedback visual y en consola
-      const fieldLabel = clickableAreas.find(area => area.id === activeField)?.label || activeField
-      let displayValue: string
-      
-      if (typeof tempValue === 'boolean') {
-        displayValue = tempValue ? 'Sí' : 'No'
-      } else if (activeField === 'tecnicoFirma' || activeField === 'clienteFirma') {
-        // Para campos de firma, mostrar mensaje más limpio
-        displayValue = tempValue ? 'La firma se ingresó correctamente' : 'Sin firma'
-      } else {
-        displayValue = tempValue as string
-      }
-
-      console.log(`Campo ${fieldLabel} actualizado:`, tempValue)
+      setActiveField(null)
       toast.success("Campo actualizado", { 
-        description: `${fieldLabel}: ${displayValue}`,
+        description: `${clickableAreas.find(a => a.id === activeField)?.label} guardado correctamente`,
         duration: 2000 
       })
-      
-      setActiveField(null)
     }
   }
 
@@ -203,7 +187,7 @@ export function ServiceOrderForm() {
     const groupValidation = validateAllGroups(formData)
     if (!groupValidation.isValid) {
       toast.error("Validación de grupos fallida", {
-        description: groupValidation.errors.join(". ")
+        description: groupValidation.errors.join(', ')
       })
       return
     }
@@ -225,197 +209,78 @@ export function ServiceOrderForm() {
 
   const submitToGoogleForms = async () => {
     try {
+      // Mostrar info sobre firmas
+      const signatureInfo = getSignatureInfo(formData)
+      console.log('📝 Información de firmas antes del envío:', signatureInfo)
+
+      if (!isOnline) {
+        // Modo offline: guardar en cola para envío posterior
+        await addPendingSubmission(formData)
+        toast.success("Formulario guardado offline", { 
+          description: "Se enviará automáticamente cuando haya conexión",
+          duration: 4000 
+        })
+        return
+      }
+
       // Validar datos antes del envío
       const validation = validateFormDataForSubmission(formData)
       if (!validation.isValid) {
-        toast.error("Error de validación", {
-          description: validation.errors.join(", ")
+        toast.error("Error en validación", {
+          description: validation.errors.join(', ')
         })
         return
       }
 
-      console.log(`🌐 Estado de conectividad: ${isOnline ? 'ONLINE' : 'OFFLINE'}`)
-
-      if (!isOnline) {
-        // MODO OFFLINE: Guardar localmente
-        console.log("📱 Sin conexión - Guardando formulario localmente")
-        
-        const submissionId = addPendingSubmission(formData)
-        
-        toast.success("📱 Formulario guardado localmente", {
-          description: `Se enviará automáticamente cuando haya conexión. ID: ${submissionId.slice(-8)}`
-        })
-        
-        console.log(`💾 Formulario guardado en cola de sincronización: ${submissionId}`)
-        
-        // Intentar sincronizar en el fondo si se recupera la conexión
-        setTimeout(() => {
-          syncManager.syncPendingSubmissions()
-        }, 2000)
-        
-        return
-      }
-
-      // MODO ONLINE: Verificar si las firmas ya están en formato URL
-      console.log("🌐 Con conexión - Verificando estado de firmas")
+      // Enviar a Google Forms
+      toast.info("Enviando formulario...", { description: "Por favor espere" })
       
-      const tecnicoFirmaIsUrl = !formData.tecnicoFirma || formData.tecnicoFirma.startsWith('https://')
-      const clienteFirmaIsUrl = !formData.clienteFirma || formData.clienteFirma.startsWith('https://')
+      const result = await submitFormToGoogle(formData)
       
-      console.log('📝 Estado de firmas:', {
-        tecnicoFirma: tecnicoFirmaIsUrl ? 'URL lista' : 'Base64 - necesita subida',
-        clienteFirma: clienteFirmaIsUrl ? 'URL lista' : 'Base64 - necesita subida'
-      })
-
-      // Si las firmas ya son URLs de ImgBB, enviar directamente
-      if (tecnicoFirmaIsUrl && clienteFirmaIsUrl) {
-        console.log("✅ Todas las firmas ya están en formato URL - Enviando directamente")
-        
-        toast.info("Enviando formulario...", { 
-          description: "Las firmas ya están en la nube" 
-        })
-
-        const result = await submitFormToGoogle(formData)
-
-        if (result.success) {
-          toast.success("¡Formulario enviado exitosamente!", {
-            description: `Orden de servicio #${formData.numeroOrden} enviada a ARAN Tecnologías`
-          })
-          console.log("✅ Formulario enviado exitosamente a Google Forms")
-        } else {
-          throw new Error(result.error || "Error al enviar formulario")
-        }
-        
-        return
-      }
-
-      // Si hay firmas en base64, subirlas primero
-      console.log("🔄 Algunas firmas están en base64 - Procesando subida")
-      let processedFormData = { ...formData }
-      
-      // Verificar si hay firmas que necesitan ser procesadas (solo base64)
-      const needsProcessing = (formData.tecnicoFirma && formData.tecnicoFirma.startsWith('data:image')) ||
-                            (formData.clienteFirma && formData.clienteFirma.startsWith('data:image'))
-
-      if (needsProcessing) {
-        // Mostrar notificación de procesamiento
-        toast.info("Procesando firmas...", { 
-          description: "Subiendo firmas a la nube antes del envío" 
-        })
-
-        // Procesar firma del técnico si es base64
-        if (formData.tecnicoFirma && formData.tecnicoFirma.startsWith('data:image')) {
-          try {
-            console.log("🔄 Subiendo firma del técnico a ImgBB...")
-            toast.info("Subiendo firma del técnico...", { 
-              description: "Por favor espera" 
-            })
-            
-            const uploadResult = await uploadImageToImgBB(
-              formData.tecnicoFirma, 
-              `firma-tecnico-${formData.numeroOrden}`
-            )
-            
-            processedFormData.tecnicoFirma = uploadResult.data.url
-            console.log("✅ Firma del técnico subida exitosamente:", uploadResult.data.url)
-            
-            toast.success("✅ Firma del técnico subida", { 
-              description: "Guardada en la nube correctamente"
-            })
-            
-            // Pausa breve para asegurar que la operación se complete
-            await new Promise(resolve => setTimeout(resolve, 500))
-          } catch (error) {
-            console.error("❌ Error subiendo firma del técnico:", error)
-            
-            // Si falla la subida, guardar localmente para reintento
-            const submissionId = addPendingSubmission(formData)
-            toast.error("Error subiendo firma del técnico", {
-              description: `Guardado localmente para reintento. ID: ${submissionId.slice(-8)}`
-            })
-            return
-          }
-        }
-
-        // Procesar firma del cliente si es base64
-        if (formData.clienteFirma && formData.clienteFirma.startsWith('data:image')) {
-          try {
-            console.log("🔄 Subiendo firma del cliente a ImgBB...")
-            toast.info("Subiendo firma del cliente...", { 
-              description: "Por favor espera" 
-            })
-            
-            const uploadResult = await uploadImageToImgBB(
-              formData.clienteFirma, 
-              `firma-cliente-${formData.numeroOrden}`
-            )
-            
-            processedFormData.clienteFirma = uploadResult.data.url
-            console.log("✅ Firma del cliente subida exitosamente:", uploadResult.data.url)
-            
-            toast.success("✅ Firma del cliente subida", { 
-              description: "Guardada en la nube correctamente"
-            })
-            
-            // Pausa breve para asegurar que la operación se complete
-            await new Promise(resolve => setTimeout(resolve, 500))
-          } catch (error) {
-            console.error("❌ Error subiendo firma del cliente:", error)
-            
-            // Si falla la subida, guardar localmente para reintento
-            const submissionId = addPendingSubmission(formData)
-            toast.error("Error subiendo firma del cliente", {
-              description: `Guardado localmente para reintento. ID: ${submissionId.slice(-8)}`
-            })
-            return
-          }
-        }
-
-        console.log("✅ Todas las firmas han sido procesadas")
-      }
-
-      // Mostrar información de las firmas procesadas para debugging
-      const signatureInfo = getSignatureInfo(processedFormData)
-      console.log("📝 Información final de firmas para Google Forms:", {
-        tecnicoFirma: signatureInfo.tecnicoFirma,
-        clienteFirma: signatureInfo.clienteFirma
-      })
-
-      // Mostrar notificación de envío final
-      toast.info("Enviando formulario a Google Forms...", { 
-        description: "Procesando envío final" 
-      })
-
-      // Enviar el formulario a Google Forms con las firmas procesadas
-      const result = await submitFormToGoogle(processedFormData)
-
       if (result.success) {
-        toast.success("¡Formulario enviado exitosamente!", {
-          description: `Orden de servicio #${formData.numeroOrden} enviada a ARAN Tecnologías`
+        toast.success("¡Formulario enviado exitosamente!", { 
+          description: "Los datos se han guardado en Google Forms",
+          duration: 5000 
         })
-        console.log("✅ Formulario enviado exitosamente a Google Forms")
+        
+        // Opcional: Limpiar formulario después del envío exitoso
+        // resetForm()
       } else {
-        throw new Error(result.error || "Error al enviar formulario")
+        throw new Error(result.error || "Error desconocido")
       }
-
+      
     } catch (error) {
-      console.error("❌ Error al enviar formulario:", error)
+      console.error('Error al enviar formulario:', error)
       
-      // Guardar localmente como respaldo
-      const submissionId = addPendingSubmission(formData)
-      
-      toast.error("Error al enviar formulario", {
-        description: `Guardado localmente para reintento. ID: ${submissionId.slice(-8)}`
-      })
-
-      // Como fallback adicional, abrir Google Forms en una nueva pestaña
-      const fallbackUrl = generatePrefilledUrl(formData)
-      setTimeout(() => {
-        window.open(fallbackUrl, "_blank")
-        toast.info("Formulario manual abierto", {
-          description: "Se ha abierto Google Forms en una nueva pestaña como respaldo"
-        })
-      }, 3000)
+      // En caso de error, guardar offline como respaldo
+      if (isOnline) {
+        try {
+          await addPendingSubmission(formData)
+          toast.error("Error en envío online", { 
+            description: "Guardado offline para reintento automático",
+            duration: 4000 
+          })
+        } catch (offlineError) {
+          toast.error("Error crítico", { 
+            description: "No se pudo enviar ni guardar offline",
+            duration: 6000 
+          })
+        }
+      } else {
+        // Ya está offline, guardar directamente
+        try {
+          await addPendingSubmission(formData)
+          toast.info("Guardado offline", { 
+            description: "Se enviará cuando haya conexión",
+            duration: 4000 
+          })
+        } catch (offlineError) {
+          toast.error("Error de almacenamiento", { 
+            description: "No se pudo guardar el formulario",
+            duration: 6000 
+          })
+        }
+      }
     }
   }
 
@@ -504,23 +369,15 @@ export function ServiceOrderForm() {
           }}
         >
           {area.type === 'checkbox' ? (
-            // Renderizar checkbox visual
-            <div className="flex items-center justify-center w-full h-full">
-              <div className={`
-                value-overlay-checkbox w-4 h-4 border-2 rounded-sm flex items-center justify-center text-xs font-bold
-                ${value as boolean 
-                  ? 'bg-primary border-primary text-white shadow-md' 
-                  : 'bg-white border-gray-300 text-transparent'
-                }
-              `}>
-                {value as boolean ? '✓' : ''}
+            hasValue && formData[area.id] && (
+              <div className="w-full h-full flex items-center justify-center">
+                <span className="text-black text-lg font-bold">✓</span>
               </div>
-            </div>
+            )
           ) : hasValue ? (
-            // Renderizar texto o firma
             <div className={`
-              value-overlay-text w-full h-full flex px-2 py-1 text-sm font-medium
-              ${area.type === 'textarea' ? 'items-start pt-2' : 
+              w-full h-full flex text-black text-xs font-medium overflow-hidden
+              ${area.type === 'textarea' ? 'items-start p-1' : 
                 area.type === 'signature' ? 'items-center justify-center' : 'items-center'}
             `}>
               {area.type === 'signature' ? (
@@ -550,25 +407,14 @@ export function ServiceOrderForm() {
                 </div>
               ) : (
                 <span className={`
-                  w-full leading-tight
-                  ${area.type === 'textarea' 
-                    ? 'text-xs leading-tight overflow-hidden' 
-                    : 'truncate'
-                  }
+                  ${area.type === 'textarea' ? 'whitespace-pre-wrap leading-tight' : 'truncate'}
+                  ${area.id === 'numeroOrden' ? 'font-bold' : ''}
                 `}>
-                  {area.type === 'textarea' 
-                    ? (value as string).substring(0, 100) + ((value as string).length > 100 ? '...' : '')
-                    : value as string
-                  }
+                  {value.toString()}
                 </span>
               )}
             </div>
-          ) : (
-            // Mostrar placeholder sutil para campos vacíos
-            <div className="w-full h-full flex items-center justify-center opacity-30">
-              <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
-            </div>
-          )}
+          ) : null}
         </div>
       )
     })
@@ -582,546 +428,90 @@ export function ServiceOrderForm() {
 
     return (
       <div
-        className="form-overlay p-6 min-w-96 max-w-md bg-white border-2 border-primary rounded-lg shadow-lg"
+        className="fixed bg-white border border-border rounded-lg shadow-lg p-4 z-50 min-w-[300px]"
         style={{
           left: overlayPosition.x,
           top: overlayPosition.y,
         }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <Label className="font-semibold text-primary text-lg">{field.label}</Label>
-            <p className="text-sm text-muted-foreground mt-1">
-              Modifica el valor y haz clic en Aplicar
-            </p>
-          </div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-sm">{field.label}</h3>
           <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
             <X className="h-4 w-4" />
           </Button>
         </div>
 
-        {/* Error message display */}
-        {getFieldError(field.id) && (
-          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-destructive rounded-full"></div>
-              <span className="text-sm text-destructive font-medium">
-                {getFieldError(field.id)}
-              </span>
+        {field.type === "checkbox" ? (
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                checked={tempValue as boolean}
+                onCheckedChange={handleTempValueChange}
+              />
+              <Label>{field.label}</Label>
             </div>
+          </div>
+        ) : field.type === "textarea" ? (
+          <div className="space-y-2">
+            <Textarea
+              value={tempValue as string}
+              onChange={(e) => handleTempValueChange(e.target.value)}
+              rows={4}
+              placeholder={`Ingrese ${field.label.toLowerCase()}`}
+              className="text-sm"
+            />
+            {getFieldHint(activeField) && (
+              <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
+            )}
+          </div>
+        ) : field.type === "signature" ? (
+          <div className="space-y-2">
+            <SignatureCanvas
+              value={tempValue as string}
+              onChange={handleTempValueChange}
+              width={280}
+              height={120}
+              orderNumber={formData.numeroOrden}
+              signatureType={activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente'}
+            />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Input
+              value={tempValue as string}
+              onChange={(e) => handleTempValueChange(e.target.value)}
+              placeholder={`Ingrese ${field.label.toLowerCase()}`}
+              className="text-sm"
+              type={field.id === "fecha" ? "date" : "text"}
+            />
+            {getFieldHint(activeField) && (
+              <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
+            )}
+            {getFieldError(activeField) && (
+              <p className="text-xs text-red-600">⚠️ {getFieldError(activeField)}</p>
+            )}
           </div>
         )}
 
-        {/* Input Field */}
-        <div className="mb-6">
-          {field.type === "checkbox" ? (
-            <div className="flex items-center space-x-3 p-3 border rounded-md bg-muted/30">
-              <Checkbox
-                id={field.id}
-                checked={tempValue as boolean}
-                onCheckedChange={(checked) => handleTempValueChange(checked as boolean)}
-              />
-              <Label htmlFor={field.id} className="text-sm font-medium">
-                {field.label}
-              </Label>
-            </div>
-          ) : field.type === "textarea" ? (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-muted-foreground">
-                Contenido:
-              </Label>
-              <Textarea
-                value={tempValue as string}
-                onChange={(e) => handleTempValueChange(e.target.value)}
-                placeholder={`Ingrese ${field.label.toLowerCase()}`}
-                rows={6}
-                className="resize-none"
-              />
-            </div>
-          ) : field.type === "signature" ? (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-muted-foreground">
-                Firma Digital:
-              </Label>
-              <SignatureCanvas
-                value={tempValue as string}
-                onChange={(signature) => handleTempValueChange(signature)}
-                width={350}
-                height={150}
-                className="w-full"
-                orderNumber={formData.numeroOrden}
-                signatureType={field.id === 'tecnicoFirma' ? 'tecnico' : 'cliente'}
-                autoUpload={true}
-              />
-              <p className="text-xs text-muted-foreground text-center">
-                Dibuje su firma - Se guardará automáticamente en la nube
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-muted-foreground">
-                {field.id === "fecha" ? "Selecciona la fecha:" : "Valor:"}
-              </Label>
-              
-              {/* Field hint */}
-              {getFieldHint(field.id) && (
-                <div className="p-2 bg-blue-50 border border-blue-200 rounded-md">
-                  <p className="text-xs text-blue-700">
-                    💡 {getFieldHint(field.id)}
-                  </p>
-                </div>
-              )}
-              
-              <Input
-                type={field.id === "fecha" ? "date" : "text"}
-                value={tempValue as string}
-                onChange={(e) => handleTempValueChange(e.target.value)}
-                placeholder={field.id === "fecha" ? "yyyy-mm-dd" : `Ingrese ${field.label.toLowerCase()}`}
-                className="w-full"
-              />
-              
-              {field.id === "fecha" && (
-                <p className="text-xs text-muted-foreground">
-                  Selecciona una fecha usando el calendario
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-3">
-          <Button 
-            variant="outline" 
-            onClick={handleCancelEdit}
-            className="flex-1"
-          >
-            <X className="h-4 w-4 mr-2" />
-            Cancelar
-          </Button>
-          <Button 
-            onClick={handleApplyValue}
-            className="flex-1"
-          >
-            <span className="mr-2">✓</span>
+        <div className="flex gap-2 mt-4">
+          <Button onClick={handleApplyValue} size="sm" className="flex-1">
             Aplicar
           </Button>
+          <Button variant="outline" onClick={handleCancelEdit} size="sm">
+            Cancelar
+          </Button>
         </div>
 
-        {/* Preview de valor actual */}
-        <div className="mt-4 pt-4 border-t border-border">
-          <div className="text-xs text-muted-foreground">
-            <span className="font-medium">Valor actual:</span> 
-            <span className="ml-2 px-2 py-1 bg-muted rounded">
-              {typeof tempValue === 'boolean' 
-                ? (tempValue ? 'Sí' : 'No') 
-                : (tempValue || 'Sin valor')
-              }
-            </span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Función para renderizar el formulario móvil
-  const renderMobileForm = () => {
-    return (
-      <div className="space-y-6">
-        {/* Información básica */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold border-b border-border pb-2">Información Básica</h3>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="numeroOrden" className="text-sm font-medium">Número de Orden</Label>
-              <Input
-                id="numeroOrden"
-                value={formData.numeroOrden}
-                disabled
-                className="mt-1 bg-muted"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="fecha" className="text-sm font-medium">Fecha</Label>
-              {getFieldHint("fecha") && (
-                <p className="text-xs text-blue-600 mb-1">💡 {getFieldHint("fecha")}</p>
-              )}
-              <Input
-                id="fecha"
-                type="date"
-                value={formData.fecha}
-                onChange={(e) => updateField("fecha", e.target.value)}
-                className="mt-1"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Información del Cliente */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold border-b border-border pb-2">Cliente</h3>
-          
-          <div>
-            <Label htmlFor="razonSocial" className="text-sm font-medium">Razón Social</Label>
-            <Input
-              id="razonSocial"
-              value={formData.razonSocial}
-              onChange={(e) => updateField("razonSocial", e.target.value)}
-              placeholder="Ingrese la razón social"
-              className="mt-1"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="cuit" className="text-sm font-medium">CUIT</Label>
-              {getFieldHint("cuit") && (
-                <p className="text-xs text-blue-600 mb-1">💡 {getFieldHint("cuit")}</p>
-              )}
-              <Input
-                id="cuit"
-                value={formData.cuit}
-                onChange={(e) => updateField("cuit", e.target.value)}
-                placeholder="20123456789"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="contacto" className="text-sm font-medium">Contacto</Label>
-              <Input
-                id="contacto"
-                value={formData.contacto}
-                onChange={(e) => updateField("contacto", e.target.value)}
-                placeholder="Nombre del contacto"
-                className="mt-1"
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="telefono" className="text-sm font-medium">Teléfono</Label>
-            {getFieldHint("telefono") && (
-              <p className="text-xs text-blue-600 mb-1">💡 {getFieldHint("telefono")}</p>
+        {field.type !== "signature" && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            {tempValue && (
+              <span className="font-medium">
+                Vista previa: {typeof tempValue === 'string' ? tempValue.slice(0, 50) : String(tempValue)}
+                {typeof tempValue === 'string' && tempValue.length > 50 && '...'}
+              </span>
             )}
-            <Input
-              id="telefono"
-              value={formData.telefono}
-              onChange={(e) => updateField("telefono", e.target.value)}
-              placeholder="3476626662"
-              className="mt-1"
-            />
           </div>
-        </div>
-
-        {/* Tipo de Servicio */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold border-b border-border pb-2">Tipo de Servicio</h3>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { key: "servicioTecnico", label: "Servicio Técnico" },
-              { key: "instalacion", label: "Instalación" },
-              { key: "puestaEnMarcha", label: "Puesta en Marcha" },
-              { key: "capacitacion", label: "Capacitación" },
-              { key: "calibracion", label: "Calibración" },
-              { key: "tercero", label: "Tercero" }
-            ].map((service) => (
-              <div key={service.key} className="flex items-center space-x-2 p-2 border rounded-md">
-                <Checkbox
-                  id={service.key}
-                  checked={formData[service.key as keyof FormData] as boolean}
-                  onCheckedChange={(checked) => updateField(service.key as keyof FormData, checked as boolean)}
-                />
-                <Label htmlFor={service.key} className="text-sm">{service.label}</Label>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Descripción del trabajo */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold border-b border-border pb-2">Descripción del Trabajo</h3>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="maquina" className="text-sm font-medium">Máquina</Label>
-              <Input
-                id="maquina"
-                value={formData.maquina}
-                onChange={(e) => updateField("maquina", e.target.value)}
-                placeholder="Descripción de la máquina"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="equipo" className="text-sm font-medium">Equipo</Label>
-              <Input
-                id="equipo"
-                value={formData.equipo}
-                onChange={(e) => updateField("equipo", e.target.value)}
-                placeholder="Descripción del equipo"
-                className="mt-1"
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="descripcion" className="text-sm font-medium">Descripción del Servicio</Label>
-            <Textarea
-              id="descripcion"
-              value={formData.descripcion}
-              onChange={(e) => updateField("descripcion", e.target.value)}
-              placeholder="Descripción detallada del trabajo realizado"
-              rows={4}
-              className="mt-1"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="insumos" className="text-sm font-medium">Insumos Utilizados</Label>
-            <Textarea
-              id="insumos"
-              value={formData.insumos}
-              onChange={(e) => updateField("insumos", e.target.value)}
-              placeholder="Lista de insumos y materiales utilizados"
-              rows={3}
-              className="mt-1"
-            />
-          </div>
-        </div>
-
-        {/* Ubicación del servicio */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold border-b border-border pb-2">Ubicación y Modalidad</h3>
-          
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            {[
-              { key: "servicioACampo", label: "Servicio a Campo" },
-              { key: "servicioEnOficina", label: "Servicio en Oficina" }
-            ].map((location) => (
-              <div key={location.key} className="flex items-center space-x-2 p-2 border rounded-md">
-                <Checkbox
-                  id={location.key}
-                  checked={formData[location.key as keyof FormData] as boolean}
-                  onCheckedChange={(checked) => updateField(location.key as keyof FormData, checked as boolean)}
-                />
-                <Label htmlFor={location.key} className="text-sm">{location.label}</Label>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="localidad" className="text-sm font-medium">Localidad</Label>
-              <Input
-                id="localidad"
-                value={formData.localidad}
-                onChange={(e) => updateField("localidad", e.target.value)}
-                placeholder="Ciudad donde se realizó el servicio"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="provincia" className="text-sm font-medium">Provincia</Label>
-              <Input
-                id="provincia"
-                value={formData.provincia}
-                onChange={(e) => updateField("provincia", e.target.value)}
-                placeholder="Provincia"
-                className="mt-1"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Condiciones del servicio */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold border-b border-border pb-2">Condiciones</h3>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { key: "conCargo", label: "Con Cargo" },
-              { key: "sinCargo", label: "Sin Cargo" },
-              { key: "servicioEnGarantia", label: "En Garantía" },
-              { key: "aConvenir", label: "A Convenir" }
-            ].map((condition) => (
-              <div key={condition.key} className="flex items-center space-x-2 p-2 border rounded-md">
-                <Checkbox
-                  id={condition.key}
-                  checked={formData[condition.key as keyof FormData] as boolean}
-                  onCheckedChange={(checked) => updateField(condition.key as keyof FormData, checked as boolean)}
-                />
-                <Label htmlFor={condition.key} className="text-sm">{condition.label}</Label>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Datos técnicos */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold border-b border-border pb-2">Datos Técnicos</h3>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="distancia" className="text-sm font-medium">Distancia (km)</Label>
-              <Input
-                id="distancia"
-                value={formData.distancia}
-                onChange={(e) => updateField("distancia", e.target.value)}
-                placeholder="Distancia en kilómetros"
-                type="number"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="duracion" className="text-sm font-medium">Duración (hs)</Label>
-              <Input
-                id="duracion"
-                value={formData.duracion}
-                onChange={(e) => updateField("duracion", e.target.value)}
-                placeholder="Duración en horas"
-                type="number"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="tipoCambio" className="text-sm font-medium">Tipo de Cambio</Label>
-              <Input
-                id="tipoCambio"
-                value={formData.tipoCambio}
-                onChange={(e) => updateField("tipoCambio", e.target.value)}
-                placeholder="Tipo de cambio"
-                type="number"
-                step="0.01"
-                className="mt-1"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="iva" className="text-sm font-medium">IVA</Label>
-              <Input
-                id="iva"
-                value={formData.iva}
-                onChange={(e) => updateField("iva", e.target.value)}
-                placeholder="Monto del IVA"
-                type="number"
-                step="0.01"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="total" className="text-sm font-medium">Total</Label>
-              <Input
-                id="total"
-                value={formData.total}
-                onChange={(e) => updateField("total", e.target.value)}
-                placeholder="Monto total"
-                type="number"
-                step="0.01"
-                className="mt-1"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Firmas */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold border-b border-border pb-2">Firmas</h3>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="tecnicoNombre" className="text-sm font-medium">Nombre del Técnico</Label>
-              <Input
-                id="tecnicoNombre"
-                value={formData.tecnicoNombre}
-                onChange={(e) => updateField("tecnicoNombre", e.target.value)}
-                placeholder="Nombre completo del técnico"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="clienteNombre" className="text-sm font-medium">Nombre del Cliente</Label>
-              <Input
-                id="clienteNombre"
-                value={formData.clienteNombre}
-                onChange={(e) => updateField("clienteNombre", e.target.value)}
-                placeholder="Nombre completo del cliente"
-                className="mt-1"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm font-medium">Firma del Técnico</Label>
-              <div className="mt-2 border border-border rounded-md">
-                <SignatureCanvas
-                  value={formData.tecnicoFirma}
-                  onChange={(signature) => updateField("tecnicoFirma", signature)}
-                  width={300}
-                  height={120}
-                  className="w-full"
-                  orderNumber={formData.numeroOrden}
-                  signatureType="tecnico"
-                  autoUpload={true}
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium">Firma del Cliente</Label>
-              <div className="mt-2 border border-border rounded-md">
-                <SignatureCanvas
-                  value={formData.clienteFirma}
-                  onChange={(signature) => updateField("clienteFirma", signature)}
-                  width={300}
-                  height={120}
-                  className="w-full"
-                  orderNumber={formData.numeroOrden}
-                  signatureType="cliente"
-                  autoUpload={true}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Campos auxiliares */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold border-b border-border pb-2">Campos Adicionales</h3>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { key: "aux1", label: "Campo Auxiliar 1" },
-              { key: "aux2", label: "Campo Auxiliar 2" },
-              { key: "aux3", label: "Campo Auxiliar 3" },
-              { key: "aux4", label: "Campo Auxiliar 4" }
-            ].map((aux) => (
-              <div key={aux.key}>
-                <Label htmlFor={aux.key} className="text-sm font-medium">{aux.label}</Label>
-                <Input
-                  id={aux.key}
-                  value={formData[aux.key as keyof FormData] as string}
-                  onChange={(e) => updateField(aux.key as keyof FormData, e.target.value)}
-                  placeholder={`Contenido de ${aux.label.toLowerCase()}`}
-                  className="mt-1"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
     )
   }
@@ -1171,21 +561,12 @@ export function ServiceOrderForm() {
         </div>
       </div>
 
-      {/* Interactive Form */}
+      {/* Interactive Form - Always show image overlay design */}
       <div className="max-w-7xl mx-auto p-2 sm:p-4">
         <Card className="p-2 sm:p-6">
-          {/* Mobile/Tablet View */}
-          <div className="block lg:hidden">
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold mb-2">Orden de Servicio #{formData.numeroOrden}</h2>
-              <p className="text-sm text-muted-foreground">Formulario adaptado para dispositivos móviles</p>
-            </div>
-            {renderMobileForm()}
-          </div>
-
-          {/* Desktop View */}
-          <div className="hidden lg:block">
-            <div ref={imageRef} className="relative mx-auto" style={{ maxWidth: "850px" }}>
+          {/* Form View - Visual overlay on image for all devices */}
+          <div className="overflow-x-auto">
+            <div ref={imageRef} className="relative mx-auto" style={{ minWidth: "850px", maxWidth: "850px" }}>
               <img src="/images/orden-servicio-aran.png" alt="Orden de Servicio ARAN" className="w-full h-auto" />
 
               {/* Value Overlays - Mostrar valores sobre la imagen */}
