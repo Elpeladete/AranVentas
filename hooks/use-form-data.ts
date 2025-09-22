@@ -87,60 +87,12 @@ const defaultFormData: FormData = {
 }
 
 // Campos críticos que requieren validación en tiempo real
-const criticalFields: (keyof FormData)[] = ["numeroOrden", "cuit", "fecha", "telefono", "razonSocial", "contacto"]
-
-// Campos recomendados para una orden completa
-const recommendedFields: (keyof FormData)[] = [
-  "numeroOrden", "fecha", "razonSocial", "cuit", "contacto", "telefono",
-  "maquina", "equipo", "descripcion", "localidad", "provincia", 
+const criticalFields: (keyof FormData)[] = [
+  "razonSocial", "contacto", "cuit", "telefono",
+  "maquina", "equipo", "descripcion", "insumos",
   "tecnicoNombre", "clienteNombre"
+  // Nota: Los grupos de servicios, ubicación, facturación y firmas se validan por separado
 ]
-
-// Analizar el progreso del formulario
-export function analyzeFormProgress(formData: FormData) {
-  const allFields = Object.keys(formData) as (keyof FormData)[]
-  
-  // Campos completados
-  const completedFields = allFields.filter(field => {
-    const value = formData[field]
-    return typeof value === 'boolean' ? value : (value && value.toString().trim() !== '')
-  })
-  
-  // Campos críticos faltantes
-  const criticalMissing = criticalFields.filter(field => {
-    const value = formData[field]
-    return typeof value === 'boolean' ? !value : (!value || value.toString().trim() === '')
-  })
-  
-  // Campos recomendados faltantes
-  const recommendedMissing = recommendedFields.filter(field => {
-    const value = formData[field]
-    return typeof value === 'boolean' ? !value : (!value || value.toString().trim() === '')
-  })
-  
-  // Todos los campos faltantes
-  const allMissing = allFields.filter(field => {
-    const value = formData[field]
-    return typeof value === 'boolean' ? !value : (!value || value.toString().trim() === '')
-  })
-  
-  // Calcular progreso basado en campos recomendados
-  const progress = Math.round(
-    ((recommendedFields.length - recommendedMissing.length) / recommendedFields.length) * 100
-  )
-  
-  return {
-    progress,
-    totalFields: allFields.length,
-    completedFields: completedFields.length,
-    criticalMissing,
-    recommendedMissing,
-    allMissing,
-    isComplete: allMissing.length === 0,
-    isRecommendedComplete: recommendedMissing.length === 0,
-    hasCriticalMissing: criticalMissing.length > 0
-  }
-}
 
 export function useFormData() {
   const [formData, setFormData] = useState<FormData>(defaultFormData)
@@ -150,31 +102,50 @@ export function useFormData() {
 
   // Load data from localStorage on mount
   useEffect(() => {
+    console.log('🚀 useEffect MOUNT ejecutándose, isLoading:', isLoading)
     try {
       const savedData = localStorage.getItem("aran-form-data")
+      console.log('🔍 Cargando datos del localStorage:', savedData)
       if (savedData) {
         const parsedData = JSON.parse(savedData)
+        console.log('📦 Datos parseados del localStorage:', {
+          tecnicoFirma: parsedData.tecnicoFirma,
+          clienteFirma: parsedData.clienteFirma,
+          totalFields: Object.keys(parsedData).length
+        })
         setFormData({ ...defaultFormData, ...parsedData })
         toast.info("Datos recuperados", { description: "Se han cargado los datos guardados anteriormente" })
+      } else {
+        console.log('📝 No hay datos en localStorage, usando valores por defecto')
       }
     } catch (error) {
       console.error("Error loading form data:", error)
       toast.error("Error al cargar datos", { description: "No se pudieron recuperar los datos guardados" })
     } finally {
+      console.log('✅ Finalizando carga, estableciendo isLoading = false')
       setIsLoading(false)
     }
-  }, [])
+  }, []) // Solo en mount
 
-  // Auto-save to localStorage when data changes
+  // Auto-save to localStorage when data changes (with debounce)
   useEffect(() => {
     if (!isLoading) {
-      try {
-        localStorage.setItem("aran-form-data", JSON.stringify(formData))
-        setLastSaveTime(new Date())
-      } catch (error) {
-        console.error("Error saving form data:", error)
-        toast.error("Error al guardar", { description: "No se pudieron guardar los datos automáticamente" })
-      }
+      const timeoutId = setTimeout(() => {
+        try {
+          console.log('💾 Guardando en localStorage:', {
+            tecnicoFirma: formData.tecnicoFirma,
+            clienteFirma: formData.clienteFirma,
+            isLoading
+          })
+          localStorage.setItem("aran-form-data", JSON.stringify(formData))
+          setLastSaveTime(new Date())
+        } catch (error) {
+          console.error("Error saving form data:", error)
+          toast.error("Error al guardar", { description: "No se pudieron guardar los datos automáticamente" })
+        }
+      }, 500) // Debounce de 500ms
+
+      return () => clearTimeout(timeoutId)
     }
   }, [formData, isLoading])
 
@@ -197,6 +168,21 @@ export function useFormData() {
   }
 
   const updateField = (field: keyof FormData, value: string | boolean) => {
+    // Log específico para firmas para debugging
+    if (field === 'tecnicoFirma' || field === 'clienteFirma') {
+      console.log(`🎯 FormData: ${field} actualizado con:`, {
+        type: typeof value,
+        isUrl: typeof value === 'string' && value.startsWith('http'),
+        isBase64: typeof value === 'string' && value.startsWith('data:image'),
+        length: typeof value === 'string' ? value.length : 0,
+        preview: typeof value === 'string' ? value.substring(0, 100) + '...' : value,
+        fullValue: value
+      })
+
+      // Log el estado actual antes del update
+      console.log(`📝 Estado ANTES del update ${field}:`, formData[field])
+    }
+    
     // Aplicar formateo automático antes de guardar
     if (typeof value === "string") {
       if (field === "telefono") {
@@ -206,11 +192,27 @@ export function useFormData() {
       }
     }
     
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    const oldFormData = formData
+    setFormData((prev) => {
+      const newData = { ...prev, [field]: value }
+      
+      // Log específico para firmas después del update
+      if (field === 'tecnicoFirma' || field === 'clienteFirma') {
+        console.log(`📝 Estado DESPUÉS del update ${field}:`, newData[field])
+        console.log(`🔄 FormData completo actualizado:`, {
+          [field]: newData[field],
+          estadoCompleto: newData
+        })
+      }
+      
+      return newData
+    })
     validateAndUpdateField(field, value)
   }
 
   const resetForm = () => {
+    console.log('🔄 RESET FORM LLAMADO - Stack trace:')
+    console.trace()
     const newFormData = {
       ...defaultFormData,
       numeroOrden: generateOrderNumber(), // Generar nuevo número de orden
@@ -267,22 +269,58 @@ export function useFormData() {
     return Object.keys(fieldErrors).length > 0
   }
 
-  const getFormProgress = (): number => {
-    const totalFields = Object.keys(defaultFormData).length
-    const filledFields = Object.values(formData).filter(value => 
-      typeof value === 'boolean' ? true : value.trim() !== ''
-    ).length
-    return Math.round((filledFields / totalFields) * 100)
+  // Validación simple de campos críticos (sin cálculo de progreso)
+  const validateCriticalFields = (): { isValid: boolean; missingFields: string[] } => {
+    const missing: string[] = []
+    
+    // Validar campos individuales críticos
+    criticalFields.forEach(field => {
+      const value = formData[field]
+      const isEmpty = typeof value === 'boolean' ? !value : (!value || value.toString().trim() === '')
+      if (isEmpty) {
+        missing.push(field)
+      }
+    })
+    
+    // Validar que tenga al menos un tipo de servicio
+    const hasService = formData.servicioTecnico || formData.instalacion || 
+                      formData.puestaEnMarcha || formData.capacitacion || 
+                      formData.calibracion || formData.tercero
+    if (!hasService) {
+      missing.push('tipoServicio')
+    }
+    
+    // Validar ubicación del servicio
+    const hasLocation = formData.servicioACampo || formData.servicioEnOficina
+    if (!hasLocation) {
+      missing.push('ubicacionServicio')
+    }
+    
+    // Validar tipo de facturación
+    const hasBilling = formData.conCargo || formData.sinCargo || 
+                      formData.servicioEnGarantia || formData.aConvenir
+    if (!hasBilling) {
+      missing.push('tipoFacturacion')
+    }
+    
+    // Validar firmas
+    if (!formData.tecnicoFirma || formData.tecnicoFirma.trim() === '') {
+      missing.push('tecnicoFirma')
+    }
+    if (!formData.clienteFirma || formData.clienteFirma.trim() === '') {
+      missing.push('clienteFirma')
+    }
+    
+    return {
+      isValid: missing.length === 0,
+      missingFields: missing
+    }
   }
 
   const regenerateOrderNumber = () => {
     const newOrderNumber = generateOrderNumber()
     updateField('numeroOrden', newOrderNumber)
     sonnerToast.success(`Nuevo número de orden generado: ${newOrderNumber}`)
-  }
-
-  const getDetailedProgress = () => {
-    return analyzeFormProgress(formData)
   }
 
   return {
@@ -295,8 +333,7 @@ export function useFormData() {
     fieldErrors,
     getFieldError,
     hasErrors,
-    getFormProgress,
-    getDetailedProgress,
+    validateCriticalFields,
     lastSaveTime,
     regenerateOrderNumber,
   }

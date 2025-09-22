@@ -165,13 +165,23 @@ export function SignatureCanvas({
         try {
           const uploadedUrl = await uploadSignature(canvas)
           if (uploadedUrl && onChange) {
+            console.log(`🎯 SignatureCanvas: onChange llamado con URL: ${uploadedUrl}`)
             onChange(uploadedUrl) // Pasar URL directamente
+          } else {
+            console.log(`🎯 SignatureCanvas: Fallback a base64`)
+            // Fallback: usar base64 local
+            const localSignature = canvas.toDataURL('image/png')
+            if (onChange) {
+              console.log(`🎯 SignatureCanvas: onChange llamado con base64 (length: ${localSignature.length})`)
+              onChange(localSignature)
+            }
           }
         } catch (error) {
           console.error('Error en subida automática:', error)
           // Fallback: usar base64 local
           const localSignature = canvas.toDataURL('image/png')
           if (onChange) {
+            console.log(`🎯 SignatureCanvas: onChange llamado con base64 de emergencia (length: ${localSignature.length})`)
             onChange(localSignature)
           }
         }

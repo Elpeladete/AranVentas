@@ -15,7 +15,6 @@ import { useNetworkStatus } from "@/hooks/use-network-status"
 import { FormActions } from "@/components/form-actions"
 import { toast } from "@/lib/toast"
 import { generateOrderNumber } from "@/lib/order-number"
-import { FormProgressModal } from "@/components/form-progress-modal"
 import { submitFormToGoogle, generatePrefilledUrl, validateFormDataForSubmission, getSignatureInfo } from "@/lib/google-forms"
 import { SignatureCanvas } from "@/components/signature-canvas"
 import { formatPhoneNumber, formatCuit, getFieldHint, validateAllGroups } from "@/lib/validations"
@@ -23,6 +22,7 @@ import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { addPendingSubmission } from "@/lib/offline-storage"
 import { syncManager } from "@/lib/offline-sync"
 import { NetworkStatusIndicator } from "@/components/network-status-indicator"
+import { OfflineTestPanel } from "@/components/offline-test-panel"
 
 interface ClickableArea {
   id: keyof FormData
@@ -45,8 +45,7 @@ export function ServiceOrderForm() {
     fieldErrors,
     getFieldError,
     hasErrors,
-    getFormProgress,
-    getDetailedProgress,
+    validateCriticalFields,
     lastSaveTime,
     regenerateOrderNumber
   } = useFormData()
@@ -58,7 +57,8 @@ export function ServiceOrderForm() {
   const [overlayPosition, setOverlayPosition] = useState({ x: 0, y: 0 })
   const [tempValue, setTempValue] = useState<string | boolean>("")
   const [originalValue, setOriginalValue] = useState<string | boolean>("")
-  const [showProgressModal, setShowProgressModal] = useState(false)
+  const [forceRender, setForceRender] = useState(0) // Para forzar re-render
+  const [showOfflinePanel, setShowOfflinePanel] = useState(false) // Panel de pruebas offline
   const imageRef = useRef<HTMLDivElement>(null)
 
   // Inicializar sincronización automática al cargar el componente
@@ -73,6 +73,20 @@ export function ServiceOrderForm() {
       syncManager.stopAutoSync()
     }
   }, [])
+
+  // useEffect para detectar cambios en firmas y forzar re-render
+  useEffect(() => {
+    const hasValidSignatures = 
+      (formData.tecnicoFirma && typeof formData.tecnicoFirma === 'string' && 
+       (formData.tecnicoFirma.startsWith('http') || formData.tecnicoFirma.startsWith('data:image'))) ||
+      (formData.clienteFirma && typeof formData.clienteFirma === 'string' && 
+       (formData.clienteFirma.startsWith('http') || formData.clienteFirma.startsWith('data:image')))
+       
+    if (hasValidSignatures) {
+      console.log('� Firmas detectadas, forzando re-render')
+      setForceRender(prev => prev + 1)
+    }
+  }, [formData.tecnicoFirma, formData.clienteFirma])
 
   // Define clickable areas based on the form image layout (campos editables)
   const clickableAreas: ClickableArea[] = [
@@ -106,8 +120,8 @@ export function ServiceOrderForm() {
     { id: "total", x: 660, y: 1038, width: 110, height: 21, label: "Total", type: "text" },
     { id: "tecnicoNombre", x: 250, y: 1100, width: 160, height: 21, label: "Técnico Asociado", type: "text" },
     { id: "clienteNombre", x: 607, y: 1100, width: 160, height: 21, label: "Cliente Asociado", type: "text" },
-    { id: "tecnicoFirma", x: 65, y: 1078, width: 150, height: 50, label: "Firma Técnico", type: "signature" },
-    { id: "clienteFirma", x: 425, y: 1078, width: 150, height: 50, label: "Firma Cliente", type: "signature" },
+    { id: "tecnicoFirma", x: 70, y: 1075, width: 150, height: 50, label: "Firma Técnico", type: "signature" },
+    { id: "clienteFirma", x: 430, y: 1075, width: 150, height: 50, label: "Firma Cliente", type: "signature" },
   ]
 
   // Define todas las áreas para visualización (incluye campos no editables como numeroOrden)
@@ -194,12 +208,14 @@ export function ServiceOrderForm() {
       return
     }
     
-    // Analizar progreso del formulario
-    const progressData = getDetailedProgress()
+    // Analizar campos críticos del formulario
+    const criticalValidation = validateCriticalFields()
     
-    // Si hay campos críticos faltantes o el formulario no está completo, mostrar modal
-    if (progressData.hasCriticalMissing || progressData.progress < 100) {
-      setShowProgressModal(true)
+    // Si hay campos críticos faltantes, mostrar advertencia
+    if (!criticalValidation.isValid) {
+      toast.error("Campos críticos incompletos", {
+        description: `Faltan campos críticos: ${criticalValidation.missingFields.length} campo(s)`
+      })
       return
     }
     
@@ -409,17 +425,15 @@ export function ServiceOrderForm() {
   }
 
   const handleSubmitIncomplete = () => {
-    setShowProgressModal(false)
     submitToGoogleForms()
   }
 
   const handleContinueEditing = () => {
-    setShowProgressModal(false)
     // Opcionalmente, podrías enfocar el primer campo crítico faltante
-    const progressData = getDetailedProgress()
-    if (progressData.criticalMissing.length > 0) {
+    const criticalValidation = validateCriticalFields()
+    if (!criticalValidation.isValid) {
       toast.info("Campos críticos pendientes", {
-        description: `Completa: ${progressData.criticalMissing.slice(0, 3).join(', ')}${progressData.criticalMissing.length > 3 ? '...' : ''}`
+        description: `Completa: ${criticalValidation.missingFields.slice(0, 3).join(', ')}${criticalValidation.missingFields.length > 3 ? '...' : ''}`
       })
     }
   }
@@ -433,19 +447,60 @@ export function ServiceOrderForm() {
   }
 
   const renderValueOverlays = () => {
+    console.log('🎨 Renderizando overlays con formData:', {
+      tecnicoFirma: formData.tecnicoFirma,
+      clienteFirma: formData.clienteFirma,
+      totalFields: Object.keys(formData).length
+    })
+    
+    console.log('📊 allDisplayAreas stats:', {
+      total: allDisplayAreas.length,
+      signatures: allDisplayAreas.filter(a => a.type === 'signature').length,
+      signatureAreas: allDisplayAreas.filter(a => a.type === 'signature').map(a => ({
+        id: a.id,
+        position: { x: a.x, y: a.y, width: a.width, height: a.height }
+      }))
+    })
+    
     return allDisplayAreas.map((area) => {
       const value = formData[area.id]
       const hasValue = area.type === 'checkbox' ? true : (value && value.toString().trim() !== '')
       
+      // Log específico para firmas
+      if (area.type === 'signature') {
+        console.log(`🎯 Renderizando firma ${area.id}:`, {
+          value: value,
+          hasValue: hasValue,
+          isImage: value && (value.toString().startsWith('data:image') || value.toString().startsWith('http')),
+          position: { x: area.x, y: area.y, width: area.width, height: area.height },
+          calculatedStyle: {
+            left: `${(area.x / 850) * 100}%`,
+            top: `${(area.y / 1200) * 100}%`,
+            width: `${(area.width / 850) * 100}%`,
+            height: `${(area.height / 1200) * 100}%`
+          },
+          valueType: typeof value,
+          valueLength: value ? value.toString().length : 0,
+          valuePreview: value ? value.toString().substring(0, 100) + '...' : 'empty'
+        })
+      }
+      
       return (
         <div
-          key={`value-${area.id}`}
-          className="absolute pointer-events-none"
+          key={`value-${area.id}-${forceRender}`}
+          className={`absolute pointer-events-none ${area.type === 'signature' ? 'z-50' : 'z-10'}`}
           style={{
             left: `${(area.x / 850) * 100}%`,
             top: `${(area.y / 1200) * 100}%`,
             width: `${(area.width / 850) * 100}%`,
             height: `${(area.height / 1200) * 100}%`,
+            // Debug styles for signatures
+            ...(area.type === 'signature' ? {
+              backgroundColor: 'red',
+              border: '5px solid blue',
+              boxShadow: '0 0 20px rgba(255, 0, 0, 0.8)',
+              transform: 'translateZ(0)' // Force hardware acceleration
+            } : {})
           }}
         >
           {area.type === 'checkbox' ? (
@@ -469,20 +524,29 @@ export function ServiceOrderForm() {
                 area.type === 'signature' ? 'items-center justify-center' : 'items-center'}
             `}>
               {area.type === 'signature' ? (
-                <div className="w-full h-full flex items-center justify-center">
-                  {(value as string).startsWith('data:image') ? (
+                /* FIRMA: Renderizado limpio y funcional */
+                <div className="w-full h-full flex items-center justify-center relative bg-white/95 border border-gray-200 rounded shadow-sm">
+                  {value && typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:image')) ? (
+                    /* Mostrar imagen de firma */
                     <img 
-                      src={value as string} 
-                      alt="Firma" 
+                      src={value.toString()} 
+                      alt={`Firma ${area.label}`}
                       className="max-w-full max-h-full object-contain"
-                      style={{ filter: 'contrast(1.2)' }}
+                      style={{
+                        backgroundColor: 'transparent',
+                        filter: 'contrast(1.1)'
+                      }}
+                      onLoad={() => console.log(`✅ Firma mostrada: ${area.id}`)}
+                      onError={(e) => console.error(`❌ Error mostrando firma: ${area.id}`, e)}
                     />
-                  ) : (value as string) ? (
-                    <div className="text-center text-xs bg-blue-100 px-2 py-1 rounded border">
-                      <div className="font-semibold text-blue-800">✍️ Firmado</div>
-                      <div className="text-blue-600 mt-1">{value as string}</div>
+                  ) : (
+                    /* Placeholder cuando no hay firma */
+                    <div className="flex flex-col items-center justify-center text-gray-400 text-xs">
+                      <div className="text-lg mb-1">✍️</div>
+                      <div>Área de Firma</div>
+                      <div className="text-xs">{area.label}</div>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               ) : (
                 <span className={`
@@ -1085,15 +1149,24 @@ export function ServiceOrderForm() {
             <h1 className="text-xl sm:text-2xl font-bold text-primary">ARAN Tecnologías</h1>
             <p className="text-sm text-muted-foreground">Sistema de Órdenes de Servicio</p>
           </div>
-          <div className="w-full sm:w-auto">
-            <FormActions
-              formData={formData}
-              onSubmit={handleSubmit}
-              onReset={resetForm}
-              hasErrors={hasErrors()}
-              lastSaveTime={lastSaveTime}
-              formProgress={getFormProgress()}
-            />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowOfflinePanel(!showOfflinePanel)}
+              className="text-xs"
+            >
+              {showOfflinePanel ? "Ocultar" : "Mostrar"} Panel Offline
+            </Button>
+            <div className="w-full sm:w-auto">
+              <FormActions
+                formData={formData}
+                onSubmit={handleSubmit}
+                onReset={resetForm}
+                hasErrors={hasErrors()}
+                lastSaveTime={lastSaveTime}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1141,18 +1214,8 @@ export function ServiceOrderForm() {
         </Card>
       </div>
 
-      {/* Progress Modal */}
-      <FormProgressModal
-        isOpen={showProgressModal}
-        onClose={() => setShowProgressModal(false)}
-        onSubmitIncomplete={handleSubmitIncomplete}
-        onContinueEditing={handleContinueEditing}
-        onOpenManualForm={handleOpenManualForm}
-        formData={formData}
-        progress={getDetailedProgress().progress}
-        missingFields={getDetailedProgress().allMissing}
-        criticalMissing={getDetailedProgress().criticalMissing}
-      />
+      {/* Panel de pruebas offline */}
+      {showOfflinePanel && <OfflineTestPanel />}
     </div>
   )
 }

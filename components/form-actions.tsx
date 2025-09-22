@@ -15,7 +15,6 @@ interface FormActionsProps {
   onReset: () => void
   hasErrors?: boolean
   lastSaveTime?: Date | null
-  formProgress?: number
 }
 
 export function FormActions({ 
@@ -23,8 +22,7 @@ export function FormActions({
   onSubmit, 
   onReset,
   hasErrors = false,
-  lastSaveTime,
-  formProgress = 0
+  lastSaveTime
 }: FormActionsProps) {
   const { isOnline, isChecking } = useNetworkStatus()
 
@@ -381,17 +379,9 @@ export function FormActions({
     }
   }
 
-  const getProgressColor = () => {
-    if (formProgress >= 90) return "text-green-600"
-    if (formProgress >= 70) return "text-blue-600"
-    if (formProgress >= 50) return "text-yellow-600"
-    return "text-red-600"
-  }
-
   const getStatusIcon = () => {
     if (hasErrors) return <AlertCircle className="h-4 w-4 text-red-500" />
-    if (formProgress >= 90) return <CheckCircle className="h-4 w-4 text-green-500" />
-    return <AlertCircle className="h-4 w-4 text-yellow-500" />
+    return <CheckCircle className="h-4 w-4 text-green-500" />
   }
 
   const getSubmitButtonText = () => {
@@ -413,8 +403,8 @@ export function FormActions({
       {/* Estado del formulario */}
       <div className="flex items-center gap-2 text-sm">
         {getStatusIcon()}
-        <span className={`font-medium ${getProgressColor()}`}>
-          {formProgress}% completo
+        <span className="font-medium text-gray-600">
+          Orden #{formData.numeroOrden}
         </span>
         
         {/* Indicador de conectividad */}

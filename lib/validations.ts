@@ -111,20 +111,39 @@ export function validateServiceGroup3(data: any): { isValid: boolean; message?: 
 }
 
 export function validateSignatureGroup(data: any): { isValid: boolean; message?: string } {
-  const hasClientSignature = data.clientSignature && data.clientSignature.trim() !== ''
-  const hasTechnicianSignature = data.technicianSignature && data.technicianSignature.trim() !== ''
+  // Verificar que existan firmas válidas (URLs o data URLs)
+  const hasClientSignature = data.clienteFirma && 
+    data.clienteFirma.trim() !== '' && 
+    (data.clienteFirma.startsWith('http') || data.clienteFirma.startsWith('data:image'))
+  
+  const hasTechnicianSignature = data.tecnicoFirma && 
+    data.tecnicoFirma.trim() !== '' && 
+    (data.tecnicoFirma.startsWith('http') || data.tecnicoFirma.startsWith('data:image'))
+  
+  console.log('🔍 Validación de firmas:', {
+    clienteFirma: {
+      exists: !!data.clienteFirma,
+      value: data.clienteFirma ? data.clienteFirma.substring(0, 50) + '...' : 'vacío',
+      isValid: hasClientSignature
+    },
+    tecnicoFirma: {
+      exists: !!data.tecnicoFirma,
+      value: data.tecnicoFirma ? data.tecnicoFirma.substring(0, 50) + '...' : 'vacío',
+      isValid: hasTechnicianSignature
+    }
+  })
   
   if (!hasClientSignature) {
     return {
       isValid: false,
-      message: "La firma del cliente es obligatoria"
+      message: "La firma del cliente es obligatoria y debe ser una imagen válida"
     }
   }
   
   if (!hasTechnicianSignature) {
     return {
       isValid: false,
-      message: "La firma del técnico es obligatoria"
+      message: "La firma del técnico es obligatoria y debe ser una imagen válida"
     }
   }
   
@@ -210,7 +229,7 @@ const fechaSchema = z.string()
   .min(1, "Fecha es requerida")
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)")
 
-// Schema para validación de teléfono argentino con formateo automático
+// Schema para validación de teléfono argentino con formateo automático  
 const telefonoSchema = z.string()
   .min(1, "Teléfono es requerido")
   .transform(formatPhoneNumber)
@@ -218,6 +237,18 @@ const telefonoSchema = z.string()
     const cleaned = phone.replace(/\D/g, '')
     return cleaned.length >= 10
   }, "Teléfono debe tener al menos 10 dígitos")
+
+// Schema para validación de firmas (URLs de ImgBB o data URLs)
+const firmaSchema = z.string()
+  .max(500, "URL de firma muy larga")
+  .optional()
+  .refine((value) => {
+    if (!value || value.trim() === '') return true
+    // Permitir URLs de ImgBB, otras URLs HTTP, o data URLs
+    return value.startsWith('https://i.ibb.co/') || 
+           value.startsWith('http') || 
+           value.startsWith('data:image')
+  }, "Firma debe ser una URL válida o imagen base64")
 
 // Schema para validación de números (distancia, duración, etc.)
 const numeroPositivoSchema = z.string()
@@ -260,9 +291,9 @@ export const formValidationSchema = z.object({
   iva: monedaSchema.optional(),
   total: monedaSchema.optional(),
   tecnicoNombre: z.string().max(50, "Nombre de técnico muy largo"),
-  tecnicoFirma: z.string().max(50, "Firma de técnico muy larga"),
+  tecnicoFirma: firmaSchema,
   clienteNombre: z.string().max(50, "Nombre de cliente muy largo"),
-  clienteFirma: z.string().max(50, "Firma de cliente muy larga"),
+  clienteFirma: firmaSchema,
   aux1: z.string().max(100, "Campo auxiliar 1 muy largo"),
   aux2: z.string().max(100, "Campo auxiliar 2 muy largo"),
   aux3: z.string().max(100, "Campo auxiliar 3 muy largo"),

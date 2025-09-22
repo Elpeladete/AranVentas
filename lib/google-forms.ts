@@ -54,7 +54,7 @@ const GOOGLE_FORMS_CONFIG = {
 /**
  * Procesa una firma para envío a Google Forms
  * @param signature - Firma en formato URL, base64 o texto
- * @returns String procesado para Google Forms
+ * @returns String procesado para Google Forms (máximo 1000 caracteres)
  */
 function processSignatureForGoogleForms(signature: string | undefined): string {
   if (!signature || signature.trim() === '') {
@@ -62,17 +62,23 @@ function processSignatureForGoogleForms(signature: string | undefined): string {
   }
   
   if (signature.startsWith('https://i.ibb.co/')) {
-    // Es una URL de ImgBB - usar directamente
+    // Es una URL de ImgBB - usar directamente (son cortas)
+    console.log('✅ Procesando URL de ImgBB para Google Forms:', signature)
     return signature
   } else if (signature.startsWith('http')) {
-    // Es otra URL - usar directamente
-    return signature
+    // Es otra URL - usar directamente pero truncar si es muy larga
+    const processed = signature.length > 1000 ? signature.substring(0, 1000) : signature
+    console.log('✅ Procesando URL externa para Google Forms:', processed)
+    return processed
   } else if (signature.startsWith('data:image')) {
-    // Es base64 - crear mensaje descriptivo
-    return '[Firma digital capturada - disponible en PDF exportado]'
+    // Es base64 - NO enviar el base64 completo, usar mensaje descriptivo
+    console.warn('⚠️ Intentando enviar base64 a Google Forms - convirtiendo a mensaje descriptivo')
+    return '[Firma digital - disponible en PDF exportado]'
   } else {
-    // Es texto normal - usar tal como está
-    return signature
+    // Es texto normal - truncar si es muy largo
+    const processed = signature.length > 1000 ? signature.substring(0, 1000) : signature
+    console.log('✅ Procesando texto para Google Forms:', processed)
+    return processed
   }
 }
 
@@ -120,6 +126,12 @@ export function prepareFormDataForSubmission(formData: AranFormData): FormData {
     } else if (fieldName === 'tecnicoFirma' || fieldName === 'clienteFirma') {
       // Usar la función especializada para procesar firmas
       const processedSignature = processSignatureForGoogleForms(value as string)
+      console.log(`📝 Procesando firma ${fieldName}:`, {
+        original: value ? `${(value as string).substring(0, 50)}...` : 'vacío',
+        originalLength: value ? (value as string).length : 0,
+        processed: processedSignature,
+        processedLength: processedSignature.length
+      })
       submissionData.append(entryId, processedSignature)
     } else {
       submissionData.append(entryId, value || "")
@@ -215,6 +227,32 @@ export function validateFormDataForSubmission(formData: AranFormData): {
     if (!/^\d+$/.test(formData.cuit.replace(/[-]/g, ''))) {
       errors.push("CUIT debe contener solo números y guiones")
     }
+  }
+
+  // Validar firmas - asegurar que no sean demasiado largas
+  if (formData.tecnicoFirma && formData.tecnicoFirma.length > 2000) {
+    console.warn('⚠️ Firma técnico muy larga:', {
+      length: formData.tecnicoFirma.length,
+      preview: formData.tecnicoFirma.substring(0, 100)
+    })
+    errors.push("Firma del técnico demasiado larga - contacte al administrador")
+  }
+  
+  if (formData.clienteFirma && formData.clienteFirma.length > 2000) {
+    console.warn('⚠️ Firma cliente muy larga:', {
+      length: formData.clienteFirma.length,
+      preview: formData.clienteFirma.substring(0, 100)
+    })
+    errors.push("Firma del cliente demasiado larga - contacte al administrador")
+  }
+
+  // Validar que las firmas sean URLs válidas (no base64)
+  if (formData.tecnicoFirma && formData.tecnicoFirma.startsWith('data:image')) {
+    errors.push("La firma del técnico debe ser subida a la nube antes del envío")
+  }
+  
+  if (formData.clienteFirma && formData.clienteFirma.startsWith('data:image')) {
+    errors.push("La firma del cliente debe ser subida a la nube antes del envío")
   }
   
   return {
