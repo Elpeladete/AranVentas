@@ -124,6 +124,7 @@ export function FormActions({
 
             // PASO 3: Intentar subir imagen a ImgBB (opcional)
             try {
+              console.log('☁️ Iniciando subida a ImgBB...')
               toast.info("Subiendo imagen...", { description: "Obteniendo URL para compartir" })
               
               const base64 = await new Promise<string>((resolve, reject) => {
@@ -131,27 +132,63 @@ export function FormActions({
                 reader.onloadend = () => {
                   const result = reader.result as string
                   const base64Data = result.split(',')[1]
+                  console.log('📝 Base64 generado, length:', base64Data.length)
                   resolve(base64Data)
                 }
-                reader.onerror = reject
+                reader.onerror = (error) => {
+                  console.error('❌ Error leyendo blob como base64:', error)
+                  reject(error)
+                }
                 reader.readAsDataURL(blob)
               })
 
+              console.log('🚀 Llamando a uploadImageToImgBB...')
               const uploadResult = await uploadImageToImgBB(base64, filename.replace('.png', ''))
               imageUrl = uploadResult.data.url
               
               console.log('💾 URL de imagen obtenida:', imageUrl)
               toast.success("URL de imagen obtenida", { 
-                description: "Imagen disponible online" 
+                description: "Imagen disponible online para compartir" 
               })
               
+              // Compartir por WhatsApp automáticamente
+              if (imageUrl && imageUrl.startsWith('http')) {
+                console.log('📱 Preparando para compartir por WhatsApp...')
+                const message = `🔧 ARAN Tecnologías - Orden de Servicio ${formData.numeroOrden || 'Nueva'}\n\n✅ Trabajo completado para: ${formData.razonSocial || 'Cliente'}\n\n🖼️ Ver orden completa: ${imageUrl}\n\n📞 ARAN Tecnologías - Servicio Técnico`
+                const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`
+                
+                // Mostrar opción de compartir
+                setTimeout(() => {
+                  const shouldShare = confirm(
+                    `¿Desea compartir la orden de servicio por WhatsApp?\n\nSe abrirá WhatsApp con el mensaje y la imagen listos para enviar.`
+                  )
+                  
+                  if (shouldShare) {
+                    window.open(whatsappUrl, '_blank')
+                    toast.success("WhatsApp abierto", {
+                      description: "Envía el mensaje con la orden de servicio"
+                    })
+                  }
+                }, 1000) // Esperar 1 segundo para que se vea el toast de éxito
+              }
+              
             } catch (uploadError) {
-              console.warn('⚠️ No se pudo subir a ImgBB:', uploadError)
+              console.error('❌ Error completo en subida a ImgBB:', uploadError)
+              console.error('❌ Stack trace:', uploadError instanceof Error ? uploadError.stack : 'No stack')
+              
               // Usar referencia local como fallback
               imageUrl = `Local: ${filename}`
-              toast.warning("Solo guardado local", { 
-                description: "Sin conexión para subir online" 
+              toast.error("No se pudo compartir por WhatsApp", { 
+                description: `Error subiendo imagen: ${uploadError instanceof Error ? uploadError.message : 'Error desconocido'}. La imagen se guardó localmente.` 
               })
+              
+              // Mostrar mensaje sobre compartir manualmente
+              setTimeout(() => {
+                toast.info("Para compartir manualmente", {
+                  description: "Use la imagen descargada localmente en su dispositivo",
+                  duration: 5000
+                })
+              }, 2000)
             }
           }
           
