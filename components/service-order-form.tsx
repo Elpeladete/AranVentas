@@ -59,6 +59,7 @@ export function ServiceOrderForm() {
   const [originalValue, setOriginalValue] = useState<string | boolean>("")
   const [forceRender, setForceRender] = useState(0) // Para forzar re-render
   const [showOfflinePanel, setShowOfflinePanel] = useState(false) // Panel de pruebas offline
+  const [isMobile, setIsMobile] = useState(false) // Estado para detectar móvil
   const imageRef = useRef<HTMLDivElement>(null)
 
   // Inicializar sincronización automática al cargar el componente
@@ -87,6 +88,23 @@ export function ServiceOrderForm() {
       setForceRender(prev => prev + 1)
     }
   }, [formData.tecnicoFirma, formData.clienteFirma])
+
+  // useEffect para detectar tamaño de pantalla
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+
+    // Verificar al cargar
+    checkScreenSize()
+    
+    // Agregar listener para cambios de tamaño
+    window.addEventListener('resize', checkScreenSize)
+    
+    return () => {
+      window.removeEventListener('resize', checkScreenSize)
+    }
+  }, [])
 
   // Define clickable areas based on the form image layout (campos editables)
   const clickableAreas: ClickableArea[] = [
@@ -426,93 +444,134 @@ export function ServiceOrderForm() {
     const field = clickableAreas.find((area) => area.id === activeField)
     if (!field) return null
 
+    // Función para calcular posición responsiva
+    const calculateResponsivePosition = () => {
+      if (isMobile) {
+        // En móviles, centrar en la pantalla
+        return {
+          position: 'fixed' as const,
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          maxWidth: '90vw',
+          maxHeight: '80vh',
+          overflow: 'auto'
+        }
+      } else {
+        // En desktop, mantener posición cerca del click pero ajustada
+        const adjustedX = Math.min(overlayPosition.x, window.innerWidth - 350)
+        const adjustedY = Math.min(overlayPosition.y, window.innerHeight - 300)
+        
+        return {
+          position: 'fixed' as const,
+          left: Math.max(10, adjustedX),
+          top: Math.max(10, adjustedY),
+          maxWidth: '400px'
+        }
+      }
+    }
+
+    const positionStyle = calculateResponsivePosition()
+
     return (
-      <div
-        className="fixed bg-white border border-border rounded-lg shadow-lg p-4 z-50 min-w-[300px]"
-        style={{
-          left: overlayPosition.x,
-          top: overlayPosition.y,
-        }}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-sm">{field.label}</h3>
-          <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {field.type === "checkbox" ? (
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                checked={tempValue as boolean}
-                onCheckedChange={handleTempValueChange}
-              />
-              <Label>{field.label}</Label>
+      <>
+        {/* Backdrop para móviles */}
+        {isMobile && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={handleCancelEdit}
+          />
+        )}
+        
+        <div
+          className="bg-white border border-border rounded-lg shadow-xl p-4 z-50 min-w-[280px]"
+          style={positionStyle}
+        >
+          {/* Header con drag handle para móviles */}
+          <div className="flex items-center justify-between mb-3 cursor-move lg:cursor-default">
+            <div className="flex items-center gap-2">
+              {isMobile && <div className="w-8 h-1 bg-gray-300 rounded-full"></div>}
+              <h3 className="font-semibold text-sm">{field.label}</h3>
             </div>
+            <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-        ) : field.type === "textarea" ? (
-          <div className="space-y-2">
-            <Textarea
-              value={tempValue as string}
-              onChange={(e) => handleTempValueChange(e.target.value)}
-              rows={4}
-              placeholder={`Ingrese ${field.label.toLowerCase()}`}
-              className="text-sm"
-            />
-            {getFieldHint(activeField) && (
-              <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
-            )}
-          </div>
-        ) : field.type === "signature" ? (
-          <div className="space-y-2">
-            <SignatureCanvas
-              value={tempValue as string}
-              onChange={handleTempValueChange}
-              width={280}
-              height={120}
-              orderNumber={formData.numeroOrden}
-              signatureType={activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente'}
-            />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <Input
-              value={tempValue as string}
-              onChange={(e) => handleTempValueChange(e.target.value)}
-              placeholder={`Ingrese ${field.label.toLowerCase()}`}
-              className="text-sm"
-              type={field.id === "fecha" ? "date" : "text"}
-            />
-            {getFieldHint(activeField) && (
-              <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
-            )}
-            {getFieldError(activeField) && (
-              <p className="text-xs text-red-600">⚠️ {getFieldError(activeField)}</p>
-            )}
-          </div>
-        )}
 
-        <div className="flex gap-2 mt-4">
-          <Button onClick={handleApplyValue} size="sm" className="flex-1">
-            Aplicar
-          </Button>
-          <Button variant="outline" onClick={handleCancelEdit} size="sm">
-            Cancelar
-          </Button>
+          {field.type === "checkbox" ? (
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  checked={tempValue as boolean}
+                  onCheckedChange={handleTempValueChange}
+                />
+                <Label>{field.label}</Label>
+              </div>
+            </div>
+          ) : field.type === "textarea" ? (
+            <div className="space-y-2">
+              <Textarea
+                value={tempValue as string}
+                onChange={(e) => handleTempValueChange(e.target.value)}
+                rows={isMobile ? 3 : 4}
+                placeholder={`Ingrese ${field.label.toLowerCase()}`}
+                className="text-sm"
+              />
+              {getFieldHint(activeField) && (
+                <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
+              )}
+            </div>
+          ) : field.type === "signature" ? (
+            <div className="space-y-2">
+              <SignatureCanvas
+                value={tempValue as string}
+                onChange={handleTempValueChange}
+                width={isMobile ? Math.min(250, window.innerWidth - 60) : 280}
+                height={isMobile ? 100 : 120}
+                orderNumber={formData.numeroOrden}
+                signatureType={activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente'}
+              />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Input
+                value={tempValue as string}
+                onChange={(e) => handleTempValueChange(e.target.value)}
+                placeholder={`Ingrese ${field.label.toLowerCase()}`}
+                className="text-sm"
+                type={field.id === "fecha" ? "date" : "text"}
+              />
+              {getFieldHint(activeField) && (
+                <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
+              )}
+              {getFieldError(activeField) && (
+                <p className="text-xs text-red-600">⚠️ {getFieldError(activeField)}</p>
+              )}
+            </div>
+          )}
+
+          {/* Botones responsivos */}
+          <div className={`flex gap-2 mt-4 ${isMobile ? 'flex-col' : 'flex-row'}`}>
+            <Button onClick={handleApplyValue} size="sm" className="flex-1">
+              ✅ Aplicar
+            </Button>
+            <Button variant="outline" onClick={handleCancelEdit} size="sm" className="flex-1">
+              ✖️ Cancelar
+            </Button>
+          </div>
+
+          {field.type !== "signature" && (
+            <div className="mt-2 text-xs text-muted-foreground">
+              {tempValue && (
+                <span className="font-medium">
+                  Vista previa: {typeof tempValue === 'string' ? tempValue.slice(0, isMobile ? 30 : 50) : String(tempValue)}
+                  {typeof tempValue === 'string' && tempValue.length > (isMobile ? 30 : 50) && '...'}
+                </span>
+              )}
+            </div>
+          )}
         </div>
-
-        {field.type !== "signature" && (
-          <div className="mt-2 text-xs text-muted-foreground">
-            {tempValue && (
-              <span className="font-medium">
-                Vista previa: {typeof tempValue === 'string' ? tempValue.slice(0, 50) : String(tempValue)}
-                {typeof tempValue === 'string' && tempValue.length > 50 && '...'}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+      </>
     )
   }
 
@@ -553,6 +612,7 @@ export function ServiceOrderForm() {
                 formData={formData}
                 onSubmit={handleSubmit}
                 onReset={resetForm}
+                onUpdateField={updateField}
                 hasErrors={hasErrors()}
                 lastSaveTime={lastSaveTime}
               />
