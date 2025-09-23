@@ -23,6 +23,8 @@ import { addPendingSubmission } from "@/lib/offline-storage"
 import { syncManager } from "@/lib/offline-sync"
 import { NetworkStatusIndicator } from "@/components/network-status-indicator"
 import { OfflineTestPanel } from "@/components/offline-test-panel"
+import { ValidationStatus } from "@/components/validation-status"
+import { SavedOrdersViewer } from "@/components/saved-orders-viewer"
 
 interface ClickableArea {
   id: keyof FormData
@@ -607,6 +609,18 @@ export function ServiceOrderForm() {
             >
               {showOfflinePanel ? "Ocultar" : "Mostrar"} Panel Offline
             </Button>
+            
+            {/* Mostrar estado de validación */}
+            <div className="w-full">
+              <ValidationStatus 
+                formData={formData} 
+                onFieldFocus={(fieldName) => {
+                  // Lógica para hacer scroll/focus al campo si es necesario
+                  console.log('Focus en campo:', fieldName)
+                }}
+              />
+            </div>
+            
             <div className="w-full sm:w-auto">
               <FormActions
                 formData={formData}
@@ -657,6 +671,16 @@ export function ServiceOrderForm() {
 
       {/* Panel de pruebas offline */}
       {showOfflinePanel && <OfflineTestPanel />}
+      
+      {/* Visor de órdenes guardadas */}
+      <SavedOrdersViewer 
+        onLoadOrder={(orderData: FormData) => {
+          // Cargar los datos de la orden seleccionada en el formulario
+          Object.entries(orderData).forEach(([key, value]) => {
+            updateField(key as keyof FormData, value as string | boolean)
+          })
+        }}
+      />
     </div>
   )
 }

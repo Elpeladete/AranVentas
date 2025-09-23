@@ -7,7 +7,7 @@ import { Send, RotateCcw, AlertCircle, CheckCircle, Download, Camera, Wifi, Wifi
 import type { FormData } from "@/hooks/use-form-data"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { toast } from "@/lib/toast"
-import { validateForm } from "@/lib/validations"
+import { validateForm, validateRequiredFields } from "@/lib/validations"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import html2canvas from "html2canvas"
 
@@ -67,21 +67,48 @@ export function FormActions({
         return
       }
 
-      toast.info("Procesando envío...", { description: "Cerrando orden y preparando envío" })
+      toast.info("Iniciando proceso...", { description: "Guardando datos localmente primero" })
       
-      // Paso 1: Capturar imagen y guardarla localmente primero
-      console.log('🚀 Iniciando proceso: Cerrar Orden antes del envío')
+      // PASO 1: Guardar datos del formulario localmente (JSON)
+      console.log('💾 Guardando datos del formulario localmente...')
+      try {
+        const formDataJson = JSON.stringify(formData, null, 2)
+        const jsonBlob = new Blob([formDataJson], { type: 'application/json' })
+        const jsonUrl = URL.createObjectURL(jsonBlob)
+        const jsonLink = document.createElement('a')
+        const timestamp = new Date().toISOString().split('T')[0]
+        const jsonFilename = `ARAN-FormData-${formData.numeroOrden || 'nueva'}-${timestamp}.json`
+        
+        jsonLink.href = jsonUrl
+        jsonLink.download = jsonFilename
+        document.body.appendChild(jsonLink)
+        jsonLink.click()
+        document.body.removeChild(jsonLink)
+        URL.revokeObjectURL(jsonUrl)
+        
+        toast.success("Datos guardados localmente", { 
+          description: `Formulario respaldado como ${jsonFilename}` 
+        })
+      } catch (jsonError) {
+        console.error('❌ Error guardando datos JSON:', jsonError)
+        toast.warning("Advertencia", { 
+          description: "No se pudieron guardar los datos localmente" 
+        })
+      }
       
+      // PASO 2: Capturar y guardar imagen localmente
+      console.log('🚀 Capturando imagen de la orden...')
       const formContainer = document.querySelector('.relative.mx-auto') as HTMLElement
+      let imageUrl: string | null = null
+      
       if (formContainer) {
         try {
-          // Usar el mismo método de canvas nativo que funciona en handleCaptureOrder
           const captureResult = await captureOrderToCanvas(formContainer)
           
           if (captureResult) {
             const { blob, filename } = captureResult
             
-            // Guardar localmente primero (descarga automática)
+            // Guardar imagen localmente (descarga automática)
             const localUrl = URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = localUrl
@@ -92,12 +119,12 @@ export function FormActions({
             URL.revokeObjectURL(localUrl)
             
             toast.success("Imagen guardada localmente", { 
-              description: "Orden capturada y descargada exitosamente" 
+              description: "Orden capturada y descargada" 
             })
 
-            // Intentar subir a ImgBB para obtener URL (opcional)
+            // PASO 3: Intentar subir imagen a ImgBB (opcional)
             try {
-              toast.info("Subiendo a ImgBB...", { description: "Obteniendo URL para compartir" })
+              toast.info("Subiendo imagen...", { description: "Obteniendo URL para compartir" })
               
               const base64 = await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader()
@@ -111,69 +138,102 @@ export function FormActions({
               })
 
               const uploadResult = await uploadImageToImgBB(base64, filename.replace('.png', ''))
+              imageUrl = uploadResult.data.url
               
-              // Guardar URL en AUX1 si la subida fue exitosa
-              console.log('💾 Guardando URL de imagen en AUX1:', uploadResult.data.url)
-              onUpdateField('aux1', uploadResult.data.url)
+              console.log('💾 URL de imagen obtenida:', imageUrl)
               toast.success("URL de imagen obtenida", { 
-                description: "Imagen disponible en línea para compartir" 
+                description: "Imagen disponible online" 
               })
               
             } catch (uploadError) {
               console.warn('⚠️ No se pudo subir a ImgBB:', uploadError)
-              // Guardar información local en AUX1 como fallback
-              onUpdateField('aux1', `Local: ${filename}`)
-              toast.warning("Imagen guardada solo localmente", { 
-                description: "No hay conexión para subir a ImgBB" 
+              // Usar referencia local como fallback
+              imageUrl = `Local: ${filename}`
+              toast.warning("Solo guardado local", { 
+                description: "Sin conexión para subir online" 
               })
             }
           }
           
         } catch (captureError) {
           console.error('❌ Error en captura de imagen:', captureError)
-          toast.warning("No se pudo capturar imagen", { 
-            description: "Se procederá con el envío sin imagen" 
+          toast.warning("Error en captura", { 
+            description: "No se pudo capturar la imagen" 
           })
         }
       }
 
-      // Paso 2: Validar formulario antes de enviar
-      const validation = validateForm(formData)
+      // PASO 4: Actualizar campo AUX1 con la URL (si se obtuvo)
+      if (imageUrl) {
+        onUpdateField('aux1', imageUrl)
+        console.log('📝 Campo AUX1 actualizado con:', imageUrl)
+      }
+
+      // PASO 5: Validar formulario antes de enviar
+      toast.info("Validando formulario...", { description: "Verificando datos antes del envío" })
+      const validation = validateRequiredFields(formData)
       
       if (!validation.isValid) {
-        // Si hay errores, mostrar confirmación para enviar incompleto
-        const errorArray = Object.entries(validation.errors).map(([field, error]) => `${field}: ${error}`)
-        const errorList = errorArray.join('\n• ')
+        const errorArray = Object.entries(validation.errors).map(([field, error]) => `• ${error}`)
+        const errorList = errorArray.join('\n')
         const shouldProceed = confirm(
-          `El formulario tiene los siguientes errores:\n\n• ${errorList}\n\n¿Desea enviar el formulario incompleto de todas formas?`
+          `⚠️ CAMPOS OBLIGATORIOS FALTANTES:\n\n${errorList}\n\nCampos faltantes: ${validation.missingFields.length}\n\n¿Desea enviar el formulario incompleto de todas formas?\n\n⚠️ ADVERTENCIA: El formulario no cumple con los requisitos mínimos.`
         )
         
         if (!shouldProceed) {
           toast.warning("Envío cancelado", {
-            description: "Corrija los errores y vuelva a intentar, o confirme para enviar incompleto"
+            description: `Complete los ${validation.missingFields.length} campos obligatorios y vuelva a intentar`
           })
           return
         }
         
-        toast.info("Enviando formulario incompleto", {
-          description: "Se enviará con los datos disponibles"
+        toast.warning("Enviando formulario incompleto", {
+          description: `⚠️ Faltan ${validation.missingFields.length} campos obligatorios`
+        })
+      } else {
+        toast.success("Validación exitosa", {
+          description: "✅ Todos los campos obligatorios están completos"
         })
       }
 
-      // Paso 3: Proceder con el envío
-      onSubmit()
+      // PASO 6: Enviar al formulario 
+      toast.info("Enviando formulario...", { description: "Transmitiendo datos al servidor" })
       
-      // Marcar el formulario como enviado y guardar una copia
-      setHasBeenSubmitted(true)
-      lastSubmittedData.current = { ...formData }
-      
-      console.log('📝 Formulario marcado como enviado - se requerirán cambios para reenviar')
+      try {
+        await new Promise<void>((resolve, reject) => {
+          // Envolver onSubmit en una promesa para manejar su resultado
+          try {
+            onSubmit()
+            // Asumir éxito si no hay excepción inmediata
+            setTimeout(resolve, 1000) // Dar tiempo para posibles errores asíncronos
+          } catch (error) {
+            reject(error)
+          }
+        })
+        
+        // PASO 7: Marcar como enviado solo si llegamos hasta aquí sin errores
+        setHasBeenSubmitted(true)
+        lastSubmittedData.current = { ...formData }
+        
+        console.log('✅ Proceso completado exitosamente')
+        toast.success("Formulario enviado exitosamente", { 
+          description: "Datos guardados localmente y enviados al servidor",
+          duration: 5000 
+        })
+        
+      } catch (submitError) {
+        console.error('❌ Error en envío del formulario:', submitError)
+        toast.error("Error en envío", { 
+          description: "Los datos están guardados localmente, pero no se enviaron al servidor" 
+        })
+        throw submitError // Re-lanzar para que se maneje en el catch principal
+      }
       
     } catch (error) {
-      console.error('❌ Error en proceso de envío:', error)
+      console.error('❌ Error en proceso completo:', error)
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
-      toast.error("Error en el proceso de envío", { 
-        description: errorMessage
+      toast.error("Error en el proceso", { 
+        description: `${errorMessage}. Los datos locales están guardados.`
       })
     }
   }

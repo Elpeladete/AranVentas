@@ -354,22 +354,119 @@ export const validations = {
   }
 }
 
-// Función mejorada para validar todo el formulario incluyendo grupos
-export function validateFormWithGroups(data: Partial<FormValidationData>): { 
+// Función específica para validar campos obligatorios según requerimientos del usuario
+export function validateRequiredFields(data: any): { 
   isValid: boolean; 
   errors: Record<string, string>;
-  groupErrors: string[];
+  missingFields: string[];
 } {
-  // Validación de campos individuales
-  const fieldValidation = validateForm(data)
-  
-  // Validación de grupos
-  const groupValidation = validateAllGroups(data)
-  
+  const errors: Record<string, string> = {}
+  const missingFields: string[] = []
+
+  // 1. Fecha (obligatorio)
+  if (!data.fecha || data.fecha.trim() === '') {
+    errors.fecha = "La fecha es obligatoria"
+    missingFields.push("fecha")
+  }
+
+  // 2. Razón Social (obligatorio)
+  if (!data.razonSocial || data.razonSocial.trim() === '') {
+    errors.razonSocial = "La razón social es obligatoria"
+    missingFields.push("razonSocial")
+  }
+
+  // 3. Contacto (obligatorio)
+  if (!data.contacto || data.contacto.trim() === '') {
+    errors.contacto = "El contacto es obligatorio"
+    missingFields.push("contacto")
+  }
+
+  // 4. CUIT (obligatorio)
+  if (!data.cuit || data.cuit.trim() === '') {
+    errors.cuit = "El CUIT es obligatorio"
+    missingFields.push("cuit")
+  } else {
+    // Validar formato CUIT si está presente
+    const cuitValidation = validateField("cuit", data.cuit)
+    if (!cuitValidation.isValid && cuitValidation.error) {
+      errors.cuit = cuitValidation.error
+      missingFields.push("cuit")
+    }
+  }
+
+  // 5. Teléfono (obligatorio)
+  if (!data.telefono || data.telefono.trim() === '') {
+    errors.telefono = "El teléfono es obligatorio"
+    missingFields.push("telefono")
+  } else {
+    // Validar formato teléfono si está presente
+    const telefonoValidation = validateField("telefono", data.telefono)
+    if (!telefonoValidation.isValid && telefonoValidation.error) {
+      errors.telefono = telefonoValidation.error
+      missingFields.push("telefono")
+    }
+  }
+
+  // 6. Al menos un tipo de servicio (obligatorio)
+  const tiposServicio = [
+    data.servicioTecnico,
+    data.instalacion,
+    data.puestaEnMarcha,
+    data.capacitacion,
+    data.calibracion,
+    data.tercero
+  ]
+  if (!tiposServicio.some(servicio => servicio === true)) {
+    errors.tiposServicio = "Debe seleccionar al menos un tipo de servicio"
+    missingFields.push("tiposServicio")
+  }
+
+  // 7. Máquina (obligatorio)
+  if (!data.maquina || data.maquina.trim() === '') {
+    errors.maquina = "La máquina es obligatoria"
+    missingFields.push("maquina")
+  }
+
+  // 8. Equipo (obligatorio)
+  if (!data.equipo || data.equipo.trim() === '') {
+    errors.equipo = "El equipo es obligatorio"
+    missingFields.push("equipo")
+  }
+
+  // 9. Descripción (obligatorio)
+  if (!data.descripcion || data.descripcion.trim() === '') {
+    errors.descripcion = "La descripción es obligatoria"
+    missingFields.push("descripcion")
+  }
+
+  // 10. Insumos (obligatorio)
+  if (!data.insumos || data.insumos.trim() === '') {
+    errors.insumos = "Los insumos son obligatorios"
+    missingFields.push("insumos")
+  }
+
+  // 11. Al menos una ubicación de servicio (obligatorio)
+  if (!data.servicioACampo && !data.servicioEnOficina) {
+    errors.ubicacionServicio = "Debe seleccionar la ubicación del servicio (Campo u Oficina)"
+    missingFields.push("ubicacionServicio")
+  }
+
+  // 12. Al menos un tipo de cargo (obligatorio) - conCargo O sinCargo
+  if (!data.conCargo && !data.sinCargo) {
+    errors.tipoCargo = "Debe seleccionar si el servicio es con cargo o sin cargo"
+    missingFields.push("tipoCargo")
+  }
+
+  // 13. Al menos un tipo de garantía (obligatorio) - servicioEnGarantia O aConvenir
+  if (!data.servicioEnGarantia && !data.aConvenir) {
+    errors.tipoGarantia = "Debe seleccionar si el servicio está en garantía o es a convenir"
+    missingFields.push("tipoGarantia")
+  }
+
   return {
-    isValid: fieldValidation.isValid && groupValidation.isValid,
-    errors: fieldValidation.errors,
-    groupErrors: groupValidation.errors
+    isValid: missingFields.length === 0,
+    errors,
+    missingFields
   }
 }
 

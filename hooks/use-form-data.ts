@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { toast } from "@/lib/toast"
-import { validateField, formatPhoneNumber, formatCuit, type FormValidationData } from "@/lib/validations"
+import { validateField, formatPhoneNumber, formatCuit, type FormValidationData, validateRequiredFields } from "@/lib/validations"
 import { generateOrderNumber } from "@/lib/order-number"
 import { toast as sonnerToast } from "sonner"
 
@@ -269,51 +269,14 @@ export function useFormData() {
     return Object.keys(fieldErrors).length > 0
   }
 
-  // Validación simple de campos críticos (sin cálculo de progreso)
-  const validateCriticalFields = (): { isValid: boolean; missingFields: string[] } => {
-    const missing: string[] = []
-    
-    // Validar campos individuales críticos
-    criticalFields.forEach(field => {
-      const value = formData[field]
-      const isEmpty = typeof value === 'boolean' ? !value : (!value || value.toString().trim() === '')
-      if (isEmpty) {
-        missing.push(field)
-      }
-    })
-    
-    // Validar que tenga al menos un tipo de servicio
-    const hasService = formData.servicioTecnico || formData.instalacion || 
-                      formData.puestaEnMarcha || formData.capacitacion || 
-                      formData.calibracion || formData.tercero
-    if (!hasService) {
-      missing.push('tipoServicio')
-    }
-    
-    // Validar ubicación del servicio
-    const hasLocation = formData.servicioACampo || formData.servicioEnOficina
-    if (!hasLocation) {
-      missing.push('ubicacionServicio')
-    }
-    
-    // Validar tipo de facturación
-    const hasBilling = formData.conCargo || formData.sinCargo || 
-                      formData.servicioEnGarantia || formData.aConvenir
-    if (!hasBilling) {
-      missing.push('tipoFacturacion')
-    }
-    
-    // Validar firmas
-    if (!formData.tecnicoFirma || formData.tecnicoFirma.trim() === '') {
-      missing.push('tecnicoFirma')
-    }
-    if (!formData.clienteFirma || formData.clienteFirma.trim() === '') {
-      missing.push('clienteFirma')
-    }
+  // Validación actualizada de campos críticos usando los nuevos requerimientos
+  const validateCriticalFields = (): { isValid: boolean; missingFields: string[]; errors: Record<string, string> } => {
+    const validation = validateRequiredFields(formData)
     
     return {
-      isValid: missing.length === 0,
-      missingFields: missing
+      isValid: validation.isValid,
+      missingFields: validation.missingFields,
+      errors: validation.errors
     }
   }
 
