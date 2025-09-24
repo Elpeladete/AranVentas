@@ -10,6 +10,7 @@ import { toast } from "@/lib/toast"
 import { validateForm, validateRequiredFields } from "@/lib/validations"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import html2canvas from "html2canvas"
+import { addNewOrder, updateOrder, markOrderAsSent } from "@/lib/local-database"
 
 interface FormActionsProps {
   formData: FormData
@@ -18,6 +19,9 @@ interface FormActionsProps {
   onUpdateField: (field: keyof FormData, value: any) => void
   hasErrors?: boolean
   lastSaveTime?: Date | null
+  onShowValidationProminent?: () => void
+  onHideValidationProminent?: () => void
+  formRef?: React.RefObject<HTMLDivElement>
 }
 
 export function FormActions({ 
@@ -26,7 +30,10 @@ export function FormActions({
   onReset,
   onUpdateField,
   hasErrors = false,
-  lastSaveTime
+  lastSaveTime,
+  onShowValidationProminent,
+  onHideValidationProminent,
+  formRef
 }: FormActionsProps) {
   const { isOnline, isChecking } = useNetworkStatus()
   
@@ -53,6 +60,11 @@ export function FormActions({
       setHasBeenSubmitted(false)
       lastSubmittedData.current = null
       onReset()
+      
+      // Ocultar la validación prominente al limpiar el formulario
+      if (onHideValidationProminent) {
+        onHideValidationProminent()
+      }
     }
   }
 
@@ -67,10 +79,26 @@ export function FormActions({
         return
       }
 
-      toast.info("Iniciando proceso...", { description: "Guardando datos localmente primero" })
+      toast.info("Iniciando proceso...", { description: "Guardando en base de datos local" })
       
-      // PASO 1: Guardar datos del formulario localmente (JSON)
-      console.log('💾 Guardando datos del formulario localmente...')
+      // PASO 1A: Guardar en base de datos local
+      console.log('🗃️ Guardando en base de datos local...')
+      let orderId: string
+      try {
+        orderId = addNewOrder(formData, 'completed')
+        toast.success("Orden guardada en BD local", { 
+          description: `Orden ${formData.numeroOrden || 'nueva'} registrada` 
+        })
+      } catch (dbError) {
+        console.error('❌ Error guardando en BD local:', dbError)
+        toast.warning("Advertencia BD", { 
+          description: "No se pudo guardar en base de datos local, continuando..." 
+        })
+        orderId = `temp-${Date.now()}`
+      }
+      
+      // PASO 1B: Guardar respaldo JSON (opcional)
+      console.log('💾 Creando respaldo JSON...')
       try {
         const formDataJson = JSON.stringify(formData, null, 2)
         const jsonBlob = new Blob([formDataJson], { type: 'application/json' })
@@ -86,22 +114,25 @@ export function FormActions({
         document.body.removeChild(jsonLink)
         URL.revokeObjectURL(jsonUrl)
         
-        toast.success("Datos guardados localmente", { 
-          description: `Formulario respaldado como ${jsonFilename}` 
-        })
+        console.log(`💾 Respaldo JSON creado: ${jsonFilename}`)
       } catch (jsonError) {
         console.error('❌ Error guardando datos JSON:', jsonError)
-        toast.warning("Advertencia", { 
-          description: "No se pudieron guardar los datos localmente" 
-        })
+        // No es crítico si falla el respaldo JSON, continuamos
       }
       
       // PASO 2: Capturar y guardar imagen localmente
       console.log('🚀 Capturando imagen de la orden...')
-      const formContainer = document.querySelector('.relative.mx-auto') as HTMLElement
+      const formContainer = formRef?.current || document.querySelector('.relative.mx-auto') as HTMLElement
       let imageUrl: string | null = null
       
       if (formContainer) {
+        console.log('✅ Contenedor del formulario encontrado:', formContainer)
+        console.log('📐 Dimensiones del contenedor:', {
+          width: formContainer.offsetWidth,
+          height: formContainer.offsetHeight,
+          className: formContainer.className
+        })
+        
         try {
           const captureResult = await captureOrderToCanvas(formContainer)
           
@@ -151,41 +182,20 @@ export function FormActions({
                 description: "Imagen disponible online para compartir" 
               })
               
-              // Compartir por WhatsApp automáticamente
-              if (imageUrl && imageUrl.startsWith('http')) {
-                console.log('📱 Preparando para compartir por WhatsApp...')
-                const message = `🔧 ARAN Tecnologías - Orden de Servicio ${formData.numeroOrden || 'Nueva'}\n\n✅ Trabajo completado para: ${formData.razonSocial || 'Cliente'}\n\n🖼️ Ver orden completa: ${imageUrl}\n\n📞 ARAN Tecnologías - Servicio Técnico`
-                const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`
-                
-                // Mostrar opción de compartir
-                setTimeout(() => {
-                  const shouldShare = confirm(
-                    `¿Desea compartir la orden de servicio por WhatsApp?\n\nSe abrirá WhatsApp con el mensaje y la imagen listos para enviar.`
-                  )
-                  
-                  if (shouldShare) {
-                    window.open(whatsappUrl, '_blank')
-                    toast.success("WhatsApp abierto", {
-                      description: "Envía el mensaje con la orden de servicio"
-                    })
-                  }
-                }, 1000) // Esperar 1 segundo para que se vea el toast de éxito
-              }
-              
             } catch (uploadError) {
               console.error('❌ Error completo en subida a ImgBB:', uploadError)
               console.error('❌ Stack trace:', uploadError instanceof Error ? uploadError.stack : 'No stack')
               
               // Usar referencia local como fallback
               imageUrl = `Local: ${filename}`
-              toast.error("No se pudo compartir por WhatsApp", { 
+              toast.error("Error subiendo imagen", { 
                 description: `Error subiendo imagen: ${uploadError instanceof Error ? uploadError.message : 'Error desconocido'}. La imagen se guardó localmente.` 
               })
               
               // Mostrar mensaje sobre compartir manualmente
               setTimeout(() => {
-                toast.info("Para compartir manualmente", {
-                  description: "Use la imagen descargada localmente en su dispositivo",
+                toast.info("Imagen disponible localmente", {
+                  description: "Use la imagen descargada desde su dispositivo",
                   duration: 5000
                 })
               }, 2000)
@@ -198,6 +208,13 @@ export function FormActions({
             description: "No se pudo capturar la imagen" 
           })
         }
+      } else {
+        console.error('❌ No se encontró el contenedor del formulario')
+        console.log('🔍 Elementos disponibles con clase "relative":', document.querySelectorAll('.relative'))
+        console.log('🔍 Elementos disponibles con clase "mx-auto":', document.querySelectorAll('.mx-auto'))
+        toast.error("Error", {
+          description: "No se pudo encontrar el formulario para capturar"
+        })
       }
 
       // PASO 4: Actualizar campo AUX1 con la URL (si se obtuvo)
@@ -211,55 +228,51 @@ export function FormActions({
       const validation = validateRequiredFields(formData)
       
       if (!validation.isValid) {
-        // En lugar del confirm, mostrar mensaje con scroll hacia ValidationStatus
+        // Activar modo prominente de validación
+        if (onShowValidationProminent) {
+          onShowValidationProminent()
+        }
+        
         const missingFieldsCount = validation.missingFields.length
         const errorList = Object.values(validation.errors).slice(0, 3) // Mostrar solo los primeros 3
         
-        toast.error("❌ No se puede enviar", { 
-          description: `Faltan ${missingFieldsCount} campos obligatorios. Revise el panel de validación arriba.`,
-          duration: 6000
-        })
+        // Mostrar confirmación inmediata para continuar con campos faltantes
+        const shouldProceed = confirm(
+          `⚠️ CAMPOS OBLIGATORIOS FALTANTES\n\nFaltan ${missingFieldsCount} campos obligatorios:\n\n• ${errorList.join('\n• ')}${missingFieldsCount > 3 ? '\n• Y más campos...' : ''}\n\n¿Desea continuar con el envío a pesar de los campos faltantes?\n\n⚠️ RECOMENDACIÓN: Complete los campos para un envío óptimo.`
+        )
         
-        // Mostrar detalles específicos en un segundo toast
-        setTimeout(() => {
-          toast.warning("Campos requeridos", {
-            description: `• ${errorList.join('\n• ')}${missingFieldsCount > 3 ? '\n• Y más...' : ''}`,
-            duration: 8000
+        if (!shouldProceed) {
+          // Usuario canceló - mostrar información y salir
+          toast.warning("Envío cancelado", { 
+            description: "Complete los campos obligatorios y vuelva a intentar.",
+            duration: 4000
           })
-        }, 1000)
-        
-        // Hacer scroll hacia el panel de validación si existe
-        setTimeout(() => {
-          const validationPanel = document.querySelector('.validation-status')
-          if (validationPanel) {
-            validationPanel.scrollIntoView({ 
-              behavior: 'smooth', 
-              block: 'center' 
-            })
-            
-            // Añadir efecto de highlight temporal
-            validationPanel.classList.add('ring-2', 'ring-orange-400', 'ring-opacity-75')
-            setTimeout(() => {
-              validationPanel.classList.remove('ring-2', 'ring-orange-400', 'ring-opacity-75')
-            }, 3000)
-          } else {
-            console.log('⚠️ Panel de validación no encontrado')
-          }
-        }, 500)
-        
-        // Mostrar opción de envío forzado después de unos segundos
-        setTimeout(() => {
-          const shouldProceed = confirm(
-            `⚠️ ENVÍO FORZADO\n\nFaltan ${missingFieldsCount} campos obligatorios.\n\n¿Está seguro que desea enviar el formulario incompleto?\n\n⚠️ RECOMENDACIÓN: Complete los campos faltantes para un envío óptimo.`
-          )
           
-          if (shouldProceed) {
-            // Continuar con el envío forzado
-            proceedWithSubmission()
-          }
-        }, 3000) // Dar 3 segundos para que el usuario vea los errores
+          // Hacer scroll hacia el panel de validación
+          setTimeout(() => {
+            const validationPanel = document.querySelector('.validation-status')
+            if (validationPanel) {
+              validationPanel.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center' 
+              })
+              
+              // Añadir efecto de highlight temporal
+              validationPanel.classList.add('ring-2', 'ring-orange-400', 'ring-opacity-75')
+              setTimeout(() => {
+                validationPanel.classList.remove('ring-2', 'ring-orange-400', 'ring-opacity-75')
+              }, 3000)
+            }
+          }, 500)
+          
+          return // Salir sin continuar el envío
+        }
         
-        return // Detener aquí el flujo normal
+        // Si llega aquí, el usuario decidió continuar con campos faltantes
+        toast.warning("Continuando con envío incompleto", { 
+          description: `Enviando formulario con ${missingFieldsCount} campos faltantes.`,
+          duration: 4000
+        }) // Detener aquí el flujo normal
         
       } else {
         toast.success("Validación exitosa", {
@@ -267,21 +280,6 @@ export function FormActions({
         })
       }
 
-      // Continuar con el envío normal
-      proceedWithSubmission()
-      
-    } catch (error) {
-      console.error('❌ Error en proceso completo:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
-      toast.error("Error en el proceso", { 
-        description: `${errorMessage}. Los datos locales están guardados.`
-      })
-    }
-  }
-  
-  // Función auxiliar para el proceso de envío
-  const proceedWithSubmission = async () => {
-    try {
       // PASO 6: Enviar al formulario 
       toast.info("Enviando formulario...", { description: "Transmitiendo datos al servidor" })
       
@@ -300,18 +298,32 @@ export function FormActions({
       setHasBeenSubmitted(true)
       lastSubmittedData.current = { ...formData }
       
+      // PASO 7A: Actualizar estado en base de datos local
+      try {
+        markOrderAsSent(orderId, imageUrl || undefined)
+        console.log('🗃️ Estado actualizado en BD local: enviado')
+      } catch (dbError) {
+        console.error('❌ Error actualizando BD local:', dbError)
+        // No es crítico, el envío ya fue exitoso
+      }
+      
       console.log('✅ Proceso completado exitosamente')
       toast.success("Formulario enviado exitosamente", { 
-        description: "Datos guardados localmente y enviados al servidor",
+        description: "Orden guardada y enviada correctamente",
         duration: 5000 
       })
       
-    } catch (submitError) {
-      console.error('❌ Error en envío del formulario:', submitError)
-      toast.error("Error en envío", { 
-        description: "Los datos están guardados localmente, pero no se enviaron al servidor" 
+      // Ocultar la validación prominente después del envío exitoso
+      if (onHideValidationProminent) {
+        onHideValidationProminent()
+      }
+      
+    } catch (error) {
+      console.error('❌ Error en proceso completo:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+      toast.error("Error en el proceso", { 
+        description: `${errorMessage}. Los datos locales están guardados.`
       })
-      throw submitError // Re-lanzar para que se maneje en el catch principal
     }
   }
 
@@ -521,7 +533,7 @@ export function FormActions({
 
   const handleCaptureOrder = async () => {
     try {
-      const formContainer = document.querySelector('.relative.mx-auto') as HTMLElement
+      const formContainer = formRef?.current || document.querySelector('.relative.mx-auto') as HTMLElement
       if (!formContainer) {
         toast.error("Error de captura", { description: "No se pudo encontrar el formulario para capturar" })
         return

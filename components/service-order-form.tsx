@@ -17,7 +17,7 @@ import { toast } from "@/lib/toast"
 import { generateOrderNumber } from "@/lib/order-number"
 import { submitFormToGoogle, generatePrefilledUrl, validateFormDataForSubmission, getSignatureInfo } from "@/lib/google-forms"
 import { SignatureCanvas } from "@/components/signature-canvas"
-import { formatPhoneNumber, formatCuit, getFieldHint, validateAllGroups } from "@/lib/validations"
+import { formatPhoneNumber, formatCuit, getFieldHint, validateAllGroups, validateRequiredFields } from "@/lib/validations"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { addPendingSubmission } from "@/lib/offline-storage"
 import { syncManager } from "@/lib/offline-sync"
@@ -62,6 +62,7 @@ export function ServiceOrderForm() {
   const [forceRender, setForceRender] = useState(0) // Para forzar re-render
   const [showOfflinePanel, setShowOfflinePanel] = useState(false) // Panel de pruebas offline
   const [isMobile, setIsMobile] = useState(false) // Estado para detectar móvil
+  const [showValidationProminent, setShowValidationProminent] = useState(false) // Mostrar validación prominente
   const imageRef = useRef<HTMLDivElement>(null)
 
   // Inicializar sincronización automática al cargar el componente
@@ -90,6 +91,21 @@ export function ServiceOrderForm() {
       setForceRender(prev => prev + 1)
     }
   }, [formData.tecnicoFirma, formData.clienteFirma])
+
+  // useEffect para ocultar la validación prominente cuando el formulario esté completo
+  useEffect(() => {
+    if (showValidationProminent) {
+      const validation = validateRequiredFields(formData)
+      if (validation.isValid) {
+        // Ocultar después de un pequeño delay para que el usuario vea el cambio
+        const timer = setTimeout(() => {
+          setShowValidationProminent(false)
+        }, 2000)
+        
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [formData, showValidationProminent])
 
   // useEffect para detectar tamaño de pantalla
   useEffect(() => {
@@ -614,6 +630,7 @@ export function ServiceOrderForm() {
             <div className="w-full">
               <ValidationStatus 
                 formData={formData} 
+                mode={showValidationProminent ? 'prominent' : 'discrete'}
                 onFieldFocus={(fieldName) => {
                   // Lógica para hacer scroll/focus al campo si es necesario
                   console.log('Focus en campo:', fieldName)
@@ -629,6 +646,9 @@ export function ServiceOrderForm() {
                 onUpdateField={updateField}
                 hasErrors={hasErrors()}
                 lastSaveTime={lastSaveTime}
+                onShowValidationProminent={() => setShowValidationProminent(true)}
+                onHideValidationProminent={() => setShowValidationProminent(false)}
+                formRef={imageRef}
               />
             </div>
           </div>

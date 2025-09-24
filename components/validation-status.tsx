@@ -9,11 +9,36 @@ import { validateRequiredFields } from "@/lib/validations"
 interface ValidationStatusProps {
   formData: FormData
   onFieldFocus?: (fieldName: string) => void
+  mode?: 'discrete' | 'prominent'
 }
 
-export function ValidationStatus({ formData, onFieldFocus }: ValidationStatusProps) {
+export function ValidationStatus({ formData, onFieldFocus, mode = 'discrete' }: ValidationStatusProps) {
   const validation = validateRequiredFields(formData)
   
+  // Modo discreto - versión compacta
+  if (mode === 'discrete') {
+    if (validation.isValid) {
+      return (
+        <div className="flex items-center space-x-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-md border border-green-200">
+          <div className="w-3 h-3 bg-green-500 rounded-full flex items-center justify-center">
+            <span className="text-white text-xs">✓</span>
+          </div>
+          <span className="font-medium">Formulario completo</span>
+        </div>
+      )
+    } else {
+      return (
+        <div className="flex items-center space-x-2 text-sm text-orange-600 bg-orange-50 px-3 py-2 rounded-md border border-orange-200">
+          <div className="w-3 h-3 bg-orange-500 rounded-full flex items-center justify-center">
+            <span className="text-white text-xs">{validation.missingFields.length}</span>
+          </div>
+          <span className="font-medium">Faltan {validation.missingFields.length} campos obligatorios</span>
+        </div>
+      )
+    }
+  }
+  
+  // Modo prominente - versión completa (actual)
   if (validation.isValid) {
     return (
       <Card className="border-green-200 bg-green-50 validation-status shadow-sm">
