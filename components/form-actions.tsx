@@ -211,60 +211,64 @@ export function FormActions({
       const validation = validateRequiredFields(formData)
       
       if (!validation.isValid) {
-        const errorArray = Object.entries(validation.errors).map(([field, error]) => `• ${error}`)
-        const errorList = errorArray.join('\n')
-        const shouldProceed = confirm(
-          `⚠️ CAMPOS OBLIGATORIOS FALTANTES:\n\n${errorList}\n\nCampos faltantes: ${validation.missingFields.length}\n\n¿Desea enviar el formulario incompleto de todas formas?\n\n⚠️ ADVERTENCIA: El formulario no cumple con los requisitos mínimos.`
-        )
+        // En lugar del confirm, mostrar mensaje con scroll hacia ValidationStatus
+        const missingFieldsCount = validation.missingFields.length
+        const errorList = Object.values(validation.errors).slice(0, 3) // Mostrar solo los primeros 3
         
-        if (!shouldProceed) {
-          toast.warning("Envío cancelado", {
-            description: `Complete los ${validation.missingFields.length} campos obligatorios y vuelva a intentar`
-          })
-          return
-        }
-        
-        toast.warning("Enviando formulario incompleto", {
-          description: `⚠️ Faltan ${validation.missingFields.length} campos obligatorios`
+        toast.error("❌ No se puede enviar", { 
+          description: `Faltan ${missingFieldsCount} campos obligatorios. Revise el panel de validación arriba.`,
+          duration: 6000
         })
+        
+        // Mostrar detalles específicos en un segundo toast
+        setTimeout(() => {
+          toast.warning("Campos requeridos", {
+            description: `• ${errorList.join('\n• ')}${missingFieldsCount > 3 ? '\n• Y más...' : ''}`,
+            duration: 8000
+          })
+        }, 1000)
+        
+        // Hacer scroll hacia el panel de validación si existe
+        setTimeout(() => {
+          const validationPanel = document.querySelector('.validation-status')
+          if (validationPanel) {
+            validationPanel.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center' 
+            })
+            
+            // Añadir efecto de highlight temporal
+            validationPanel.classList.add('ring-2', 'ring-orange-400', 'ring-opacity-75')
+            setTimeout(() => {
+              validationPanel.classList.remove('ring-2', 'ring-orange-400', 'ring-opacity-75')
+            }, 3000)
+          } else {
+            console.log('⚠️ Panel de validación no encontrado')
+          }
+        }, 500)
+        
+        // Mostrar opción de envío forzado después de unos segundos
+        setTimeout(() => {
+          const shouldProceed = confirm(
+            `⚠️ ENVÍO FORZADO\n\nFaltan ${missingFieldsCount} campos obligatorios.\n\n¿Está seguro que desea enviar el formulario incompleto?\n\n⚠️ RECOMENDACIÓN: Complete los campos faltantes para un envío óptimo.`
+          )
+          
+          if (shouldProceed) {
+            // Continuar con el envío forzado
+            proceedWithSubmission()
+          }
+        }, 3000) // Dar 3 segundos para que el usuario vea los errores
+        
+        return // Detener aquí el flujo normal
+        
       } else {
         toast.success("Validación exitosa", {
           description: "✅ Todos los campos obligatorios están completos"
         })
       }
 
-      // PASO 6: Enviar al formulario 
-      toast.info("Enviando formulario...", { description: "Transmitiendo datos al servidor" })
-      
-      try {
-        await new Promise<void>((resolve, reject) => {
-          // Envolver onSubmit en una promesa para manejar su resultado
-          try {
-            onSubmit()
-            // Asumir éxito si no hay excepción inmediata
-            setTimeout(resolve, 1000) // Dar tiempo para posibles errores asíncronos
-          } catch (error) {
-            reject(error)
-          }
-        })
-        
-        // PASO 7: Marcar como enviado solo si llegamos hasta aquí sin errores
-        setHasBeenSubmitted(true)
-        lastSubmittedData.current = { ...formData }
-        
-        console.log('✅ Proceso completado exitosamente')
-        toast.success("Formulario enviado exitosamente", { 
-          description: "Datos guardados localmente y enviados al servidor",
-          duration: 5000 
-        })
-        
-      } catch (submitError) {
-        console.error('❌ Error en envío del formulario:', submitError)
-        toast.error("Error en envío", { 
-          description: "Los datos están guardados localmente, pero no se enviaron al servidor" 
-        })
-        throw submitError // Re-lanzar para que se maneje en el catch principal
-      }
+      // Continuar con el envío normal
+      proceedWithSubmission()
       
     } catch (error) {
       console.error('❌ Error en proceso completo:', error)
@@ -272,6 +276,42 @@ export function FormActions({
       toast.error("Error en el proceso", { 
         description: `${errorMessage}. Los datos locales están guardados.`
       })
+    }
+  }
+  
+  // Función auxiliar para el proceso de envío
+  const proceedWithSubmission = async () => {
+    try {
+      // PASO 6: Enviar al formulario 
+      toast.info("Enviando formulario...", { description: "Transmitiendo datos al servidor" })
+      
+      await new Promise<void>((resolve, reject) => {
+        // Envolver onSubmit en una promesa para manejar su resultado
+        try {
+          onSubmit()
+          // Asumir éxito si no hay excepción inmediata
+          setTimeout(resolve, 1000) // Dar tiempo para posibles errores asíncronos
+        } catch (error) {
+          reject(error)
+        }
+      })
+      
+      // PASO 7: Marcar como enviado solo si llegamos hasta aquí sin errores
+      setHasBeenSubmitted(true)
+      lastSubmittedData.current = { ...formData }
+      
+      console.log('✅ Proceso completado exitosamente')
+      toast.success("Formulario enviado exitosamente", { 
+        description: "Datos guardados localmente y enviados al servidor",
+        duration: 5000 
+      })
+      
+    } catch (submitError) {
+      console.error('❌ Error en envío del formulario:', submitError)
+      toast.error("Error en envío", { 
+        description: "Los datos están guardados localmente, pero no se enviaron al servidor" 
+      })
+      throw submitError // Re-lanzar para que se maneje en el catch principal
     }
   }
 

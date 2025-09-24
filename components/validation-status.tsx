@@ -16,7 +16,7 @@ export function ValidationStatus({ formData, onFieldFocus }: ValidationStatusPro
   
   if (validation.isValid) {
     return (
-      <Card className="border-green-200 bg-green-50">
+      <Card className="border-green-200 bg-green-50 validation-status shadow-sm">
         <CardContent className="p-4">
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
@@ -25,6 +25,7 @@ export function ValidationStatus({ formData, onFieldFocus }: ValidationStatusPro
             <span className="text-green-700 font-medium">
               ✅ Formulario completo - Listo para enviar
             </span>
+            <div className="ml-2 h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
           </div>
         </CardContent>
       </Card>
@@ -48,10 +49,11 @@ export function ValidationStatus({ formData, onFieldFocus }: ValidationStatusPro
   }
 
   return (
-    <Card className="border-orange-200 bg-orange-50">
+    <Card className="border-orange-200 bg-orange-50 validation-status shadow-md">
       <CardHeader className="pb-3">
-        <CardTitle className="text-orange-800 text-sm">
+        <CardTitle className="text-orange-800 text-sm flex items-center">
           ⚠️ Campos Obligatorios Faltantes ({validation.missingFields.length})
+          <div className="ml-2 h-2 w-2 bg-orange-500 rounded-full animate-pulse"></div>
         </CardTitle>
         <CardDescription className="text-orange-600 text-xs">
           Complete estos campos antes de enviar el formulario
