@@ -9,6 +9,7 @@ import { useNetworkStatus } from "@/hooks/use-network-status"
 import { toast } from "@/lib/toast"
 import { validateForm, validateRequiredFields } from "@/lib/validations"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
+import { sendServiceOrderToWhatsApp } from "@/lib/wazzup-api"
 import html2canvas from "html2canvas"
 import { addNewOrder, updateOrder, markOrderAsSent } from "@/lib/local-database"
 
@@ -286,6 +287,44 @@ export function FormActions({
       } catch (dbError) {
         console.error('❌ Error actualizando BD local:', dbError)
         // No es crítico, el envío ya fue exitoso
+      }
+      
+      // PASO 8: Enviar por WhatsApp si hay número de teléfono y imagen
+      if (formData.telefono && imageUrl && imageUrl.startsWith('http')) {
+        toast.info("Enviando por WhatsApp...", { description: "Compartiendo orden de servicio" })
+        
+        try {
+          const whatsappResult = await sendServiceOrderToWhatsApp(
+            formData.telefono,
+            formData,
+            imageUrl
+          )
+          
+          if (whatsappResult.success) {
+            toast.success("¡Enviado por WhatsApp!", { 
+              description: "La orden se compartió exitosamente por WhatsApp",
+              duration: 4000 
+            })
+          } else {
+            console.warn('⚠️ WhatsApp falló:', whatsappResult.error)
+            toast.warning("WhatsApp no disponible", { 
+              description: "La orden se guardó correctamente, pero no se pudo enviar por WhatsApp",
+              duration: 4000 
+            })
+          }
+        } catch (whatsappError) {
+          console.error('❌ Error en WhatsApp:', whatsappError)
+          toast.warning("WhatsApp no disponible", { 
+            description: "La orden se guardó correctamente, pero no se pudo enviar por WhatsApp",
+            duration: 4000 
+          })
+        }
+      } else {
+        console.log('ℹ️ WhatsApp omitido:', {
+          hasTelefono: !!formData.telefono,
+          hasImageUrl: !!imageUrl,
+          isValidUrl: imageUrl?.startsWith('http')
+        })
       }
       
       console.log('✅ Proceso completado exitosamente')
