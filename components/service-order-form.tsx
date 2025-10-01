@@ -24,6 +24,8 @@ import { syncManager } from "@/lib/offline-sync"
 
 
 import { ValidationStatus } from "@/components/validation-status"
+import { OdooContactSearch, useOdooContactSearch } from "@/components/odoo-contact-search"
+import type { OdooContact } from "@/lib/odoo-integration"
 
 
 interface ClickableArea {
@@ -59,6 +61,9 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
   // Hook para detectar conectividad
   const { isOnline, isChecking } = useNetworkStatus()
   
+  // Hook para búsqueda de contactos en Odoo
+  const { selectedContact, handleContactSelect, clearSelectedContact } = useOdooContactSearch()
+  
   const [activeField, setActiveField] = useState<keyof FormData | null>(null)
   const [overlayPosition, setOverlayPosition] = useState({ x: 0, y: 0 })
   const [tempValue, setTempValue] = useState<string | boolean>("")
@@ -82,6 +87,44 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
       syncManager.stopAutoSync()
     }
   }, [])
+
+  // Autocompletar datos cuando se selecciona un contacto de Odoo
+  useEffect(() => {
+    if (selectedContact) {
+      console.log('🎯 Autocompletando datos de contacto Odoo:', selectedContact)
+      
+      // Autocompletar campos con los datos del contacto
+      updateField('razonSocial', selectedContact.name)
+      
+      if (selectedContact.vat) {
+        updateField('cuit', selectedContact.vat)
+      }
+      
+      if (selectedContact.phone) {
+        updateField('telefono', selectedContact.phone)
+      }
+      
+      // Si es una empresa y no tiene contacto específico, usar el nombre de la empresa
+      // Si es persona, usar como contacto
+      if (!selectedContact.is_company) {
+        updateField('contacto', selectedContact.name)
+      } else if (selectedContact.contact_person) {
+        updateField('contacto', selectedContact.contact_person)
+      }
+      
+      if (selectedContact.city) {
+        updateField('localidad', selectedContact.city)
+      }
+      
+      toast.success("Datos autocompletados", {
+        description: `Información cargada desde Odoo: ${selectedContact.name}`,
+        duration: 4000
+      })
+      
+      // Limpiar selección después del autocompletado
+      clearSelectedContact()
+    }
+  }, [selectedContact, updateField, clearSelectedContact])
 
   // useEffect para detectar cambios en firmas y forzar re-render
   useEffect(() => {
@@ -622,6 +665,26 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
                 orderNumber={formData.numeroOrden}
                 signatureType={activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente'}
               />
+            </div>
+          ) : activeField === "razonSocial" ? (
+            <div className="space-y-2">
+              {/* Componente de búsqueda inteligente de Odoo */}
+              <OdooContactSearch
+                value={tempValue as string}
+                onValueChange={handleTempValueChange}
+                onContactSelect={handleContactSelect}
+                placeholder="Buscar en Odoo o escribir manualmente..."
+                className="text-sm"
+              />
+              <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                🔍 <strong>Búsqueda inteligente:</strong> Escribe para buscar contactos en Odoo y autocompletar datos (CUIT, teléfono, etc.)
+              </div>
+              {getFieldHint(activeField) && (
+                <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
+              )}
+              {getFieldError(activeField) && (
+                <p className="text-xs text-red-600">⚠️ {getFieldError(activeField)}</p>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
