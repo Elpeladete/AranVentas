@@ -24,8 +24,8 @@ import { syncManager } from "@/lib/offline-sync"
 
 
 import { ValidationStatus } from "@/components/validation-status"
-import { OdooContactSearch, useOdooContactSearch } from "@/components/odoo-contact-search"
-import type { OdooContact } from "@/lib/odoo-integration"
+import { OdooContactSearch, useOdooContactSearch } from "@/components/odoo-contact-search-fixed"
+import type { OdooContact } from "@/lib/odoo-api-client"
 
 
 interface ClickableArea {
@@ -62,7 +62,7 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
   const { isOnline, isChecking } = useNetworkStatus()
   
   // Hook para búsqueda de contactos en Odoo
-  const { selectedContact, handleContactSelect, clearSelectedContact } = useOdooContactSearch()
+  const { selectedContact, handleContactSelect, resetSelection } = useOdooContactSearch()
   
   const [activeField, setActiveField] = useState<keyof FormData | null>(null)
   const [overlayPosition, setOverlayPosition] = useState({ x: 0, y: 0 })
@@ -104,27 +104,26 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
         updateField('telefono', selectedContact.phone)
       }
       
-      // Si es una empresa y no tiene contacto específico, usar el nombre de la empresa
-      // Si es persona, usar como contacto
-      if (!selectedContact.is_company) {
-        updateField('contacto', selectedContact.name)
-      } else if (selectedContact.contact_person) {
-        updateField('contacto', selectedContact.contact_person)
-      }
+      // Usar el nombre como contacto por defecto
+      updateField('contacto', selectedContact.name)
       
       if (selectedContact.city) {
         updateField('localidad', selectedContact.city)
       }
       
+      if (selectedContact.state) {
+        updateField('provincia', selectedContact.state)
+      }
+      
       toast.success("Datos autocompletados", {
-        description: `Información cargada desde Odoo: ${selectedContact.name}`,
+        description: `Información cargada desde Odoo: ${selectedContact.name}${selectedContact.state ? ` - ${selectedContact.state}` : ''}`,
         duration: 4000
       })
       
       // Limpiar selección después del autocompletado
-      clearSelectedContact()
+      resetSelection()
     }
-  }, [selectedContact, updateField, clearSelectedContact])
+  }, [selectedContact, updateField, resetSelection])
 
   // useEffect para detectar cambios en firmas y forzar re-render
   useEffect(() => {
