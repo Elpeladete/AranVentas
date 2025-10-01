@@ -11,7 +11,7 @@ import { validateForm, validateRequiredFields } from "@/lib/validations"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { sendServiceOrderToWhatsApp } from "@/lib/wazzup-api"
 import html2canvas from "html2canvas"
-import { addNewOrder, updateOrder, markOrderAsSent } from "@/lib/local-database"
+import { addNewOrder, updateOrder, markOrderAsSent, getOrdersByNumber } from "@/lib/local-database"
 
 interface FormActionsProps {
   formData: FormData
@@ -291,33 +291,53 @@ export function FormActions({
       
       // PASO 8: Enviar por WhatsApp si hay número de teléfono y imagen
       if (formData.telefono && imageUrl && imageUrl.startsWith('http')) {
-        toast.info("Enviando por WhatsApp...", { description: "Compartiendo orden de servicio" })
+        // Verificar si esta orden ya fue enviada por WhatsApp anteriormente
+        const existingOrders = getOrdersByNumber(formData.numeroOrden || '')
+        const alreadySentOrder = existingOrders.find(order => 
+          order.status === 'sent' && 
+          order.googleFormsSent === true &&
+          order.imageUrl // Indica que ya se envió con imagen
+        )
         
-        try {
-          const whatsappResult = await sendServiceOrderToWhatsApp(
-            formData.telefono,
-            formData,
-            imageUrl
-          )
-          
-          if (whatsappResult.success) {
-            toast.success("¡Enviado por WhatsApp!", { 
-              description: "La orden se compartió exitosamente por WhatsApp",
-              duration: 4000 
-            })
-          } else {
-            console.warn('⚠️ WhatsApp falló:', whatsappResult.error)
+        if (alreadySentOrder) {
+          console.log('ℹ️ WhatsApp omitido: Orden ya enviada anteriormente', {
+            ordenId: alreadySentOrder.id,
+            sentAt: alreadySentOrder.sentAt,
+            numeroOrden: formData.numeroOrden
+          })
+          toast.info("WhatsApp ya enviado", { 
+            description: `Esta orden ya fue enviada por WhatsApp el ${alreadySentOrder.sentAt?.toLocaleDateString() || 'fecha anterior'}`,
+            duration: 3000
+          })
+        } else {
+          toast.info("Enviando por WhatsApp...", { description: "Compartiendo orden de servicio" })
+        
+          try {
+            const whatsappResult = await sendServiceOrderToWhatsApp(
+              formData.telefono,
+              formData,
+              imageUrl
+            )
+            
+            if (whatsappResult.success) {
+              toast.success("¡Enviado por WhatsApp!", { 
+                description: "La orden se compartió exitosamente por WhatsApp",
+                duration: 4000 
+              })
+            } else {
+              console.warn('⚠️ WhatsApp falló:', whatsappResult.error)
+              toast.warning("WhatsApp no disponible", { 
+                description: "La orden se guardó correctamente, pero no se pudo enviar por WhatsApp",
+                duration: 4000 
+              })
+            }
+          } catch (whatsappError) {
+            console.error('❌ Error en WhatsApp:', whatsappError)
             toast.warning("WhatsApp no disponible", { 
               description: "La orden se guardó correctamente, pero no se pudo enviar por WhatsApp",
               duration: 4000 
             })
           }
-        } catch (whatsappError) {
-          console.error('❌ Error en WhatsApp:', whatsappError)
-          toast.warning("WhatsApp no disponible", { 
-            description: "La orden se guardó correctamente, pero no se pudo enviar por WhatsApp",
-            duration: 4000 
-          })
         }
       } else {
         console.log('ℹ️ WhatsApp omitido:', {
