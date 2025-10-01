@@ -225,18 +225,7 @@ export function useFormData() {
     toast.formReset()
   }
 
-  const exportData = () => {
-    const dataStr = JSON.stringify(formData, null, 2)
-    const dataBlob = new Blob([dataStr], { type: "application/json" })
-    const url = URL.createObjectURL(dataBlob)
-    const link = document.createElement("a")
-    const filename = `orden-servicio-${formData.numeroOrden || "nueva"}-${new Date().toISOString().split("T")[0]}.json`
-    link.href = url
-    link.download = filename
-    link.click()
-    URL.revokeObjectURL(url)
-    toast.dataExported(filename)
-  }
+
 
   const importData = (file: File) => {
     return new Promise<void>((resolve, reject) => {
@@ -290,7 +279,7 @@ export function useFormData() {
     formData,
     updateField,
     resetForm,
-    exportData,
+
     importData,
     isLoading,
     fieldErrors,

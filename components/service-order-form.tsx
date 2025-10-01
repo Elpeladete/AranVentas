@@ -21,10 +21,10 @@ import { formatPhoneNumber, formatCuit, getFieldHint, validateAllGroups, validat
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { addPendingSubmission } from "@/lib/offline-storage"
 import { syncManager } from "@/lib/offline-sync"
-import { NetworkStatusIndicator } from "@/components/network-status-indicator"
-import { OfflineTestPanel } from "@/components/offline-test-panel"
+
+
 import { ValidationStatus } from "@/components/validation-status"
-import { SavedOrdersViewer } from "@/components/saved-orders-viewer"
+
 
 interface ClickableArea {
   id: keyof FormData
@@ -36,12 +36,16 @@ interface ClickableArea {
   type: "text" | "checkbox" | "textarea" | "signature"
 }
 
-export function ServiceOrderForm() {
+interface ServiceOrderFormProps {
+  onShowDatabase?: () => void
+}
+
+export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {}) {
   const { 
     formData, 
     updateField, 
     resetForm, 
-    exportData, 
+ 
     importData, 
     isLoading,
     fieldErrors,
@@ -60,9 +64,10 @@ export function ServiceOrderForm() {
   const [tempValue, setTempValue] = useState<string | boolean>("")
   const [originalValue, setOriginalValue] = useState<string | boolean>("")
   const [forceRender, setForceRender] = useState(0) // Para forzar re-render
-  const [showOfflinePanel, setShowOfflinePanel] = useState(false) // Panel de pruebas offline
+
   const [isMobile, setIsMobile] = useState(false) // Estado para detectar móvil
   const [showValidationProminent, setShowValidationProminent] = useState(false) // Mostrar validación prominente
+  const [zoomLevel, setZoomLevel] = useState(1) // Estado para el zoom
   const imageRef = useRef<HTMLDivElement>(null)
 
   // Inicializar sincronización automática al cargar el componente
@@ -70,7 +75,7 @@ export function ServiceOrderForm() {
     // Inicializar el sistema de sincronización offline
     syncManager.startAutoSync(60000)
     
-    console.log('🚀 Sistema de sincronización offline inicializado')
+
     
     // Cleanup al desmontar el componente
     return () => {
@@ -87,10 +92,85 @@ export function ServiceOrderForm() {
        (formData.clienteFirma.startsWith('http') || formData.clienteFirma.startsWith('data:image')))
        
     if (hasValidSignatures) {
-      console.log('✅ Firmas detectadas, forzando re-render')
+
       setForceRender(prev => prev + 1)
     }
   }, [formData.tecnicoFirma, formData.clienteFirma])
+
+  // useEffect para detectar dispositivos móviles
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // Funciones para manejo de zoom
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(prev + 0.2, 2.5))
+  }
+
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(prev - 0.2, 0.5))
+  }
+
+  const resetZoom = () => {
+    setZoomLevel(1)
+  }
+
+  // Función para posicionar la vista cerca del área clickeada (móvil)
+  const centerAreaOnScreen = (area: ClickableArea) => {
+    if (!isMobile || !imageRef.current) return
+    
+    const container = imageRef.current.parentElement
+    if (!container) return
+    
+    // Calcular posición del área en la imagen escalada
+    const imageHeight = imageRef.current.clientHeight
+    const imageWidth = imageRef.current.clientWidth
+    const scaledAreaY = (area.y / 1200) * imageHeight * zoomLevel
+    const scaledAreaX = (area.x / 850) * imageWidth * zoomLevel
+    const scaledAreaHeight = (area.height / 1200) * imageHeight * zoomLevel
+    const scaledAreaWidth = (area.width / 850) * imageWidth * zoomLevel
+    
+    // Obtener posición actual del contenedor de imagen
+    const imageRect = imageRef.current.getBoundingClientRect()
+    
+    // Calcular el centro del área clickeada
+    const areaCenterY = scaledAreaY + (scaledAreaHeight / 2)
+    const areaCenterX = scaledAreaX + (scaledAreaWidth / 2)
+    
+    // Posición absoluta del centro del área
+    const absoluteAreaY = imageRect.top + areaCenterY + window.scrollY
+    const absoluteAreaX = imageRect.left + areaCenterX + window.scrollX
+    
+    // Calcular posición ideal: área visible en el tercio superior de la pantalla
+    const viewportHeight = window.innerHeight
+    const viewportWidth = window.innerWidth
+    const targetY = absoluteAreaY - (viewportHeight * 0.3) // Tercio superior, no centro
+    
+    // Solo hacer scroll horizontal si el área está fuera de la vista
+    let targetX = window.scrollX
+    if (absoluteAreaX < window.scrollX + 50) {
+      // Área muy a la izquierda, mover hacia la derecha
+      targetX = absoluteAreaX - (viewportWidth * 0.2)
+    } else if (absoluteAreaX > window.scrollX + viewportWidth - 50) {
+      // Área muy a la derecha, mover hacia la izquierda  
+      targetX = absoluteAreaX - (viewportWidth * 0.8)
+    }
+    
+    // Aplicar scroll suave
+    window.scrollTo({
+      top: Math.max(0, targetY),
+      left: Math.max(0, targetX),
+      behavior: 'smooth'
+    })
+    
+
+  }
 
   // useEffect para ocultar la validación prominente cuando el formulario esté completo
   useEffect(() => {
@@ -180,6 +260,14 @@ export function ServiceOrderForm() {
     
     setActiveField(area.id)
     setOverlayPosition({ x: x + 10, y: y + 10 })
+    
+    // Centrar automáticamente el área en móvil
+    if (isMobile) {
+      // Pequeño delay para permitir que el overlay se renderice primero
+      setTimeout(() => {
+        centerAreaOnScreen(area)
+      }, 100)
+    }
   }
 
   const handleApplyValue = () => {
@@ -247,7 +335,7 @@ export function ServiceOrderForm() {
     try {
       // Mostrar info sobre firmas
       const signatureInfo = getSignatureInfo(formData)
-      console.log('📝 Información de firmas antes del envío:', signatureInfo)
+
 
       if (!isOnline) {
         // Modo offline: guardar en cola para envío posterior
@@ -348,20 +436,9 @@ export function ServiceOrderForm() {
   }
 
   const renderValueOverlays = () => {
-    console.log('🎨 Renderizando overlays con formData:', {
-      tecnicoFirma: formData.tecnicoFirma,
-      clienteFirma: formData.clienteFirma,
-      totalFields: Object.keys(formData).length
-    })
+
     
-    console.log('📊 allDisplayAreas stats:', {
-      total: allDisplayAreas.length,
-      signatures: allDisplayAreas.filter(a => a.type === 'signature').length,
-      signatureAreas: allDisplayAreas.filter(a => a.type === 'signature').map(a => ({
-        id: a.id,
-        position: { x: a.x, y: a.y, width: a.width, height: a.height }
-      }))
-    })
+
     
     return allDisplayAreas.map((area) => {
       const value = formData[area.id]
@@ -369,21 +446,7 @@ export function ServiceOrderForm() {
       
       // Log específico para firmas
       if (area.type === 'signature') {
-        console.log(`🎯 Renderizando firma ${area.id}:`, {
-          value: value,
-          hasValue: hasValue,
-          isImage: value && (value.toString().startsWith('data:image') || value.toString().startsWith('http')),
-          position: { x: area.x, y: area.y, width: area.width, height: area.height },
-          calculatedStyle: {
-            left: `${(area.x / 850) * 100}%`,
-            top: `${(area.y / 1200) * 100}%`,
-            width: `${(area.width / 850) * 100}%`,
-            height: `${(area.height / 1200) * 100}%`
-          },
-          valueType: typeof value,
-          valueLength: value ? value.toString().length : 0,
-          valuePreview: value ? value.toString().substring(0, 100) + '...' : 'empty'
-        })
+
       }
       
       return (
@@ -429,7 +492,7 @@ export function ServiceOrderForm() {
                         backgroundColor: 'transparent',
                         filter: 'contrast(1.1)'
                       }}
-                      onLoad={() => console.log(`✅ Firma mostrada: ${area.id}`)}
+
                       onError={(e) => console.error(`❌ Error mostrando firma: ${area.id}`, e)}
                     />
                   ) : (
@@ -462,30 +525,36 @@ export function ServiceOrderForm() {
     const field = clickableAreas.find((area) => area.id === activeField)
     if (!field) return null
 
-    // Función para calcular posición responsiva
+    // Función simplificada para posicionar overlay cerca del área clickeada
     const calculateResponsivePosition = () => {
-      if (isMobile) {
-        // En móviles, centrar en la pantalla
+      if (!imageRef.current) {
+        // Fallback si no hay referencia a la imagen
         return {
           position: 'fixed' as const,
           left: '50%',
           top: '50%',
           transform: 'translate(-50%, -50%)',
           maxWidth: '90vw',
-          maxHeight: '80vh',
-          overflow: 'auto'
+          maxHeight: '80vh'
         }
-      } else {
-        // En desktop, mantener posición cerca del click pero ajustada
-        const adjustedX = Math.min(overlayPosition.x, window.innerWidth - 350)
-        const adjustedY = Math.min(overlayPosition.y, window.innerHeight - 300)
-        
-        return {
-          position: 'fixed' as const,
-          left: Math.max(10, adjustedX),
-          top: Math.max(10, adjustedY),
-          maxWidth: '400px'
-        }
+      }
+
+      // 🎯 SIEMPRE usar el sistema de porcentajes (móvil Y desktop)
+      const overlayWidth = isMobile ? 320 : 400
+      const overlayHeight = isMobile ? 250 : 300
+      
+      const percentageX = Math.max(20, (field.x / 850) * 100)
+      const percentageY = (field.y / 1200) * 100
+      
+      return {
+        position: 'absolute' as const,
+        left: `${percentageX}%`,
+        top: `${Math.max(0, percentageY - 5)}%`, // Un poco arriba del campo
+        width: `${overlayWidth}px`,
+        maxHeight: `${overlayHeight}px`,
+        overflow: 'auto',
+        zIndex: 60,
+        transform: 'translateX(-50%)' // Centrar horizontalmente
       }
     }
 
@@ -496,22 +565,26 @@ export function ServiceOrderForm() {
         {/* Backdrop para móviles */}
         {isMobile && (
           <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            className="fixed inset-0 bg-black bg-opacity-30 z-40"
             onClick={handleCancelEdit}
           />
         )}
         
         <div
-          className="bg-white border border-border rounded-lg shadow-xl p-4 z-50 min-w-[280px]"
+          className="bg-white border-2 border-blue-500 rounded-lg shadow-xl p-4 z-50 min-w-[280px] relative"
           style={positionStyle}
         >
-          {/* Header con drag handle para móviles */}
-          <div className="flex items-center justify-between mb-3 cursor-move lg:cursor-default">
+          {/* Indicador visual que apunta al área */}
+          <div className="absolute -top-2 left-4 w-4 h-4 bg-blue-500 transform rotate-45 border-l-2 border-t-2 border-white"></div>
+          
+          {/* Header con información del campo */}
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              {isMobile && <div className="w-8 h-1 bg-gray-300 rounded-full"></div>}
-              <h3 className="font-semibold text-sm">{field.label}</h3>
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+              <h3 className="font-semibold text-sm text-blue-700">{field.label}</h3>
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Editando</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+            <Button variant="ghost" size="sm" onClick={handleCancelEdit} className="text-red-500 hover:text-red-700">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -606,9 +679,6 @@ export function ServiceOrderForm() {
 
   return (
     <div className="relative min-h-screen bg-muted/30">
-      {/* Indicador de estado de red */}
-      <NetworkStatusIndicator />
-      
       {/* Header */}
       <div className="bg-card border-b border-border p-2 sm:p-4">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -617,14 +687,7 @@ export function ServiceOrderForm() {
             <p className="text-sm text-muted-foreground">Sistema de Órdenes de Servicio</p>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowOfflinePanel(!showOfflinePanel)}
-              className="text-xs"
-            >
-              {showOfflinePanel ? "Ocultar" : "Mostrar"} Panel Offline
-            </Button>
+
             
             {/* Mostrar estado de validación */}
             <div className="w-full">
@@ -633,7 +696,7 @@ export function ServiceOrderForm() {
                 mode={showValidationProminent ? 'prominent' : 'discrete'}
                 onFieldFocus={(fieldName) => {
                   // Lógica para hacer scroll/focus al campo si es necesario
-                  console.log('Focus en campo:', fieldName)
+
                 }}
               />
             </div>
@@ -649,6 +712,7 @@ export function ServiceOrderForm() {
                 onShowValidationProminent={() => setShowValidationProminent(true)}
                 onHideValidationProminent={() => setShowValidationProminent(false)}
                 formRef={imageRef}
+                onShowDatabase={onShowDatabase}
               />
             </div>
           </div>
@@ -658,9 +722,54 @@ export function ServiceOrderForm() {
       {/* Interactive Form - Always show image overlay design */}
       <div className="max-w-7xl mx-auto p-2 sm:p-4">
         <Card className="p-2 sm:p-6">
+          {/* Controles de Zoom para Móvil */}
+          {isMobile && (
+            <div className="mb-4 flex items-center justify-center gap-2 p-2 bg-gray-50 rounded-lg">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleZoomOut}
+                disabled={zoomLevel <= 0.5}
+                className="text-xs"
+              >
+                🔍−
+              </Button>
+              <span className="text-xs text-gray-600 min-w-[60px] text-center">
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetZoom}
+                className="text-xs"
+              >
+                🎯
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleZoomIn}
+                disabled={zoomLevel >= 2.5}
+                className="text-xs"
+              >
+                🔍+
+              </Button>
+            </div>
+          )}
+
           {/* Form View - Visual overlay on image for all devices */}
-          <div className="overflow-x-auto">
-            <div ref={imageRef} className="relative mx-auto" style={{ minWidth: "850px", maxWidth: "850px" }}>
+          <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: isMobile ? '70vh' : 'auto' }}>
+            <div 
+              ref={imageRef} 
+              className="relative mx-auto" 
+              style={{ 
+                minWidth: "850px", 
+                maxWidth: "850px",
+                transform: isMobile ? `scale(${zoomLevel})` : 'scale(1)',
+                transformOrigin: 'top left',
+                transition: 'transform 0.2s ease-in-out'
+              }}
+            >
               <img src="/images/orden-servicio-aran.png" alt="Orden de Servicio ARAN" className="w-full h-auto" />
 
               {/* Value Overlays - Mostrar valores sobre la imagen */}
@@ -670,12 +779,18 @@ export function ServiceOrderForm() {
             {clickableAreas.map((area) => (
               <div
                 key={area.id}
-                className="absolute clickable-area"
+                className={`absolute clickable-area ${
+                  activeField === area.id 
+                    ? 'ring-4 ring-blue-500 ring-opacity-50 bg-blue-100 bg-opacity-30' 
+                    : 'hover:bg-blue-50 hover:bg-opacity-20'
+                }`}
                 style={{
                   left: `${(area.x / 850) * 100}%`,
                   top: `${(area.y / 1200) * 100}%`,
                   width: `${(area.width / 850) * 100}%`,
                   height: `${(area.height / 1200) * 100}%`,
+                  transition: 'all 0.2s ease-in-out',
+                  zIndex: activeField === area.id ? 10 : 1
                 }}
                 onClick={(e) => handleAreaClick(area, e)}
                 title={`Clic para editar: ${area.label}`}
@@ -686,21 +801,21 @@ export function ServiceOrderForm() {
             {renderOverlay()}
             </div>
           </div>
+
+          {/* Instrucción para móvil */}
+          {isMobile && (
+            <div className="mt-2 text-center">
+              <p className="text-xs text-gray-500">
+                📱 Usa los controles arriba para hacer zoom o pellizca la pantalla
+              </p>
+            </div>
+          )}
         </Card>
       </div>
 
-      {/* Panel de pruebas offline */}
-      {showOfflinePanel && <OfflineTestPanel />}
+
       
-      {/* Visor de órdenes guardadas */}
-      <SavedOrdersViewer 
-        onLoadOrder={(orderData: FormData) => {
-          // Cargar los datos de la orden seleccionada en el formulario
-          Object.entries(orderData).forEach(([key, value]) => {
-            updateField(key as keyof FormData, value as string | boolean)
-          })
-        }}
-      />
+
     </div>
   )
 }

@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Send, RotateCcw, AlertCircle, CheckCircle, Download, Camera, Wifi, WifiOff, Clock, AlertTriangle } from "lucide-react"
+import { Send, RotateCcw, AlertCircle, CheckCircle, Camera, Wifi, WifiOff, Clock, AlertTriangle } from "lucide-react"
 import type { FormData } from "@/hooks/use-form-data"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { toast } from "@/lib/toast"
@@ -22,6 +22,7 @@ interface FormActionsProps {
   onShowValidationProminent?: () => void
   onHideValidationProminent?: () => void
   formRef?: React.RefObject<HTMLDivElement>
+  onShowDatabase?: () => void
 }
 
 export function FormActions({ 
@@ -33,7 +34,8 @@ export function FormActions({
   lastSaveTime,
   onShowValidationProminent,
   onHideValidationProminent,
-  formRef
+  formRef,
+  onShowDatabase
 }: FormActionsProps) {
   const { isOnline, isChecking } = useNetworkStatus()
   
@@ -97,28 +99,7 @@ export function FormActions({
         orderId = `temp-${Date.now()}`
       }
       
-      // PASO 1B: Guardar respaldo JSON (opcional)
-      console.log('💾 Creando respaldo JSON...')
-      try {
-        const formDataJson = JSON.stringify(formData, null, 2)
-        const jsonBlob = new Blob([formDataJson], { type: 'application/json' })
-        const jsonUrl = URL.createObjectURL(jsonBlob)
-        const jsonLink = document.createElement('a')
-        const timestamp = new Date().toISOString().split('T')[0]
-        const jsonFilename = `ARAN-FormData-${formData.numeroOrden || 'nueva'}-${timestamp}.json`
-        
-        jsonLink.href = jsonUrl
-        jsonLink.download = jsonFilename
-        document.body.appendChild(jsonLink)
-        jsonLink.click()
-        document.body.removeChild(jsonLink)
-        URL.revokeObjectURL(jsonUrl)
-        
-        console.log(`💾 Respaldo JSON creado: ${jsonFilename}`)
-      } catch (jsonError) {
-        console.error('❌ Error guardando datos JSON:', jsonError)
-        // No es crítico si falla el respaldo JSON, continuamos
-      }
+
       
       // PASO 2: Capturar y guardar imagen localmente
       console.log('🚀 Capturando imagen de la orden...')
@@ -639,13 +620,14 @@ export function FormActions({
 
         <Button 
           variant="outline" 
-          onClick={handleCaptureOrder}
-          className="border-green-200 text-green-700 hover:bg-green-50 w-full sm:w-auto"
+          onClick={onShowDatabase}
+          className="border-blue-200 text-blue-700 hover:bg-blue-50 w-full sm:w-auto"
           size="sm"
+          disabled={!onShowDatabase}
         >
-          <Camera className="h-4 w-4 mr-2" />
-          <span className="hidden sm:inline">Cerrar Orden</span>
-          <span className="sm:hidden">Cerrar y Enviar Orden</span>
+          <span className="mr-2">🗃️</span>
+          <span className="hidden sm:inline">Base de Datos</span>
+          <span className="sm:hidden">Ver Base de Datos</span>
         </Button>
 
         <Button 

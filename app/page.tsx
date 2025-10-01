@@ -9,21 +9,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-background">
-      {/* Botón flotante para abrir base de datos */}
-      <div className="fixed top-4 right-4 z-40">
-        <Button
-          onClick={() => setShowDatabase(true)}
-          variant="outline"
-          size="sm"
-          className="shadow-lg bg-white hover:bg-gray-50"
-          title="Ver base de datos local"
-        >
-          <span className="mr-2">🗃️</span>
-          Base de Datos
-        </Button>
-      </div>
-
-      <ServiceOrderForm />
+      <ServiceOrderForm onShowDatabase={() => setShowDatabase(true)} />
       
       {/* Visualizador de base de datos */}
       {showDatabase && (

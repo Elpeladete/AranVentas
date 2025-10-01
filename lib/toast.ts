@@ -88,12 +88,7 @@ export const toast = {
     })
   },
   
-  dataExported: (filename: string) => {
-    sonnerToast.success("Datos exportados", {
-      description: `Archivo guardado: ${filename}`,
-      duration: 3000,
-    })
-  },
+
   
   formReset: () => {
     sonnerToast.info("Formulario limpiado", {
