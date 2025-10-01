@@ -685,8 +685,8 @@ export function FormActions({
           disabled={!onShowDatabase}
         >
           <span className="mr-2">🗃️</span>
-          <span className="hidden sm:inline">Base de Datos</span>
-          <span className="sm:hidden">Ver Base de Datos</span>
+          <span className="hidden sm:inline">Registros Anteriores</span>
+          <span className="sm:hidden">Ver Registros</span>
         </Button>
 
         <Button 

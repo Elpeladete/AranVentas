@@ -19,6 +19,7 @@ import {
   type OrderRecord 
 } from "@/lib/local-database"
 import { toast } from "@/lib/toast"
+import { sendServiceOrderToWhatsApp } from "@/lib/wazzup-api"
 
 // Iconos simples usando Unicode
 const Icons = {
@@ -31,7 +32,9 @@ const Icons = {
   Archive: () => <span>📦</span>,
   Eye: () => <span>👁️</span>,
   RefreshCw: () => <span>🔄</span>,
-  Calendar: () => <span>📅</span>
+  Calendar: () => <span>📅</span>,
+  WhatsApp: () => <span>📱</span>,
+  Send: () => <span>📤</span>
 }
 
 interface OrdersDatabaseViewerProps {
@@ -100,6 +103,56 @@ export function OrdersDatabaseViewer({ onClose }: OrdersDatabaseViewerProps) {
     }
   }
   
+  const handleWhatsAppResend = async (order: OrderRecord) => {
+    if (!order.formData.telefono) {
+      toast.error("Sin teléfono", { 
+        description: "Esta orden no tiene un número de teléfono registrado" 
+      })
+      return
+    }
+    
+    if (!order.imageUrl || !order.imageUrl.startsWith('http')) {
+      toast.error("Sin imagen", { 
+        description: "Esta orden no tiene una imagen válida para enviar" 
+      })
+      return
+    }
+    
+    const shouldResend = confirm(
+      `¿Reenviar orden ${order.numeroOrden} por WhatsApp?\n\nSe enviará a: ${order.formData.telefono}\nCliente: ${order.formData.razonSocial || 'Sin especificar'}`
+    )
+    
+    if (!shouldResend) return
+    
+    try {
+      toast.info("Reenviando por WhatsApp...", { 
+        description: `Enviando orden ${order.numeroOrden}` 
+      })
+      
+      const result = await sendServiceOrderToWhatsApp(
+        order.formData.telefono,
+        order.formData,
+        order.imageUrl
+      )
+      
+      if (result.success) {
+        toast.success("¡Reenviado exitosamente!", { 
+          description: `Orden ${order.numeroOrden} enviada por WhatsApp`,
+          duration: 4000 
+        })
+      } else {
+        toast.error("Error en reenvío", { 
+          description: `No se pudo reenviar: ${result.error || 'Error desconocido'}` 
+        })
+      }
+    } catch (error) {
+      console.error('Error en reenvío por WhatsApp:', error)
+      toast.error("Error en reenvío", { 
+        description: "No se pudo conectar con el servicio de WhatsApp" 
+      })
+    }
+  }
+  
   const getStatusColor = (status: OrderRecord['status']) => {
     switch (status) {
       case 'draft': return 'bg-gray-500'
@@ -138,7 +191,7 @@ export function OrdersDatabaseViewer({ onClose }: OrdersDatabaseViewerProps) {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <Icons.Database />
-              <h2 className="text-2xl font-bold">Base de Datos Local - Órdenes de Servicio</h2>
+              <h2 className="text-2xl font-bold">Registros Anteriores - Órdenes de Servicio</h2>
             </div>
             
             <div className="flex gap-2">
@@ -302,6 +355,17 @@ export function OrdersDatabaseViewer({ onClose }: OrdersDatabaseViewerProps) {
                             <Icons.FileText />
                           </Button>
                         )}
+                        {order.formData.telefono && order.imageUrl && order.imageUrl.startsWith('http') && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 w-8 p-0 text-green-600"
+                            onClick={() => handleWhatsAppResend(order)}
+                            title="Reenviar por WhatsApp"
+                          >
+                            <Icons.WhatsApp />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -320,7 +384,7 @@ export function OrdersDatabaseViewer({ onClose }: OrdersDatabaseViewerProps) {
                 <p className="text-gray-600">
                   {searchQuery || statusFilter !== 'all'
                     ? 'No se encontraron órdenes con los filtros aplicados.'
-                    : 'Aún no hay órdenes en la base de datos.'}
+                    : 'Aún no hay registros anteriores.'}
                 </p>
               </div>
             )}
