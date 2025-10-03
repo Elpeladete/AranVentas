@@ -48,7 +48,13 @@ export interface FormData {
 
 const defaultFormData: FormData = {
   numeroOrden: generateOrderNumber(),
-  fecha: new Date().toISOString().split("T")[0],
+  fecha: (() => {
+    const today = new Date()
+    const dd = String(today.getDate()).padStart(2, '0')
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const yyyy = today.getFullYear()
+    return `${dd}-${mm}-${yyyy}`
+  })(),
   razonSocial: "",
   cuit: "",
   contacto: "",
@@ -213,10 +219,14 @@ export function useFormData() {
   const resetForm = () => {
     console.log('🔄 RESET FORM LLAMADO - Stack trace:')
     console.trace()
+    const today = new Date()
+    const dd = String(today.getDate()).padStart(2, '0')
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const yyyy = today.getFullYear()
     const newFormData = {
       ...defaultFormData,
       numeroOrden: generateOrderNumber(), // Generar nuevo número de orden
-      fecha: new Date().toISOString().split("T")[0] // Fecha actual
+      fecha: `${dd}-${mm}-${yyyy}` // Fecha actual en formato DD-MM-YYYY
     }
     setFormData(newFormData)
     setFieldErrors({})

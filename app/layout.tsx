@@ -3,6 +3,8 @@ import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
+import { BuildInfoDisplay } from '@/components/build-info'
+import { BuildInfoLogger } from '@/components/build-info-logger'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -54,6 +56,8 @@ export default function RootLayout({
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         {children}
         <Toaster position="top-right" richColors closeButton />
+        <BuildInfoDisplay position="bottom-left" compact={true} />
+        <BuildInfoLogger />
         <Analytics />
       </body>
     </html>

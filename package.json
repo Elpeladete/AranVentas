@@ -1,13 +1,15 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
+  "name": "aran-services",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
+    "prebuild": "node scripts/generate-build-info.js",
     "build": "next build",
     "dev": "next dev",
     "dev-network": "next dev --hostname 0.0.0.0 --port 3000",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "build-info": "node scripts/generate-build-info.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

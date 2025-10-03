@@ -18,6 +18,7 @@ import { generateOrderNumber } from "@/lib/order-number"
 import { submitFormToGoogle, generatePrefilledUrl, validateFormDataForSubmission, getSignatureInfo } from "@/lib/google-forms"
 import { SignatureCanvas } from "@/components/signature-canvas"
 import { formatPhoneNumber, formatCuit, getFieldHint, validateAllGroups, validateRequiredFields } from "@/lib/validations"
+import { formatDateForDisplay, formatDateForStorage } from "@/lib/utils"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { addPendingSubmission } from "@/lib/offline-storage"
 import { syncManager } from "@/lib/offline-sync"
@@ -28,6 +29,8 @@ import { OdooContactSearch, useOdooContactSearch } from "@/components/odoo-conta
 import type { OdooContact } from "@/lib/odoo-api-client"
 import { InsumosTable } from "@/components/insumos-table"
 import { InsumosCompactView } from "@/components/insumos-compact-view"
+import { LocalidadAutocomplete } from "@/components/localidad-autocomplete"
+import type { LocalidadSearchResult } from "@/lib/localidades-search"
 
 
 interface ClickableArea {
@@ -65,6 +68,22 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
   
   // Hook para búsqueda de contactos en Odoo
   const { selectedContact, handleContactSelect, resetSelection } = useOdooContactSearch()
+  
+  // Función para manejar selección de localidad
+  const handleLocalidadSelect = (localidad: LocalidadSearchResult) => {
+    console.log('🏙️ Localidad seleccionada:', localidad)
+    
+    // Autocompletar el campo localidad
+    updateField('localidad', localidad.municipio)
+    
+    // Autocompletar automáticamente la provincia
+    updateField('provincia', localidad.provincia)
+    
+    toast.success("Localidad autocompletada", {
+      description: `${localidad.municipio}, ${localidad.provincia}${localidad.pais !== 'Argentina' ? ` - ${localidad.pais}` : ''}`,
+      duration: 3000
+    })
+  }
   
   const [activeField, setActiveField] = useState<keyof FormData | null>(null)
   const [overlayPosition, setOverlayPosition] = useState({ x: 0, y: 0 })
@@ -300,7 +319,13 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
     // Guardar valor original y establecer valor temporal
     const currentValue = formData[area.id]
     setOriginalValue(currentValue)
-    setTempValue(currentValue)
+    
+    // Para el campo fecha, convertir a formato YYYY-MM-DD para el input date
+    if (area.id === "fecha" && typeof currentValue === "string") {
+      setTempValue(formatDateForStorage(currentValue))
+    } else {
+      setTempValue(currentValue)
+    }
     
     setActiveField(area.id)
     setOverlayPosition({ x: x + 10, y: y + 10 })
@@ -316,7 +341,14 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
 
   const handleApplyValue = () => {
     if (activeField) {
-      updateField(activeField, tempValue)
+      let finalValue = tempValue
+      
+      // Para la fecha, convertir de YYYY-MM-DD (del input date) a DD-MM-YYYY para almacenamiento
+      if (activeField === "fecha" && typeof tempValue === "string") {
+        finalValue = formatDateForDisplay(tempValue)
+      }
+      
+      updateField(activeField, finalValue)
       setActiveField(null)
       toast.success("Campo actualizado", { 
         description: `${clickableAreas.find(a => a.id === activeField)?.label} guardado correctamente`,
@@ -341,6 +373,10 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
         value = formatPhoneNumber(value)
       } else if (activeField === "cuit") {
         value = formatCuit(value)
+      } else if (activeField === "fecha") {
+        // Para la fecha, convertir a formato de almacenamiento (YYYY-MM-DD) 
+        // para que sea compatible con input type="date"
+        value = formatDateForStorage(value)
       }
     }
     setTempValue(value)
@@ -556,7 +592,7 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
                   ${area.type === 'textarea' ? 'whitespace-pre-wrap leading-tight' : 'truncate'}
                   ${area.id === 'numeroOrden' ? 'font-bold' : ''}
                 `}>
-                  {value.toString()}
+                  {area.id === 'fecha' ? formatDateForDisplay(value.toString()) : value.toString()}
                 </span>
               )}
             </div>
@@ -703,6 +739,46 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
               />
               <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
                 🔍 <strong>Búsqueda inteligente:</strong> Escribe para buscar contactos en Odoo y autocompletar datos (CUIT, teléfono, etc.)
+              </div>
+              {getFieldHint(activeField) && (
+                <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
+              )}
+              {getFieldError(activeField) && (
+                <p className="text-xs text-red-600">⚠️ {getFieldError(activeField)}</p>
+              )}
+            </div>
+          ) : activeField === "localidad" ? (
+            <div className="space-y-2">
+              {/* Componente de búsqueda inteligente de localidades */}
+              <LocalidadAutocomplete
+                value={tempValue as string}
+                onValueChange={handleTempValueChange}
+                onLocalidadSelect={handleLocalidadSelect}
+                placeholder="Buscar localidad..."
+                className="text-sm"
+              />
+              <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
+                🏙️ <strong>Autocompletado inteligente:</strong> Selecciona una localidad y se completará automáticamente la provincia
+              </div>
+              {getFieldHint(activeField) && (
+                <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
+              )}
+              {getFieldError(activeField) && (
+                <p className="text-xs text-red-600">⚠️ {getFieldError(activeField)}</p>
+              )}
+            </div>
+          ) : activeField === "localidad" ? (
+            <div className="space-y-2">
+              {/* Componente de búsqueda inteligente de localidades */}
+              <LocalidadAutocomplete
+                value={tempValue as string}
+                onValueChange={handleTempValueChange}
+                onLocalidadSelect={handleLocalidadSelect}
+                placeholder="Buscar localidad..."
+                className="text-sm"
+              />
+              <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
+                🏙️ <strong>Autocompletado inteligente:</strong> Selecciona una localidad y se completará automáticamente la provincia
               </div>
               {getFieldHint(activeField) && (
                 <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>

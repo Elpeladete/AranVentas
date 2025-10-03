@@ -12,6 +12,7 @@ import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { sendServiceOrderToWhatsApp } from "@/lib/wazzup-api"
 import html2canvas from "html2canvas"
 import { addNewOrder, updateOrder, markOrderAsSent, getOrdersByNumber } from "@/lib/local-database"
+import { formatDateForDisplay } from "@/lib/utils"
 
 interface FormActionsProps {
   formData: FormData
@@ -606,6 +607,10 @@ export function FormActions({
               ctx.fillText(line.trim(), pos.x + 4, yPos)
             }
           } else {
+            // Para la fecha, aplicar formato DD-MM-YYYY para visualización
+            if (fieldName === 'fecha') {
+              displayValue = formatDateForDisplay(displayValue)
+            }
             ctx.fillText(displayValue, pos.x + 4, pos.y + 15)
           }
         }

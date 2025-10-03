@@ -227,7 +227,7 @@ const numeroOrdenSchema = z.string()
 // Schema para validación de fecha
 const fechaSchema = z.string()
   .min(1, "Fecha es requerida")
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido (YYYY-MM-DD)")
+  .regex(/^(\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4})$/, "Formato de fecha inválido (DD-MM-YYYY o YYYY-MM-DD)")
 
 // Schema para validación de teléfono argentino con formateo automático  
 const telefonoSchema = z.string()
@@ -264,9 +264,9 @@ export const formValidationSchema = z.object({
   numeroOrden: numeroOrdenSchema,
   fecha: fechaSchema,
   razonSocial: z.string().min(1, "Razón social es requerida").max(100, "Razón social muy larga"),
-  cuit: cuitSchema, // ✅ REQUERIDO
-  contacto: z.string().min(1, "Contacto es requerido").max(50, "Nombre de contacto muy largo"), // ✅ REQUERIDO
-  telefono: telefonoSchema, // ✅ REQUERIDO
+  cuit: cuitSchema,
+  contacto: z.string().min(1, "Contacto es requerido").max(50, "Nombre de contacto muy largo"),
+  telefono: telefonoSchema,
   servicioTecnico: z.boolean(),
   instalacion: z.boolean(),
   puestaEnMarcha: z.boolean(),
@@ -283,10 +283,10 @@ export const formValidationSchema = z.object({
   sinCargo: z.boolean(),
   servicioEnGarantia: z.boolean(),
   aConvenir: z.boolean(),
-  localidad: z.string().min(1, "Localidad es requerida").max(50, "Localidad muy larga"), // ✅ REQUERIDO
-  provincia: z.string().min(1, "Provincia es requerida").max(50, "Provincia muy larga"), // ✅ REQUERIDO
-  distancia: z.string().min(1, "Distancia es requerida").refine((val) => /^\d*\.?\d+$/.test(val), "Distancia debe ser un número"), // ✅ REQUERIDO
-  duracion: z.string().min(1, "Duración es requerida").refine((val) => /^\d*\.?\d+$/.test(val), "Duración debe ser un número"), // ✅ REQUERIDO
+  localidad: z.string().max(50, "Localidad muy larga"),
+  provincia: z.string().max(50, "Provincia muy larga"),
+  distancia: z.string().optional().refine((val) => !val || /^\d*\.?\d+$/.test(val), "Distancia debe ser un número"),
+  duracion: z.string().optional().refine((val) => !val || /^\d*\.?\d+$/.test(val), "Duración debe ser un número"),
   tipoCambio: z.string().optional().refine((val) => !val || /^\d*\.?\d{0,4}$/.test(val), "Tipo de cambio inválido"),
   iva: monedaSchema.optional(),
   total: monedaSchema.optional(),
@@ -407,37 +407,7 @@ export function validateRequiredFields(data: any): {
     }
   }
 
-  // 10. Localidad (obligatorio)
-  if (!data.localidad || data.localidad.trim() === '') {
-    errors.localidad = "La localidad es obligatoria"
-    missingFields.push("localidad")
-  }
-
-  // 7. Provincia (obligatorio)
-  if (!data.provincia || data.provincia.trim() === '') {
-    errors.provincia = "La provincia es obligatoria"
-    missingFields.push("provincia")
-  }
-
-  // 8. Distancia (obligatorio)
-  if (!data.distancia || data.distancia.trim() === '') {
-    errors.distancia = "La distancia es obligatoria"
-    missingFields.push("distancia")
-  } else if (!/^\d*\.?\d+$/.test(data.distancia)) {
-    errors.distancia = "La distancia debe ser un número válido"
-    missingFields.push("distancia")
-  }
-
-  // 9. Duración (obligatorio)
-  if (!data.duracion || data.duracion.trim() === '') {
-    errors.duracion = "La duración es obligatoria"
-    missingFields.push("duracion")
-  } else if (!/^\d*\.?\d+$/.test(data.duracion)) {
-    errors.duracion = "La duración debe ser un número válido"
-    missingFields.push("duracion")
-  }
-
-  // 10. Al menos un tipo de servicio (obligatorio)
+  // 6. Al menos un tipo de servicio (obligatorio)
   const tiposServicio = [
     data.servicioTecnico,
     data.instalacion,
@@ -451,43 +421,43 @@ export function validateRequiredFields(data: any): {
     missingFields.push("tiposServicio")
   }
 
-  // 11. Máquina (obligatorio)
+  // 7. Máquina (obligatorio)
   if (!data.maquina || data.maquina.trim() === '') {
     errors.maquina = "La máquina es obligatoria"
     missingFields.push("maquina")
   }
 
-  // 12. Equipo (obligatorio)
+  // 8. Equipo (obligatorio)
   if (!data.equipo || data.equipo.trim() === '') {
     errors.equipo = "El equipo es obligatorio"
     missingFields.push("equipo")
   }
 
-  // 13. Descripción (obligatorio)
+  // 9. Descripción (obligatorio)
   if (!data.descripcion || data.descripcion.trim() === '') {
     errors.descripcion = "La descripción es obligatoria"
     missingFields.push("descripcion")
   }
 
-  // 14. Insumos (obligatorio)
+  // 10. Insumos (obligatorio)
   if (!data.insumos || data.insumos.trim() === '') {
     errors.insumos = "Los insumos son obligatorios"
     missingFields.push("insumos")
   }
 
-  // 55. Al menos una ubicación de servicio (obligatorio)
+  // 11. Al menos una ubicación de servicio (obligatorio)
   if (!data.servicioACampo && !data.servicioEnOficina) {
     errors.ubicacionServicio = "Debe seleccionar la ubicación del servicio (Campo u Oficina)"
     missingFields.push("ubicacionServicio")
   }
 
-  // 16. Al menos un tipo de cargo (obligatorio) - conCargo O sinCargo
+  // 12. Al menos un tipo de cargo (obligatorio) - conCargo O sinCargo
   if (!data.conCargo && !data.sinCargo) {
     errors.tipoCargo = "Debe seleccionar si el servicio es con cargo o sin cargo"
     missingFields.push("tipoCargo")
   }
 
-  // 17. Al menos un tipo de garantía (obligatorio) - servicioEnGarantia O aConvenir
+  // 13. Al menos un tipo de garantía (obligatorio) - servicioEnGarantia O aConvenir
   if (!data.servicioEnGarantia && !data.aConvenir) {
     errors.tipoGarantia = "Debe seleccionar si el servicio está en garantía o es a convenir"
     missingFields.push("tipoGarantia")
