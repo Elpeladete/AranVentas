@@ -28,6 +28,7 @@ export function OfflineStatus({ className }: OfflineStatusProps) {
   const [isUpdating, setIsUpdating] = useState(false)
   const [lastCheck, setLastCheck] = useState<Date | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [isClient, setIsClient] = useState(false)
   const { isOnline } = useNetworkStatus()
 
   // Actualizar estado de datasets
@@ -37,15 +38,22 @@ export function OfflineStatus({ className }: OfflineStatusProps) {
     setLastCheck(new Date())
   }
 
-  // Inicializar y actualizar periódicamente
+  // Verificar que estamos en el cliente
   useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  // Inicializar y actualizar periódicamente (solo en cliente)
+  useEffect(() => {
+    if (!isClient) return
+    
     updateDatasetStatus()
     
     // Actualizar cada 30 segundos
     const interval = setInterval(updateDatasetStatus, 30000)
     
     return () => clearInterval(interval)
-  }, [])
+  }, [isClient])
 
   // Forzar actualización de todos los datasets
   const handleForceUpdate = async () => {
@@ -109,6 +117,11 @@ export function OfflineStatus({ className }: OfflineStatusProps) {
     const isOld = (now - dataset.lastUpdate) > dayOld
     
     return isOld ? "outline" : "secondary"
+  }
+
+  // No renderizar nada hasta que estemos en el cliente
+  if (!isClient) {
+    return null
   }
 
   // Obtener información de almacenamiento

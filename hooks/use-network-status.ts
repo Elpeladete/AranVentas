@@ -45,7 +45,7 @@ async function checkRealConnectivity(): Promise<boolean> {
  */
 export function useNetworkStatus() {
   const [networkStatus, setNetworkStatus] = useState<NetworkStatus>({
-    isOnline: navigator.onLine,
+    isOnline: typeof window !== 'undefined' ? navigator.onLine : true, // Default to true on server
     isChecking: false,
     lastChecked: null
   })
@@ -74,6 +74,9 @@ export function useNetworkStatus() {
 
   // Efectos para monitorear cambios de conectividad
   useEffect(() => {
+    // Solo ejecutar en el cliente
+    if (typeof window === 'undefined') return
+
     // Verificación inicial
     checkConnectivity()
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { offlineDataManager } from '@/lib/offline-data-manager'
 
 /**
@@ -8,7 +8,17 @@ import { offlineDataManager } from '@/lib/offline-data-manager'
  * Se ejecuta automáticamente al cargar la aplicación
  */
 export function OfflineDataInitializer() {
+  const [isClient, setIsClient] = useState(false)
+
+  // Verificar que estamos en el cliente
   useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  // Inicializar el gestor de datos offline (solo en cliente)
+  useEffect(() => {
+    if (!isClient) return
+
     // Inicializar el gestor de datos offline
     offlineDataManager.initialize()
       .then(() => {
@@ -17,7 +27,7 @@ export function OfflineDataInitializer() {
       .catch((error) => {
         console.error('❌ Error inicializando sistema offline:', error)
       })
-  }, [])
+  }, [isClient])
 
   // Este componente no renderiza nada visible
   return null
