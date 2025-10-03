@@ -1,7 +1,9 @@
 /**
- * Servicio para búsqueda de localidades y provincias desde Google Sheets
+ * Servicio para búsqueda de localidades y provincias desde Google Sheets con soporte offline
  * Estructura esperada del CSV: Municipio,Provincia,País,Extra,Número
  */
+
+import { offlineDataManager, checkConnectivity } from './offline-data-manager'
 
 export interface LocalidadData {
   municipio: string
@@ -27,45 +29,67 @@ let lastFetchTime: number | null = null
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos
 
 /**
- * Obtiene los datos de localidades desde Google Sheets con caché
+ * Obtiene los datos de localidades con soporte offline
  */
 async function fetchLocalidades(): Promise<LocalidadData[]> {
   const now = Date.now()
   
-  // Verificar si el cache es válido
+  // Verificar si el cache en memoria es válido
   if (localidadesCache && lastFetchTime && (now - lastFetchTime < CACHE_DURATION)) {
-    console.log('📋 Usando cache de localidades')
+    console.log('📋 Usando cache de localidades en memoria')
     return localidadesCache
   }
 
   try {
-    console.log('🌐 Descargando localidades desde Google Sheets...')
-    const response = await fetch(LOCALIDADES_CSV_URL)
+    // Verificar conectividad
+    const isOnline = await checkConnectivity()
     
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
+    if (isOnline) {
+      // Intentar descargar datos frescos
+      console.log('🌐 Descargando localidades desde Google Sheets...')
+      const response = await fetch(LOCALIDADES_CSV_URL)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
 
-    const csvText = await response.text()
-    const localidades = parseLocalidadesCsv(csvText)
-    
-    // Actualizar cache
-    localidadesCache = localidades
-    lastFetchTime = now
-    
-    console.log(`✅ ${localidades.length} localidades cargadas exitosamente`)
-    return localidades
+      const csvText = await response.text()
+      const localidades = parseLocalidadesCsv(csvText)
+      
+      // Actualizar cache en memoria
+      localidadesCache = localidades
+      lastFetchTime = now
+      
+      console.log(`✅ ${localidades.length} localidades cargadas desde servidor`)
+      return localidades
+    } else {
+      throw new Error('Sin conexión, usando datos offline')
+    }
     
   } catch (error) {
-    console.error('❌ Error descargando localidades:', error)
+    console.warn('⚠️ Error obteniendo datos online, intentando offline:', error)
     
-    // Si hay cache previo, usarlo como fallback
+    // Intentar usar datos offline
+    const offlineData = offlineDataManager.getOfflineData('localidades')
+    if (offlineData) {
+      console.log('📱 Usando datos de localidades offline')
+      const localidades = parseLocalidadesCsv(offlineData)
+      
+      // Actualizar cache en memoria
+      localidadesCache = localidades
+      lastFetchTime = now
+      
+      console.log(`✅ ${localidades.length} localidades cargadas desde offline`)
+      return localidades
+    }
+    
+    // Si hay cache previo en memoria, usarlo como último recurso
     if (localidadesCache) {
-      console.log('🔄 Usando cache anterior como fallback')
+      console.log('🔄 Usando cache anterior en memoria como último recurso')
       return localidadesCache
     }
     
-    throw new Error('No se pudieron cargar los datos de localidades')
+    throw new Error('No se pudieron cargar los datos de localidades (sin conexión y sin datos offline)')
   }
 }
 

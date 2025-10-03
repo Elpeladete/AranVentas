@@ -5,6 +5,8 @@ import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 import { BuildInfoDisplay } from '@/components/build-info'
 import { BuildInfoLogger } from '@/components/build-info-logger'
+import { OfflineStatus } from '@/components/offline-status'
+import { OfflineDataInitializer } from '@/components/offline-data-initializer'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -57,6 +59,8 @@ export default function RootLayout({
         {children}
         <Toaster position="top-right" richColors closeButton />
         <BuildInfoDisplay position="bottom-left" compact={true} />
+        <OfflineStatus />
+        <OfflineDataInitializer />
         <BuildInfoLogger />
         <Analytics />
       </body>

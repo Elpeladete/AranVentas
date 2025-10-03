@@ -1,6 +1,8 @@
 /**
- * Funcionalidad de búsqueda de insumos desde Google Sheets
+ * Funcionalidad de búsqueda de insumos desde Google Sheets con soporte offline
  */
+
+import { offlineDataManager, checkConnectivity } from './offline-data-manager'
 
 export interface InsumoData {
   codigo: string
@@ -16,45 +18,68 @@ const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos en milliseconds
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRGlidz9LeA--m7jkkwI-MBP3n_rfBlX7vG8HgynCrMGMN1sbNF2XAjlDdfY4PGH9-fXG4o9mozx1np/pub?gid=340700628&single=true&output=csv"
 
 /**
- * Obtiene los datos de insumos desde Google Sheets
+ * Obtiene los datos de insumos con soporte offline
  */
 export async function fetchInsumosData(): Promise<InsumoData[]> {
   const now = Date.now()
   
-  // Usar caché si está disponible y no ha expirado
+  // Usar caché en memoria si está disponible y no ha expirado
   if (cachedInsumos && (now - lastFetch) < CACHE_DURATION) {
-    console.log('📦 Usando datos de insumos desde caché')
+    console.log('📦 Usando datos de insumos desde caché en memoria')
     return cachedInsumos
   }
 
   try {
-    console.log('🔄 Descargando datos de insumos desde Google Sheets...')
-    const response = await fetch(SHEET_CSV_URL)
+    // Verificar conectividad
+    const isOnline = await checkConnectivity()
     
-    if (!response.ok) {
-      throw new Error(`Error HTTP: ${response.status}`)
+    if (isOnline) {
+      // Intentar descargar datos frescos
+      console.log('🔄 Descargando datos de insumos desde Google Sheets...')
+      const response = await fetch(SHEET_CSV_URL)
+      
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`)
+      }
+      
+      const csvText = await response.text()
+      const insumos = parseCSVToInsumos(csvText)
+      
+      // Actualizar caché en memoria
+      cachedInsumos = insumos
+      lastFetch = now
+      
+      console.log(`✅ Datos de insumos cargados desde servidor: ${insumos.length} elementos`)
+      return insumos
+    } else {
+      throw new Error('Sin conexión, usando datos offline')
     }
     
-    const csvText = await response.text()
-    const insumos = parseCSVToInsumos(csvText)
-    
-    // Actualizar caché
-    cachedInsumos = insumos
-    lastFetch = now
-    
-    console.log(`✅ Datos de insumos cargados: ${insumos.length} elementos`)
-    return insumos
-    
   } catch (error) {
-    console.error('❌ Error descargando datos de insumos:', error)
+    console.warn('⚠️ Error obteniendo datos online, intentando offline:', error)
     
-    // Si hay caché disponible, usarlo aunque esté expirado
+    // Intentar usar datos offline
+    const offlineData = offlineDataManager.getOfflineData('insumos')
+    if (offlineData) {
+      console.log('📱 Usando datos de insumos offline')
+      const insumos = parseCSVToInsumos(offlineData)
+      
+      // Actualizar caché en memoria
+      cachedInsumos = insumos
+      lastFetch = now
+      
+      console.log(`✅ Datos de insumos cargados desde offline: ${insumos.length} elementos`)
+      return insumos
+    }
+    
+    // Si hay caché previo en memoria, usarlo como último recurso
     if (cachedInsumos) {
-      console.log('⚠️ Usando caché expirado debido al error')
+      console.log('🔄 Usando caché anterior en memoria como último recurso')
       return cachedInsumos
     }
     
-    // Si no hay caché, retornar array vacío
+    // Si no hay datos disponibles, retornar array vacío
+    console.warn('⚠️ No se pudieron cargar datos de insumos (sin conexión y sin datos offline)')
     return []
   }
 }
