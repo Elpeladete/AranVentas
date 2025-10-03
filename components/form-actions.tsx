@@ -421,7 +421,7 @@ export function FormActions({
         maquina: { x: 135, y: 332, width: 280, height: 21 },
         equipo: { x: 485, y: 332, width: 280, height: 21 },
         descripcion: { x: 65, y: 360, width: 700, height: 270 },
-        insumos: { x: 65, y: 685, width: 700, height: 220 },
+        insumos: { x: 58, y: 685, width: 719, height: 240 },
         localidad: { x: 470, y: 920, width: 135, height: 21 },
         provincia: { x: 594, y: 920, width: 60, height: 21 },
         distancia: { x: 470, y: 943, width: 150, height: 21 },
@@ -468,7 +468,122 @@ export function FormActions({
           ctx.font = 'bold 11px Arial'
           
           let displayValue = value.toString()
-          if (fieldName === 'descripcion' || fieldName === 'insumos') {
+          
+          if (fieldName === 'insumos') {
+            // Renderizar tabla de insumos
+            const renderInsumosTable = () => {
+              if (!displayValue || displayValue.trim() === '') return
+              
+              // Parsear datos: "cantidad;serie;codigo;articulo;precio|..."
+              const rows = displayValue.split('|').filter(row => row.trim() !== '')
+              if (rows.length === 0) return
+              
+              // Definir columnas y anchos (proporciones: 1fr 2.6fr 2.6fr 4fr 2fr, width=719px)
+              const columnWidths = [59, 153, 153, 236, 118] // Cantidad, Serie, Código, Artículo, Precio
+              const rowHeight = 16
+              const startX = pos.x + 4
+              let currentY = pos.y + 8
+              
+              // Configurar fuente para tabla
+              ctx.font = '10px Arial'
+              ctx.fillStyle = '#000000'
+              
+              // Renderizar cada fila
+              rows.forEach((row, index) => {
+                if (currentY > pos.y + pos.height - 20) return // No exceder área
+                
+                const cells = row.split(';')
+                let currentX = startX
+                
+                // Renderizar cada celda
+                cells.forEach((cell, cellIndex) => {
+                  if (cellIndex < columnWidths.length) {
+                    const cellWidth = columnWidths[cellIndex]
+                    let cellText = cell.trim()
+                    
+                    // Formatear precio (última columna)
+                    if (cellIndex === 4 && cellText && !isNaN(parseFloat(cellText))) {
+                      const num = parseFloat(cellText)
+                      cellText = new Intl.NumberFormat('es-CL', {
+                        style: 'currency',
+                        currency: 'CLP',
+                        minimumFractionDigits: 0
+                      }).format(num)
+                    }
+                    
+                    // Truncar texto si es muy largo (ajustado a anchos reales)
+                    const maxChars = cellIndex === 0 ? 6 :      // Cantidad (59px) 
+                                   cellIndex === 1 ? 16 :      // Serie (153px)
+                                   cellIndex === 2 ? 16 :      // Código (153px) 
+                                   cellIndex === 3 ? 30 :      // Artículo (236px)
+                                   cellIndex === 4 ? 12 : 8    // Precio (118px)
+                    if (cellText.length > maxChars) {
+                      cellText = cellText.substring(0, maxChars - 2) + '..'
+                    }
+                    
+                    // Alinear texto según la columna (coincide con tabla HTML)
+                    let textX = currentX + 2
+                    if (cellIndex === 0) {
+                      // Cantidad: Izquierda (text-left)
+                      ctx.textAlign = 'left'
+                      textX = currentX + 4
+                    } else if (cellIndex === 1 || cellIndex === 2) {
+                      // Serie y Código: Derecha (text-right)
+                      ctx.textAlign = 'right'
+                      textX = currentX + cellWidth - 4
+                    } else if (cellIndex === 3) {
+                      // Artículo: Izquierda (text-left)
+                      ctx.textAlign = 'left'
+                      textX = currentX + 4
+                    } else if (cellIndex === 4) {
+                      // Precio: Derecha (text-right)
+                      ctx.textAlign = 'right'
+                      textX = currentX + cellWidth - 4
+                    }
+                    
+                    ctx.fillText(cellText, textX, currentY)
+                    currentX += cellWidth
+                  }
+                })
+                
+                currentY += rowHeight
+              })
+              
+              // Calcular y mostrar subtotal si hay datos
+              if (rows.length > 0) {
+                let total = 0
+                rows.forEach(row => {
+                  const cells = row.split(';')
+                  if (cells.length >= 5) {
+                    const precio = parseFloat(cells[4])
+                    const cantidad = parseFloat(cells[0])
+                    if (!isNaN(precio) && !isNaN(cantidad)) {
+                      total += precio * cantidad
+                    }
+                  }
+                })
+                
+                if (total > 0) {
+                  currentY += 4
+                  ctx.font = 'bold 10px Arial'
+                  ctx.textAlign = 'right'
+                  const subtotalText = 'Subtotal: ' + new Intl.NumberFormat('es-CL', {
+                    style: 'currency',
+                    currency: 'CLP',
+                    minimumFractionDigits: 0
+                  }).format(total)
+                  ctx.fillText(subtotalText, pos.x + pos.width - 10, currentY)
+                }
+              }
+              
+              // Restaurar configuración de texto
+              ctx.textAlign = 'left'
+              ctx.font = 'bold 11px Arial'
+            }
+            
+            renderInsumosTable()
+            
+          } else if (fieldName === 'descripcion') {
             const words = displayValue.split(' ')
             const maxWidth = pos.width - 8
             let line = ''

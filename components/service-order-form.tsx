@@ -26,6 +26,8 @@ import { syncManager } from "@/lib/offline-sync"
 import { ValidationStatus } from "@/components/validation-status"
 import { OdooContactSearch, useOdooContactSearch } from "@/components/odoo-contact-search-fixed"
 import type { OdooContact } from "@/lib/odoo-api-client"
+import { InsumosTable } from "@/components/insumos-table"
+import { InsumosCompactView } from "@/components/insumos-compact-view"
 
 
 interface ClickableArea {
@@ -268,7 +270,7 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
     { id: "maquina", x: 135, y: 332, width: 280, height: 21, label: "Máquina", type: "text" },
     { id: "equipo", x: 485, y: 332, width: 280, height: 21, label: "Equipo", type: "text" },
     { id: "descripcion", x: 65, y: 360, width: 700, height: 270, label: "Descripción Completa", type: "textarea" },
-    { id: "insumos", x: 65, y: 685, width: 700, height: 220, label: "Insumos/Equipos", type: "textarea" },
+    { id: "insumos", x: 59, y: 685, width: 717, height: 235, label: "Insumos/Equipos", type: "textarea" },
     { id: "localidad", x: 470, y: 920, width: 135, height: 21, label: "Localidad", type: "text" },
     { id: "provincia", x: 594, y: 920, width: 60, height: 21, label: "Provincia", type: "text" },
     { id: "distancia", x: 470, y: 943, width: 150, height: 21, label: "Distancia (km)", type: "text" },
@@ -546,6 +548,9 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
                     </div>
                   )}
                 </div>
+              ) : area.id === 'insumos' && value ? (
+                /* Mostrar tabla compacta de insumos */
+                <InsumosCompactView value={value.toString()} />
               ) : (
                 <span className={`
                   ${area.type === 'textarea' ? 'whitespace-pre-wrap leading-tight' : 'truncate'}
@@ -582,11 +587,22 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
       }
 
       // 🎯 SIEMPRE usar el sistema de porcentajes (móvil Y desktop)
-      const overlayWidth = isMobile ? 320 : 400
-      const overlayHeight = isMobile ? 250 : 300
+      // Tamaño especial para la tabla de insumos
+      const isInsumosTable = activeField === "insumos"
+      const overlayWidth = isInsumosTable 
+        ? (isMobile ? 600 : 800)  // Más ancho para la tabla
+        : (isMobile ? 320 : 400)
+      const overlayHeight = isInsumosTable 
+        ? (isMobile ? 400 : 500)  // Más alto para la tabla
+        : (isMobile ? 250 : 300)
       
-      const percentageX = Math.max(20, (field.x / 850) * 100)
-      const percentageY = (field.y / 1200) * 100
+      // Para la tabla de insumos, posicionar más centrado
+      const percentageX = isInsumosTable 
+        ? 50  // Centrado para la tabla grande
+        : Math.max(20, (field.x / 850) * 100)
+      const percentageY = isInsumosTable
+        ? Math.max(10, (field.y / 1200) * 100 - 10)  // Más arriba para tabla grande
+        : (field.y / 1200) * 100
       
       return {
         position: 'absolute' as const,
@@ -643,13 +659,23 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
             </div>
           ) : field.type === "textarea" ? (
             <div className="space-y-2">
-              <Textarea
-                value={tempValue as string}
-                onChange={(e) => handleTempValueChange(e.target.value)}
-                rows={isMobile ? 3 : 4}
-                placeholder={`Ingrese ${field.label.toLowerCase()}`}
-                className="text-sm"
-              />
+              {activeField === "insumos" ? (
+                /* Tabla especializada para insumos */
+                <InsumosTable
+                  value={tempValue as string}
+                  onChange={handleTempValueChange}
+                  className="w-full"
+                />
+              ) : (
+                /* Textarea normal para otros campos como descripción */
+                <Textarea
+                  value={tempValue as string}
+                  onChange={(e) => handleTempValueChange(e.target.value)}
+                  rows={isMobile ? 3 : 4}
+                  placeholder={`Ingrese ${field.label.toLowerCase()}`}
+                  className="text-sm"
+                />
+              )}
               {getFieldHint(activeField) && (
                 <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
               )}

@@ -134,6 +134,16 @@ export function prepareFormDataForSubmission(formData: AranFormData): FormData {
       })
       submissionData.append(entryId, processedSignature)
     } else {
+      // Log específico para insumos
+      if (fieldName === 'insumos') {
+        console.log('🚀 Enviando datos de insumos a Google Forms:', {
+          fieldName,
+          entryId,
+          value: value || "",
+          valueLength: value ? (value as string).length : 0,
+          preview: value ? `${(value as string).substring(0, 100)}...` : 'vacío'
+        })
+      }
       submissionData.append(entryId, value || "")
     }
   })
