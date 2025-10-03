@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Input } from '@/components/ui/input'
 import { searchInsumos, type InsumoData } from '@/lib/insumos-search'
 
 interface InsumoAutocompleteProps {
@@ -24,7 +23,7 @@ export function InsumoAutocomplete({
   const [loading, setLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
   
   // Buscar sugerencias cuando cambia el valor
@@ -110,14 +109,28 @@ export function InsumoAutocomplete({
   
   return (
     <div className="relative">
-      <Input
+      <textarea
         ref={inputRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className={`${className} ${loading ? 'pr-8' : ''}`}
+        className={`${className} ${loading ? 'pr-8' : ''} resize-none overflow-hidden`}
         disabled={disabled}
+        rows={1}
+        style={{ 
+          lineHeight: '1.2',
+          whiteSpace: 'normal',
+          wordWrap: 'break-word',
+          minHeight: '1.75rem',
+          maxHeight: '4rem'
+        }}
+        onInput={(e) => {
+          // Auto-ajustar altura del textarea
+          const target = e.target as HTMLTextAreaElement
+          target.style.height = '1.75rem'
+          target.style.height = Math.min(target.scrollHeight, 64) + 'px' // max 4rem = 64px
+        }}
       />
       
       {loading && (

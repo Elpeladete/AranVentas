@@ -224,25 +224,25 @@ export function InsumosTable({ value, onChange, className = "" }: InsumosTablePr
         {/* Data Rows */}
         <div className="max-h-56 overflow-y-auto">
           {rows.map((row, rowIndex) => (
-            <div key={rowIndex} className="grid border-b border-gray-200 hover:bg-gray-50" style={{ gridTemplateColumns: '1fr 2.6fr 2.6fr 4fr 2fr' }}>
-              <div className="border-r border-gray-200">
+            <div key={rowIndex} className="grid border-b border-gray-200 hover:bg-gray-50 items-start" style={{ gridTemplateColumns: '1fr 2.6fr 2.6fr 4fr 2fr', minHeight: '1.75rem' }}>
+              <div className="border-r border-gray-200 flex items-start">
                 <Input
                   value={row.cantidad}
                   onChange={(e) => updateCell(rowIndex, 'cantidad', e.target.value)}
                   placeholder="0"
-                  className="border-0 rounded-none text-xs h-7 focus:ring-1 focus:ring-blue-500 text-left"
+                  className="border-0 rounded-none text-xs min-h-7 focus:ring-1 focus:ring-blue-500 text-left"
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   title="Solo números enteros"
                 />
               </div>
-              <div className="border-r border-gray-200">
+              <div className="border-r border-gray-200 flex items-start">
                 <Input
                   value={row.numeroSerie}
                   onChange={(e) => updateCell(rowIndex, 'numeroSerie', e.target.value)}
                   placeholder="ABC123"
-                  className="border-0 rounded-none text-xs h-8 focus:ring-1 focus:ring-blue-500 text-right"
+                  className="border-0 rounded-none text-xs min-h-7 focus:ring-1 focus:ring-blue-500 text-right"
                   type="text"
                   title="Número de serie (alfanumérico)"
                 />
@@ -253,7 +253,7 @@ export function InsumosTable({ value, onChange, className = "" }: InsumosTablePr
                   onChange={(value) => updateCell(rowIndex, 'codigo', value)}
                   onSelect={(insumo) => handleInsumoSelect(rowIndex, insumo)}
                   placeholder="Buscar código..."
-                  className="border-0 rounded-none text-xs h-7 focus:ring-1 focus:ring-blue-500 text-right"
+                  className="border-0 rounded-none text-xs focus:ring-1 focus:ring-blue-500 text-right w-full"
                 />
               </div>
               <div className="border-r border-gray-200">
@@ -262,15 +262,15 @@ export function InsumosTable({ value, onChange, className = "" }: InsumosTablePr
                   onChange={(value) => updateCell(rowIndex, 'articulo', value)}
                   onSelect={(insumo) => handleArticuloSelect(rowIndex, insumo)}
                   placeholder="Buscar descripción..."
-                  className="border-0 rounded-none text-xs h-7 p-1 focus:ring-1 focus:ring-blue-500 text-left resize-none overflow-hidden"
+                  className="border-0 rounded-none text-xs p-1 focus:ring-1 focus:ring-blue-500 text-left resize-none overflow-hidden w-full"
                 />
               </div>
-              <div className="flex">
+              <div className="flex items-start">
                 <Input
                   value={row.precioNeto}
                   onChange={(e) => updateCell(rowIndex, 'precioNeto', e.target.value)}
                   placeholder="0.00"
-                  className="border-0 rounded-none text-xs h-8 focus:ring-1 focus:ring-blue-500 text-right"
+                  className="border-0 rounded-none text-xs min-h-7 focus:ring-1 focus:ring-blue-500 text-right flex-1"
                   type="text"
                   inputMode="decimal"
                   title="Precio en formato 0.00 (máximo 2 decimales)"
