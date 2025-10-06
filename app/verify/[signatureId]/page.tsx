@@ -12,9 +12,12 @@ export const metadata: Metadata = {
   description: 'Verificación de firmas digitales criptográficas y certificadas',
 }
 
+// Para páginas con parámetros dinámicos
+export const dynamic = 'force-dynamic'
+
 interface VerifyPageProps {
   params: {
-    signatureId?: string
+    signatureId: string
   }
 }
 
@@ -32,7 +35,7 @@ export default function VerifyPage({ params }: VerifyPageProps) {
             </p>
           </div>
           
-          <Suspense fallback={<div>Cargando verificador...</div>}>
+          <Suspense fallback={<div className="text-center">Cargando verificador...</div>}>
             <SignatureVerification initialSignatureId={params.signatureId} />
           </Suspense>
         </div>
