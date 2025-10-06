@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { X } from "lucide-react"
+import { X, CheckCircle } from "lucide-react"
 import { useFormData, type FormData } from "@/hooks/use-form-data"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { FormActions } from "@/components/form-actions"
@@ -17,11 +17,13 @@ import { toast } from "@/lib/toast"
 import { generateOrderNumber } from "@/lib/order-number"
 import { submitFormToGoogle, generatePrefilledUrl, validateFormDataForSubmission, getSignatureInfo } from "@/lib/google-forms"
 import { SignatureCanvas } from "@/components/signature-canvas"
+import { HybridDigitalSignature } from "@/components/hybrid-digital-signature"
 import { formatPhoneNumber, formatCuit, getFieldHint, validateAllGroups, validateRequiredFields } from "@/lib/validations"
 import { formatDateForDisplay, formatDateForStorage } from "@/lib/utils"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { addPendingSubmission } from "@/lib/offline-storage"
 import { syncManager } from "@/lib/offline-sync"
+import type { DigitalSignature } from "@/lib/digital-signature-hybrid"
 
 
 import { ValidationStatus } from "@/components/validation-status"
@@ -95,6 +97,13 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
   const [showValidationProminent, setShowValidationProminent] = useState(false) // Mostrar validación prominente
   const [zoomLevel, setZoomLevel] = useState(1) // Estado para el zoom
   const imageRef = useRef<HTMLDivElement>(null)
+  
+  // Estados para firma digital híbrida
+  const [digitalSignatures, setDigitalSignatures] = useState<{
+    tecnico?: DigitalSignature
+    cliente?: DigitalSignature
+  }>({})
+  const [showDigitalSignature, setShowDigitalSignature] = useState<'tecnico' | 'cliente' | null>(null)
 
   // Inicializar sincronización automática al cargar el componente
   useEffect(() => {
@@ -717,15 +726,88 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
               )}
             </div>
           ) : field.type === "signature" ? (
-            <div className="space-y-2">
-              <SignatureCanvas
-                value={tempValue as string}
-                onChange={handleTempValueChange}
-                width={isMobile ? Math.min(250, window.innerWidth - 60) : 280}
-                height={isMobile ? 100 : 120}
-                orderNumber={formData.numeroOrden}
-                signatureType={activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente'}
-              />
+            <div className="space-y-4">
+              {/* Selector de tipo de firma */}
+              <div className="flex gap-2 mb-4">
+                <Button
+                  variant={showDigitalSignature === null ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowDigitalSignature(null)}
+                >
+                  ✍️ Firma Manual
+                </Button>
+                <Button
+                  variant={showDigitalSignature !== null ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowDigitalSignature(activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente')}
+                >
+                  🔒 Firma Digital
+                </Button>
+              </div>
+
+              {showDigitalSignature === null ? (
+                /* Firma manual tradicional */
+                <div className="space-y-2">
+                  <SignatureCanvas
+                    value={tempValue as string}
+                    onChange={handleTempValueChange}
+                    width={isMobile ? Math.min(250, window.innerWidth - 60) : 280}
+                    height={isMobile ? 100 : 120}
+                    orderNumber={formData.numeroOrden}
+                    signatureType={activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente'}
+                  />
+                  <div className="text-xs text-gray-500">
+                    Firma manual dibujada en canvas
+                  </div>
+                </div>
+              ) : (
+                /* Firma digital híbrida */
+                <div className="space-y-2">
+                  <HybridDigitalSignature
+                    documentData={{
+                      ...formData,
+                      timestamp: Date.now(),
+                      orderNumber: formData.numeroOrden
+                    }}
+                    signerInfo={{
+                      name: activeField === 'tecnicoFirma' ? formData.tecnicoNombre : formData.contacto,
+                      email: activeField === 'tecnicoFirma' ? '' : '',
+                      role: activeField === 'tecnicoFirma' ? 'technician' : 'client',
+                      company: activeField === 'tecnicoFirma' ? 'Arán Tecnologías' : formData.razonSocial,
+                      dni: '',
+                      position: activeField === 'tecnicoFirma' ? 'Técnico' : 'Cliente'
+                    }}
+                    onSignatureComplete={(signature) => {
+                      const signatureType = activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente'
+                      setDigitalSignatures(prev => ({
+                        ...prev,
+                        [signatureType]: signature
+                      }))
+                      
+                      // Guardar referencia de la firma en el formulario
+                      handleTempValueChange(`digital_signature:${signature.id}`)
+                      
+                      toast.success('Firma digital aplicada', {
+                        description: `Firma ${signature.type} guardada exitosamente`
+                      })
+                    }}
+                    className="border rounded-lg p-4"
+                  />
+                  
+                  {/* Mostrar firma aplicada */}
+                  {digitalSignatures[activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente'] && (
+                    <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-green-800">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="font-medium">Firma Digital Aplicada</span>
+                      </div>
+                      <div className="text-sm text-green-700 mt-1">
+                        ID: {digitalSignatures[activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente']?.id}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : activeField === "razonSocial" ? (
             <div className="space-y-2">
