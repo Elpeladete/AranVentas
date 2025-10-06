@@ -33,6 +33,22 @@ function generateBuildInfo() {
     vercelUrl: process.env.VERCEL_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'localhost'
   };
 
+  // Función para escapar strings de manera segura para TypeScript
+  function escapeString(str) {
+    return str
+      .replace(/\\/g, '\\\\')    // Escapes backslashes
+      .replace(/"/g, '\\"')      // Escapes double quotes
+      .replace(/\n/g, '\\n')     // Escapes newlines
+      .replace(/\r/g, '\\r')     // Escapes carriage returns
+      .replace(/\t/g, '\\t')     // Escapes tabs
+      .replace(/\u2028/g, '\\u2028') // Line separator
+      .replace(/\u2029/g, '\\u2029'); // Paragraph separator
+  }
+
+  // Limpiar commit message para evitar problemas de sintaxis
+  const cleanCommitMessage = escapeString(buildInfo.commitMessage || 'No commit message')
+    .substring(0, 200); // Limitar longitud para evitar mensajes muy largos
+
   // Generar archivo de build info
   const buildInfoPath = path.join(__dirname, '..', 'lib', 'build-info.generated.ts');
   const buildInfoContent = `/**
@@ -46,7 +62,7 @@ export const generatedBuildInfo = {
   buildDate: "${buildInfo.buildDate}",
   commitSha: "${buildInfo.commitSha}",
   commitRef: "${buildInfo.commitRef}",
-  commitMessage: "${buildInfo.commitMessage}",
+  commitMessage: "${cleanCommitMessage}",
   repoOwner: "${buildInfo.repoOwner}",
   repoSlug: "${buildInfo.repoSlug}",
   vercelEnv: "${buildInfo.vercelEnv}",
