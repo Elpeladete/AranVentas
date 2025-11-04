@@ -104,6 +104,7 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
     cliente?: DigitalSignature
   }>({})
   const [showDigitalSignature, setShowDigitalSignature] = useState<'tecnico' | 'cliente' | null>(null)
+  const [clienteManualSignatureComplete, setClienteManualSignatureComplete] = useState(false)
 
   // Inicializar sincronización automática al cargar el componente
   useEffect(() => {
@@ -339,6 +340,11 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
     setActiveField(area.id)
     setOverlayPosition({ x: x + 10, y: y + 10 })
     
+    // Resetear estados de secuencia de firma cuando se cambia de campo
+    if (area.id !== 'clienteFirma') {
+      setClienteManualSignatureComplete(false)
+    }
+    
     // Centrar automáticamente el área en móvil
     if (isMobile) {
       // Pequeño delay para permitir que el overlay se renderice primero
@@ -386,6 +392,26 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
         // Para la fecha, convertir a formato de almacenamiento (YYYY-MM-DD) 
         // para que sea compatible con input type="date"
         value = formatDateForStorage(value)
+      }
+      
+      // Detectar cuando se completa la firma manual del cliente
+      if (activeField === "clienteFirma" && typeof value === "string" && value.length > 0 && !value.startsWith('digital_signature:')) {
+        console.log('🖊️ Firma manual del cliente completada, iniciando secuencia de firma digital...')
+        setClienteManualSignatureComplete(true)
+        
+        // Mostrar toast informativo
+        toast.success('Firma manual completada', {
+          description: 'Ahora puedes agregar la firma digital para mayor validez legal',
+          duration: 4000
+        })
+        
+        // Auto-abrir la firma digital después de un breve delay
+        setTimeout(() => {
+          if (activeField === "clienteFirma") {
+            setShowDigitalSignature('cliente')
+            console.log('🔒 Abriendo automáticamente la firma digital del cliente')
+          }
+        }, 1500)
       }
     }
     setTempValue(value)
@@ -632,27 +658,110 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
       }
 
       // 🎯 SIEMPRE usar el sistema de porcentajes (móvil Y desktop)
+      // Detectar si es tablet (1280x800)
+      const isTablet = window.innerWidth >= 1200 && window.innerWidth <= 1300 && 
+                       window.innerHeight >= 750 && window.innerHeight <= 850
+      
       // Tamaño especial para la tabla de insumos
       const isInsumosTable = activeField === "insumos"
       const overlayWidth = isInsumosTable 
-        ? (isMobile ? 600 : 800)  // Más ancho para la tabla
-        : (isMobile ? 320 : 400)
+        ? (isMobile ? 600 : isTablet ? 700 : 800)  // Más compacto en tablet
+        : (isMobile ? 320 : isTablet ? 350 : 400)
       const overlayHeight = isInsumosTable 
-        ? (isMobile ? 400 : 500)  // Más alto para la tabla
-        : (isMobile ? 250 : 300)
+        ? (isMobile ? 450 : isTablet ? 550 : 600)  // Aumentado para mejor visibilidad
+        : (isMobile ? 350 : isTablet ? 450 : 500)  // Aumentado para contenido completo
       
-      // Para la tabla de insumos, posicionar más centrado
-      const percentageX = isInsumosTable 
+      // Obtener dimensiones del contenedor
+      const containerRect = imageRef.current.getBoundingClientRect()
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      
+      // Calcular posición inicial basada en el campo
+      let percentageX = isInsumosTable 
         ? 50  // Centrado para la tabla grande
-        : Math.max(20, (field.x / 850) * 100)
-      const percentageY = isInsumosTable
+        : (field.x / 850) * 100
+      let percentageY = isInsumosTable
         ? Math.max(10, (field.y / 1200) * 100 - 10)  // Más arriba para tabla grande
         : (field.y / 1200) * 100
+      
+      // Calcular posición absoluta en píxeles
+      let leftPos = (percentageX / 100) * containerRect.width
+      let topPos = (percentageY / 100) * containerRect.height
+      
+      // ========== AJUSTES HORIZONTALES ==========
+      // Ajustar si se sale por la izquierda (considerando el translateX(-50%))
+      const halfOverlayWidth = overlayWidth / 2
+      if (leftPos - halfOverlayWidth < 0) {
+        // Reposicionar para que no se salga por la izquierda
+        leftPos = halfOverlayWidth + 20 // 20px de margen
+        percentageX = (leftPos / containerRect.width) * 100
+      }
+      
+      // Ajustar si se sale por la derecha
+      if (leftPos + halfOverlayWidth > containerRect.width) {
+        // Reposicionar para que no se salga por la derecha
+        leftPos = containerRect.width - halfOverlayWidth - 20 // 20px de margen
+        percentageX = (leftPos / containerRect.width) * 100
+      }
+      
+      // ========== AJUSTES VERTICALES ==========
+      // Posicionar el overlay arriba del campo (5% menos)
+      topPos = topPos - (containerRect.height * 0.05)
+      
+      // Verificar si se sale por arriba
+      if (topPos < 0) {
+        topPos = 20 // Margen superior de 20px
+      }
+      
+      // Verificar si se sale por abajo
+      const availableSpaceBelow = containerRect.height - topPos
+      if (overlayHeight > availableSpaceBelow - 20) {
+        // No hay espacio abajo, intentar posicionar arriba del campo
+        const fieldTopPos = (field.y / 1200) * containerRect.height
+        const spaceAbove = fieldTopPos - 20 // Espacio disponible arriba
+        
+        if (spaceAbove > overlayHeight) {
+          // Hay espacio arriba, posicionar allí
+          topPos = fieldTopPos - overlayHeight - 10
+        } else if (fieldTopPos > containerRect.height / 2) {
+          // El campo está en la mitad inferior, posicionar arriba lo más posible
+          topPos = Math.max(20, fieldTopPos - overlayHeight - 10)
+        } else {
+          // El campo está arriba, usar posición fija centrada
+          return {
+            position: 'fixed' as const,
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: `${Math.min(overlayWidth, viewportWidth - 40)}px`,
+            maxHeight: `${Math.min(overlayHeight, viewportHeight - 100)}px`,
+            overflow: 'auto',
+            zIndex: 60
+          }
+        }
+      }
+      
+      // Recalcular porcentaje Y después de ajustes
+      percentageY = (topPos / containerRect.height) * 100
+      
+      // Si el overlay es muy ancho para el contenedor, usar posición fija centrada
+      if (overlayWidth > containerRect.width - 40) {
+        return {
+          position: 'fixed' as const,
+          left: '50%',
+          top: '20%',
+          transform: 'translateX(-50%)',
+          width: `${Math.min(overlayWidth, viewportWidth - 40)}px`,
+          maxHeight: `${Math.min(overlayHeight, viewportHeight - 100)}px`,
+          overflow: 'auto',
+          zIndex: 60
+        }
+      }
       
       return {
         position: 'absolute' as const,
         left: `${percentageX}%`,
-        top: `${Math.max(0, percentageY - 5)}%`, // Un poco arriba del campo
+        top: `${Math.max(0, percentageY)}%`,
         width: `${overlayWidth}px`,
         maxHeight: `${overlayHeight}px`,
         overflow: 'auto',
@@ -674,23 +783,57 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
         )}
         
         <div
-          className="bg-white border-2 border-blue-500 rounded-lg shadow-xl p-4 z-50 min-w-[280px] relative"
-          style={positionStyle}
+          className="bg-white border-2 border-blue-500 rounded-lg shadow-xl z-50 min-w-[280px] max-w-[400px] relative flex flex-col"
+          style={{
+            ...positionStyle,
+            maxHeight: positionStyle.maxHeight || 'calc(100vh - 100px)' // Asegurar altura máxima
+          }}
         >
           {/* Indicador visual que apunta al área */}
           <div className="absolute -top-2 left-4 w-4 h-4 bg-blue-500 transform rotate-45 border-l-2 border-t-2 border-white"></div>
           
-          {/* Header con información del campo */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
+          {/* Header con información del campo - FIJO */}
+          <div className="flex items-center justify-between p-3 md:p-4 pb-2 flex-shrink-0 border-b border-gray-200">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
               <h3 className="font-semibold text-sm text-blue-700">{field.label}</h3>
               <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Editando</span>
+              {/* Indicador de campo persistente */}
+              {(activeField === 'tecnicoNombre' || activeField === 'tecnicoFirma') && (
+                <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200 flex items-center gap-1">
+                  <span>💾</span>
+                  <span>Persistente</span>
+                </span>
+              )}
             </div>
             <Button variant="ghost" size="sm" onClick={handleCancelEdit} className="text-red-500 hover:text-red-700">
               <X className="h-4 w-4" />
             </Button>
           </div>
+          
+          {/* Contenedor con scroll para el contenido */}
+          <div className="flex-1 overflow-y-auto p-3 md:p-4 pt-3"
+               style={{
+                 scrollbarWidth: 'thin',
+                 scrollbarColor: '#cbd5e0 #f7fafc'
+               }}
+          >
+          
+          {/* Mensaje informativo para campos persistentes */}
+          {(activeField === 'tecnicoNombre' || activeField === 'tecnicoFirma') && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <span className="text-lg">💾</span>
+                <div className="flex-1 text-xs text-green-800">
+                  <div className="font-semibold mb-1">Campo Persistente del Técnico</div>
+                  <div>
+                    Este dato se guardará automáticamente y se mantendrá en futuras órdenes 
+                    para agilizar tu trabajo. Puedes modificarlo cuando sea necesario.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {field.type === "checkbox" ? (
             <div className="space-y-2">
@@ -735,15 +878,43 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
                   onClick={() => setShowDigitalSignature(null)}
                 >
                   ✍️ Firma Manual
+                  {activeField === 'clienteFirma' && clienteManualSignatureComplete && (
+                    <span className="ml-1 text-green-600">✓</span>
+                  )}
                 </Button>
                 <Button
                   variant={showDigitalSignature !== null ? "default" : "outline"}
                   size="sm"
                   onClick={() => setShowDigitalSignature(activeField === 'tecnicoFirma' ? 'tecnico' : 'cliente')}
+                  disabled={activeField === 'clienteFirma' && !clienteManualSignatureComplete}
                 >
                   🔒 Firma Digital
+                  {activeField === 'clienteFirma' && !clienteManualSignatureComplete && (
+                    <span className="ml-1 text-gray-400 text-xs">(Completa la firma manual primero)</span>
+                  )}
                 </Button>
               </div>
+              
+              {/* Indicador de progreso para firma del cliente */}
+              {activeField === 'clienteFirma' && (
+                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-sm text-blue-800">
+                    <div className="font-medium mb-2">Secuencia de Firma del Cliente:</div>
+                    <div className="flex items-center gap-2">
+                      <span className={`flex items-center gap-1 ${clienteManualSignatureComplete ? 'text-green-600' : 'text-blue-600'}`}>
+                        {clienteManualSignatureComplete ? '✅' : '1️⃣'} Firma Manual
+                      </span>
+                      <span className="text-gray-400">→</span>
+                      <span className={`flex items-center gap-1 ${digitalSignatures.cliente ? 'text-green-600' : 'text-gray-500'}`}>
+                        {digitalSignatures.cliente ? '✅' : '2️⃣'} Firma Digital
+                        {digitalSignatures.cliente && (
+                          <span className="text-xs">(Completada)</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {showDigitalSignature === null ? (
                 /* Firma manual tradicional */
@@ -770,7 +941,9 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
                       orderNumber: formData.numeroOrden
                     }}
                     signerInfo={{
-                      name: activeField === 'tecnicoFirma' ? formData.tecnicoNombre : formData.contacto,
+                      name: activeField === 'tecnicoFirma' 
+                        ? formData.tecnicoNombre 
+                        : (formData.clienteNombre || formData.contacto || 'Cliente'),
                       email: activeField === 'tecnicoFirma' ? '' : '',
                       role: activeField === 'tecnicoFirma' ? 'technician' : 'client',
                       company: activeField === 'tecnicoFirma' ? 'Arán Tecnologías' : formData.razonSocial,
@@ -849,26 +1022,6 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
                 <p className="text-xs text-red-600">⚠️ {getFieldError(activeField)}</p>
               )}
             </div>
-          ) : activeField === "localidad" ? (
-            <div className="space-y-2">
-              {/* Componente de búsqueda inteligente de localidades */}
-              <LocalidadAutocomplete
-                value={tempValue as string}
-                onValueChange={handleTempValueChange}
-                onLocalidadSelect={handleLocalidadSelect}
-                placeholder="Buscar localidad..."
-                className="text-sm"
-              />
-              <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
-                🏙️ <strong>Autocompletado inteligente:</strong> Selecciona una localidad y se completará automáticamente la provincia
-              </div>
-              {getFieldHint(activeField) && (
-                <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
-              )}
-              {getFieldError(activeField) && (
-                <p className="text-xs text-red-600">⚠️ {getFieldError(activeField)}</p>
-              )}
-            </div>
           ) : (
             <div className="space-y-2">
               <Input
@@ -886,19 +1039,10 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
               )}
             </div>
           )}
-
-          {/* Botones responsivos */}
-          <div className={`flex gap-2 mt-4 ${isMobile ? 'flex-col' : 'flex-row'}`}>
-            <Button onClick={handleApplyValue} size="sm" className="flex-1">
-              ✅ Aplicar
-            </Button>
-            <Button variant="outline" onClick={handleCancelEdit} size="sm" className="flex-1">
-              ✖️ Cancelar
-            </Button>
-          </div>
-
+          
+          {/* Vista previa dentro del área de scroll */}
           {field.type !== "signature" && (
-            <div className="mt-2 text-xs text-muted-foreground">
+            <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-muted-foreground">
               {tempValue && (
                 <span className="font-medium">
                   Vista previa: {typeof tempValue === 'string' ? tempValue.slice(0, isMobile ? 30 : 50) : String(tempValue)}
@@ -907,6 +1051,17 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
               )}
             </div>
           )}
+          </div>
+
+          {/* Botones responsivos - SIEMPRE VISIBLES AL FONDO */}
+          <div className={`flex gap-2 p-3 md:p-4 pt-2 border-t border-gray-200 bg-gray-50 flex-shrink-0 ${isMobile ? 'flex-col' : 'flex-row'}`}>
+            <Button onClick={handleApplyValue} size="sm" className="flex-1">
+              ✅ Aplicar
+            </Button>
+            <Button variant="outline" onClick={handleCancelEdit} size="sm" className="flex-1">
+              ✖️ Cancelar
+            </Button>
+          </div>
         </div>
       </>
     )
@@ -927,7 +1082,7 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
     <div className="relative min-h-screen bg-muted/30">
       {/* Header */}
       <div className="bg-card border-b border-border p-2 sm:p-4">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="max-w-[1240px] mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-primary">ARAN Tecnologías</h1>
             <p className="text-sm text-muted-foreground">Sistema de Órdenes de Servicio</p>
@@ -966,8 +1121,8 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
       </div>
 
       {/* Interactive Form - Always show image overlay design */}
-      <div className="max-w-7xl mx-auto p-2 sm:p-4">
-        <Card className="p-2 sm:p-6">
+      <div className="max-w-[1240px] mx-auto p-2 sm:p-4">
+        <Card className="p-2 sm:p-4 lg:p-6">
           {/* Controles de Zoom para Móvil */}
           {isMobile && (
             <div className="mb-4 flex items-center justify-center gap-2 p-2 bg-gray-50 rounded-lg">
@@ -1004,13 +1159,14 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
           )}
 
           {/* Form View - Visual overlay on image for all devices */}
-          <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: isMobile ? '70vh' : 'auto' }}>
+          <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: isMobile ? '70vh' : 'calc(100vh - 200px)' }}>
             <div 
               ref={imageRef} 
               className="relative mx-auto" 
               style={{ 
-                minWidth: "850px", 
-                maxWidth: "850px",
+                minWidth: isMobile ? "850px" : "min(850px, 100%)", 
+                maxWidth: isMobile ? "850px" : "min(850px, 100%)",
+                width: isMobile ? "850px" : "min(850px, calc(100vw - 4rem))",
                 transform: isMobile ? `scale(${zoomLevel})` : 'scale(1)',
                 transformOrigin: 'top left',
                 transition: 'transform 0.2s ease-in-out'
@@ -1022,13 +1178,17 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
               {renderValueOverlays()}
 
               {/* Clickable Areas */}
-            {clickableAreas.map((area) => (
+            {clickableAreas.map((area) => {
+              const isPersistentField = area.id === 'tecnicoNombre' || area.id === 'tecnicoFirma'
+              return (
               <div
                 key={area.id}
                 className={`absolute clickable-area ${
                   activeField === area.id 
                     ? 'ring-4 ring-blue-500 ring-opacity-50 bg-blue-100 bg-opacity-30' 
-                    : 'hover:bg-blue-50 hover:bg-opacity-20'
+                    : isPersistentField
+                      ? 'hover:bg-green-50 hover:bg-opacity-20 ring-1 ring-green-300 ring-opacity-40'
+                      : 'hover:bg-blue-50 hover:bg-opacity-20'
                 }`}
                 style={{
                   left: `${(area.x / 850) * 100}%`,
@@ -1039,9 +1199,19 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
                   zIndex: activeField === area.id ? 10 : 1
                 }}
                 onClick={(e) => handleAreaClick(area, e)}
-                title={`Clic para editar: ${area.label}`}
-              />
-            ))}
+                title={isPersistentField 
+                  ? `💾 Campo Persistente - Clic para editar: ${area.label}` 
+                  : `Clic para editar: ${area.label}`}
+              >
+                {/* Indicador visual de campo persistente */}
+                {isPersistentField && formData[area.id] && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center text-white text-xs shadow-sm z-10 pointer-events-none">
+                    💾
+                  </div>
+                )}
+              </div>
+              )
+            })}
 
             {/* Overlay */}
             {renderOverlay()}

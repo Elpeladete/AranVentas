@@ -93,52 +93,89 @@ export class HybridDigitalSignatureService {
    * Genera un certificado digital auto-firmado para uso offline
    */
   async generateSelfSignedCertificate(signerInfo: SignerInfo): Promise<DigitalCertificate> {
-    const keyPair = this.ec.genKeyPair()
-    const privateKeyHex = keyPair.getPrivate('hex')
-    const publicKeyHex = keyPair.getPublic('hex')
-    
-    // Crear certificado X.509 básico con jsrsasign
-    const cert = new KJUR.asn1.x509.Certificate()
-    cert.setSerialNumberByParam({ int: Math.floor(Math.random() * 1000000) })
-    cert.setSignatureAlgByParam({ name: 'SHA256withECDSA' })
-    cert.setIssuerByParam({ str: `/CN=AranServices Self-Signed/O=Aran Tecnologias` })
-    cert.setSubjectByParam({ str: `/CN=${signerInfo.name}/emailAddress=${signerInfo.email}` })
-    cert.setNotBeforeByParam({ str: new Date().toISOString().split('T')[0].replace(/-/g, '') })
-    cert.setNotAfterByParam({ str: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0].replace(/-/g, '') })
-    
-    const id = uuidv4()
-    
-    // Almacenar certificado localmente
-    const certificate: DigitalCertificate = {
-      id,
-      subject: signerInfo.name,
-      issuer: 'AranServices Self-Signed',
-      validFrom: new Date(),
-      validTo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-      publicKey: publicKeyHex,
-      serialNumber: id.replace(/-/g, '').substring(0, 16)
+    try {
+      const keyPair = this.ec.genKeyPair()
+      const privateKeyHex = keyPair.getPrivate('hex')
+      const publicKeyHex = keyPair.getPublic('hex')
+      
+      const id = uuidv4()
+      const serialNumber = id.replace(/-/g, '').substring(0, 16)
+      
+      console.log('🔧 Generando certificado digital para:', signerInfo.name)
+      console.log('🔑 Clave pública generada:', publicKeyHex.substring(0, 20) + '...')
+      
+      // Crear certificado simplificado sin usar jsrsasign complejo
+      const validFrom = new Date()
+      const validTo = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+      
+      const certificate: DigitalCertificate = {
+        id,
+        subject: signerInfo.name,
+        issuer: 'AranServices Self-Signed',
+        validFrom,
+        validTo,
+        publicKey: publicKeyHex,
+        serialNumber
+      }
+      
+      // Crear hash del certificado para validación
+      const certData = {
+        subject: certificate.subject,
+        issuer: certificate.issuer,
+        validFrom: certificate.validFrom.toISOString(),
+        validTo: certificate.validTo.toISOString(),
+        publicKey: certificate.publicKey,
+        serialNumber: certificate.serialNumber
+      }
+      
+      const certHash = CryptoJS.SHA256(JSON.stringify(certData)).toString()
+      console.log('🎯 Hash del certificado:', certHash.substring(0, 16) + '...')
+      
+      // Guardar en localStorage
+      if (typeof window !== 'undefined') {
+        const certificates = this.getStoredCertificates()
+        certificates[id] = { 
+          certificate, 
+          privateKey: privateKeyHex,
+          certHash 
+        }
+        localStorage.setItem('digital_certificates', JSON.stringify(certificates))
+        console.log('💾 Certificado almacenado localmente con ID:', id)
+      }
+      
+      console.log('✅ Certificado digital creado exitosamente')
+      return certificate
+      
+    } catch (error) {
+      console.error('❌ Error generando certificado:', error)
+      throw new Error(`Error generando certificado: ${error instanceof Error ? error.message : 'Error desconocido'}`)
     }
-    
-    // Guardar en localStorage
-    if (typeof window !== 'undefined') {
-      const certificates = this.getStoredCertificates()
-      certificates[id] = { certificate, privateKey: privateKeyHex }
-      localStorage.setItem('digital_certificates', JSON.stringify(certificates))
-    }
-    
-    return certificate
   }
 
   /**
    * Obtiene certificados almacenados localmente
    */
-  private getStoredCertificates(): Record<string, { certificate: DigitalCertificate, privateKey: string }> {
+  private getStoredCertificates(): Record<string, { certificate: DigitalCertificate, privateKey: string, certHash?: string }> {
     if (typeof window === 'undefined') return {}
     
     try {
       const stored = localStorage.getItem('digital_certificates')
-      return stored ? JSON.parse(stored) : {}
-    } catch {
+      if (!stored) return {}
+      
+      const parsed = JSON.parse(stored)
+      
+      // Convertir fechas de string a Date objects
+      Object.keys(parsed).forEach(key => {
+        const cert = parsed[key]
+        if (cert.certificate) {
+          cert.certificate.validFrom = new Date(cert.certificate.validFrom)
+          cert.certificate.validTo = new Date(cert.certificate.validTo)
+        }
+      })
+      
+      return parsed
+    } catch (error) {
+      console.warn('⚠️ Error parsing stored certificates:', error)
       return {}
     }
   }

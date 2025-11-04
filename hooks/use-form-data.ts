@@ -217,22 +217,43 @@ export function useFormData() {
   }
 
   const resetForm = () => {
-    console.log('🔄 RESET FORM LLAMADO - Stack trace:')
-    console.trace()
+    console.log('🔄 RESET FORM LLAMADO - Preservando datos del técnico')
+    
+    // Guardar campos del técnico que deben persistir
+    const persistentTechnicianData = {
+      tecnicoNombre: formData.tecnicoNombre,
+      tecnicoFirma: formData.tecnicoFirma
+    }
+    
+    console.log('💾 Datos del técnico a preservar:', persistentTechnicianData)
+    
     const today = new Date()
     const dd = String(today.getDate()).padStart(2, '0')
     const mm = String(today.getMonth() + 1).padStart(2, '0')
     const yyyy = today.getFullYear()
+    
+    // Crear nuevo formulario manteniendo los datos del técnico
     const newFormData = {
       ...defaultFormData,
       numeroOrden: generateOrderNumber(), // Generar nuevo número de orden
-      fecha: `${dd}-${mm}-${yyyy}` // Fecha actual en formato DD-MM-YYYY
+      fecha: `${dd}-${mm}-${yyyy}`, // Fecha actual en formato DD-MM-YYYY
+      tecnicoNombre: persistentTechnicianData.tecnicoNombre, // Mantener nombre del técnico
+      tecnicoFirma: persistentTechnicianData.tecnicoFirma // Mantener firma del técnico
     }
+    
+    console.log('✅ Nuevo formulario con datos del técnico:', {
+      tecnicoNombre: newFormData.tecnicoNombre,
+      tecnicoFirma: newFormData.tecnicoFirma ? 'Preservada' : 'Vacía'
+    })
+    
     setFormData(newFormData)
     setFieldErrors({})
-    localStorage.removeItem("aran-form-data")
+    // No remover completamente, guardar con los datos del técnico
+    localStorage.setItem("aran-form-data", JSON.stringify(newFormData))
     setLastSaveTime(null)
-    toast.formReset()
+    toast.success("Formulario limpiado", { 
+      description: "Los datos del técnico se han preservado" 
+    })
   }
 
 

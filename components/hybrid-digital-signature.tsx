@@ -343,7 +343,7 @@ export function HybridDigitalSignature({
                   <div>
                     <div className="font-medium text-sm">{cert.subject}</div>
                     <div className="text-xs text-gray-500">
-                      Válido hasta: {cert.validTo.toLocaleDateString()}
+                      Válido hasta: {new Date(cert.validTo).toLocaleDateString()}
                     </div>
                   </div>
                   <div className="text-xs text-gray-400">
