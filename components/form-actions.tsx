@@ -293,52 +293,85 @@ export function FormActions({
       // PASO 8: Enviar por WhatsApp si hay número de teléfono y imagen
       if (formData.telefono && imageUrl && imageUrl.startsWith('http')) {
         // Verificar si esta orden ya fue enviada por WhatsApp anteriormente
+        // y si tiene CAMBIOS respecto a la versión anterior
         const existingOrders = getOrdersByNumber(formData.numeroOrden || '')
-        const alreadySentOrder = existingOrders.find(order => 
+        const previousSentOrder = existingOrders.find(order => 
+          order.id !== orderId && // Excluir la orden actual
           order.status === 'sent' && 
           order.googleFormsSent === true &&
           order.imageUrl // Indica que ya se envió con imagen
         )
         
-        if (alreadySentOrder) {
-          console.log('ℹ️ WhatsApp omitido: Orden ya enviada anteriormente', {
-            ordenId: alreadySentOrder.id,
-            sentAt: alreadySentOrder.sentAt,
+        // Comparar si hay cambios entre la orden anterior y la actual
+        let hasChanges = true
+        if (previousSentOrder) {
+          // Comparar los datos del formulario
+          const previousData = JSON.stringify(previousSentOrder.formData)
+          const currentData = JSON.stringify(formData)
+          hasChanges = previousData !== currentData
+          
+          console.log('🔍 Verificando cambios en orden:', {
+            ordenIdAnterior: previousSentOrder.id,
+            ordenIdActual: orderId,
+            hasChanges,
             numeroOrden: formData.numeroOrden
           })
-          toast.info("WhatsApp ya enviado", { 
-            description: `Esta orden ya fue enviada por WhatsApp el ${alreadySentOrder.sentAt?.toLocaleDateString() || 'fecha anterior'}`,
+        }
+        
+        if (previousSentOrder && !hasChanges) {
+          // Hay una orden anterior SIN cambios - mostrar advertencia pero NO bloquear
+          const sentDate = previousSentOrder.sentAt ? new Date(previousSentOrder.sentAt) : null
+          const dateStr = sentDate && !isNaN(sentDate.getTime()) 
+            ? sentDate.toLocaleDateString('es-AR', { year: 'numeric', month: '2-digit', day: '2-digit' })
+            : 'fecha anterior'
+            
+          console.log('⚠️ WhatsApp: Orden sin cambios, pero permitiendo reenvío', {
+            ordenIdAnterior: previousSentOrder.id,
+            sentAt: dateStr,
+            numeroOrden: formData.numeroOrden
+          })
+          
+          toast.warning("Reenvío de orden sin cambios", { 
+            description: `Esta orden ya fue enviada el ${dateStr}. Enviando nuevamente...`,
             duration: 3000
           })
+        } else if (previousSentOrder && hasChanges) {
+          // Hay cambios - informar que se está reenviando versión actualizada
+          console.log('✅ WhatsApp: Enviando versión actualizada de la orden')
+          toast.info("Enviando versión actualizada", { 
+            description: "Se detectaron cambios. Enviando orden actualizada por WhatsApp" 
+          })
         } else {
+          // Primera vez que se envía
           toast.info("Enviando por WhatsApp...", { description: "Compartiendo orden de servicio" })
+        }
         
-          try {
-            const whatsappResult = await sendServiceOrderToWhatsApp(
-              formData.telefono,
-              formData,
-              imageUrl
-            )
-            
-            if (whatsappResult.success) {
-              toast.success("¡Enviado por WhatsApp!", { 
-                description: "La orden se compartió exitosamente por WhatsApp",
-                duration: 4000 
-              })
-            } else {
-              console.warn('⚠️ WhatsApp falló:', whatsappResult.error)
-              toast.warning("WhatsApp no disponible", { 
-                description: "La orden se guardó correctamente, pero no se pudo enviar por WhatsApp",
-                duration: 4000 
-              })
-            }
-          } catch (whatsappError) {
-            console.error('❌ Error en WhatsApp:', whatsappError)
+        // Intentar enviar por WhatsApp
+        try {
+          const whatsappResult = await sendServiceOrderToWhatsApp(
+            formData.telefono,
+            formData,
+            imageUrl
+          )
+          
+          if (whatsappResult.success) {
+            toast.success("¡Enviado por WhatsApp!", { 
+              description: "La orden se compartió exitosamente por WhatsApp",
+              duration: 4000 
+            })
+          } else {
+            console.warn('⚠️ WhatsApp falló:', whatsappResult.error)
             toast.warning("WhatsApp no disponible", { 
               description: "La orden se guardó correctamente, pero no se pudo enviar por WhatsApp",
               duration: 4000 
             })
           }
+        } catch (whatsappError) {
+          console.error('❌ Error en WhatsApp:', whatsappError)
+          toast.warning("WhatsApp no disponible", { 
+            description: "La orden se guardó correctamente, pero no se pudo enviar por WhatsApp",
+            duration: 4000 
+          })
         }
       } else {
         console.log('ℹ️ WhatsApp omitido:', {

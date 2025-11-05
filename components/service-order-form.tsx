@@ -662,19 +662,19 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
       const isTablet = window.innerWidth >= 1200 && window.innerWidth <= 1300 && 
                        window.innerHeight >= 750 && window.innerHeight <= 850
       
-      // Tamaño especial para la tabla de insumos
-      const isInsumosTable = activeField === "insumos"
-      const overlayWidth = isInsumosTable 
-        ? (isMobile ? 600 : isTablet ? 700 : 800)  // Más compacto en tablet
-        : (isMobile ? 320 : isTablet ? 350 : 400)
-      const overlayHeight = isInsumosTable 
-        ? (isMobile ? 450 : isTablet ? 550 : 600)  // Aumentado para mejor visibilidad
-        : (isMobile ? 350 : isTablet ? 450 : 500)  // Aumentado para contenido completo
-      
-      // Obtener dimensiones del contenedor
+      // Obtener dimensiones del contenedor primero
       const containerRect = imageRef.current.getBoundingClientRect()
       const viewportWidth = window.innerWidth
       const viewportHeight = window.innerHeight
+      
+      // Tamaño especial para la tabla de insumos - 90% ancho, 60% alto del contenedor
+      const isInsumosTable = activeField === "insumos"
+      const overlayWidth = isInsumosTable 
+        ? containerRect.width * 0.90  // 90% del ancho del contenedor del formulario
+        : (isMobile ? 320 : isTablet ? 350 : 400)
+      const overlayHeight = isInsumosTable 
+        ? containerRect.height * 0.60  // 60% del alto del contenedor del formulario
+        : (isMobile ? 350 : isTablet ? 450 : 500)  // Aumentado para contenido completo
       
       // Calcular posición inicial basada en el campo
       let percentageX = isInsumosTable 
@@ -783,7 +783,11 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
         )}
         
         <div
-          className="bg-white border-2 border-blue-500 rounded-lg shadow-xl z-50 min-w-[280px] max-w-[400px] relative flex flex-col"
+          className={`bg-white border-2 border-blue-500 rounded-lg shadow-xl z-50 relative flex flex-col ${
+            activeField === 'insumos' 
+              ? 'min-w-[90%]'  // Tabla de insumos ocupa 90% del ancho
+              : 'min-w-[280px] max-w-[400px]'  // Overlays normales
+          }`}
           style={{
             ...positionStyle,
             maxHeight: positionStyle.maxHeight || 'calc(100vh - 100px)' // Asegurar altura máxima
