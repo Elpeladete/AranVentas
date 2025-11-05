@@ -33,6 +33,8 @@ import { InsumosTable } from "@/components/insumos-table"
 import { InsumosCompactView } from "@/components/insumos-compact-view"
 import { LocalidadAutocomplete } from "@/components/localidad-autocomplete"
 import type { LocalidadSearchResult } from "@/lib/localidades-search"
+import { TecnicoAutocomplete } from "@/components/tecnico-autocomplete"
+import type { TecnicoSearchResult } from "@/lib/tecnicos-search"
 
 
 interface ClickableArea {
@@ -83,6 +85,24 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
     
     toast.success("Localidad autocompletada", {
       description: `${localidad.municipio}, ${localidad.provincia}${localidad.pais !== 'Argentina' ? ` - ${localidad.pais}` : ''}`,
+      duration: 3000
+    })
+  }
+  
+  // Función para manejar selección de técnico
+  const handleTecnicoSelect = (tecnico: TecnicoSearchResult) => {
+    console.log('👨‍🔧 Técnico seleccionado:', tecnico)
+    
+    // Autocompletar el nombre del técnico
+    setTempValue(tecnico.nombre)
+    
+    // Mostrar información adicional en el toast
+    const infoDetails = []
+    if (tecnico.cargo) infoDetails.push(tecnico.cargo)
+    if (tecnico.dni) infoDetails.push(`DNI: ${tecnico.dni}`)
+    
+    toast.success("Técnico seleccionado", {
+      description: `${tecnico.nombre}${infoDetails.length > 0 ? ` - ${infoDetails.join(', ')}` : ''}`,
       duration: 3000
     })
   }
@@ -1018,6 +1038,26 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
               />
               <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
                 🏙️ <strong>Autocompletado inteligente:</strong> Selecciona una localidad y se completará automáticamente la provincia
+              </div>
+              {getFieldHint(activeField) && (
+                <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
+              )}
+              {getFieldError(activeField) && (
+                <p className="text-xs text-red-600">⚠️ {getFieldError(activeField)}</p>
+              )}
+            </div>
+          ) : activeField === "tecnicoNombre" ? (
+            <div className="space-y-2">
+              {/* Componente de búsqueda inteligente de técnicos */}
+              <TecnicoAutocomplete
+                value={tempValue as string}
+                onChange={handleTempValueChange}
+                onSelect={handleTecnicoSelect}
+                placeholder="Buscar técnico..."
+                className="text-sm"
+              />
+              <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                👨‍🔧 <strong>Búsqueda de técnicos:</strong> Selecciona un técnico de la lista o escribe manualmente
               </div>
               {getFieldHint(activeField) && (
                 <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
