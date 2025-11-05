@@ -77,7 +77,10 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
   const handleLocalidadSelect = (localidad: LocalidadSearchResult) => {
     console.log('🏙️ Localidad seleccionada:', localidad)
     
-    // Autocompletar el campo localidad
+    // Actualizar el tempValue con la localidad seleccionada
+    setTempValue(localidad.municipio)
+    
+    // Aplicar inmediatamente los valores al formulario
     updateField('localidad', localidad.municipio)
     
     // Autocompletar automáticamente la provincia
@@ -321,7 +324,7 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
     { id: "descripcion", x: 65, y: 360, width: 700, height: 270, label: "Descripción Completa", type: "textarea" },
     { id: "insumos", x: 59, y: 685, width: 717, height: 235, label: "Insumos/Equipos", type: "textarea" },
     { id: "localidad", x: 470, y: 920, width: 135, height: 21, label: "Localidad", type: "text" },
-    { id: "provincia", x: 594, y: 920, width: 60, height: 21, label: "Provincia", type: "text" },
+    { id: "provincia", x: 594, y: 920, width: 170, height: 21, label: "Provincia", type: "text" },
     { id: "distancia", x: 470, y: 943, width: 150, height: 21, label: "Distancia (km)", type: "text" },
     { id: "duracion", x: 470, y: 966, width: 150, height: 21, label: "Duración (horas)", type: "text" },
     { id: "tipoCambio", x: 660, y: 990, width: 110, height: 21, label: "Tipo de Cambio", type: "text" },

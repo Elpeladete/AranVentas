@@ -365,7 +365,8 @@ async function searchContacts(searchTerm: string, uid: number): Promise<any[]> {
           const phoneStringMatch = structXml.match(/<member>[\s\S]*?<name>phone<\/name>[\s\S]*?<value><string>(.*?)<\/string><\/value>[\s\S]*?<\/member>/)
           const phoneBoolMatch = structXml.match(/<member>[\s\S]*?<name>phone<\/name>[\s\S]*?<value><boolean>([01])<\/boolean><\/value>[\s\S]*?<\/member>/)
           const cityMatch = structXml.match(/<member>[\s\S]*?<name>city<\/name>[\s\S]*?<value><string>(.*?)<\/string><\/value>[\s\S]*?<\/member>/)
-          const stateMatch = structXml.match(/<member>[\s\S]*?<name>state_id<\/name>[\s\S]*?<value><string>(.*?)<\/string><\/value>[\s\S]*?<\/member>/)
+          // state_id es un array [id, nombre] en Odoo - buscar el segundo elemento
+          const stateArrayMatch = structXml.match(/<member>[\s\S]*?<name>state_id<\/name>[\s\S]*?<value><array><data>[\s\S]*?<value><string>(.*?)<\/string><\/value>[\s\S]*?<\/data><\/array><\/value>[\s\S]*?<\/member>/)
           
           if (idMatch) {
             contact.id = parseInt(idMatch[1])
@@ -390,9 +391,13 @@ async function searchContacts(searchTerm: string, uid: number): Promise<any[]> {
             contact.city = cityMatch[1]
             console.log(`✅ Ciudad encontrada: ${contact.city}`)
           }
-          if (stateMatch) {
-            contact.state = stateMatch[1]
-            console.log(`✅ Provincia encontrada: ${contact.state}`)
+          // Extraer el nombre de la provincia del array state_id
+          if (stateArrayMatch) {
+            // Guardar en state_id para mantener consistencia con el mapeo
+            contact.state_id = stateArrayMatch[1]
+            console.log(`✅ Provincia encontrada: ${contact.state_id}`)
+          } else {
+            console.log(`⚠️ No se encontró state_id en el XML`)
           }
           
           if (contact.id && contact.name) {

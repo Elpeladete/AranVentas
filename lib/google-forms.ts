@@ -110,11 +110,43 @@ export function getSignatureInfo(formData: AranFormData): {
     clienteFirma: processSignatureInfo(formData.clienteFirma)
   }
 }
+
+/**
+ * Convierte fecha de DD-MM-YYYY a YYYY-MM-DD para Google Forms
+ * @param dateString - Fecha en formato DD-MM-YYYY o YYYY-MM-DD
+ * @returns Fecha en formato YYYY-MM-DD
+ */
+function convertDateForGoogleForms(dateString: string | undefined): string {
+  if (!dateString || dateString.trim() === '') {
+    console.log('⚠️ Fecha vacía, devolviendo string vacío')
+    return ''
+  }
+  
+  // Si ya está en formato YYYY-MM-DD, devolver tal como está
+  if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    console.log('✅ Fecha ya en formato YYYY-MM-DD:', dateString)
+    return dateString
+  }
+  
+  // Convertir de DD-MM-YYYY a YYYY-MM-DD
+  if (dateString.match(/^\d{2}-\d{2}-\d{4}$/)) {
+    const [day, month, year] = dateString.split('-')
+    const converted = `${year}-${month}-${day}`
+    console.log(`📅 Convirtiendo fecha: ${dateString} → ${converted}`)
+    return converted
+  }
+  
+  // Si no coincide con ningún formato, devolver vacío y advertir
+  console.warn('⚠️ Formato de fecha no reconocido:', dateString)
+  return ''
+}
+
 /**
  * Prepara los datos del formulario para Google Forms
  * Procesa especialmente las firmas para usar URLs de ImgBB
  */
 export function prepareFormDataForSubmission(formData: AranFormData): FormData {
+  console.log('🔄 Preparando datos para Google Forms...')
   const submissionData = new FormData()
   
   // Iterar sobre todas las entradas configuradas
@@ -122,7 +154,19 @@ export function prepareFormDataForSubmission(formData: AranFormData): FormData {
     const value = formData[fieldName as keyof AranFormData]
     
     if (typeof value === 'boolean') {
-      submissionData.append(entryId, value ? "TRUE" : "FALSE")
+      const boolValue = value ? "TRUE" : "FALSE"
+      console.log(`✅ ${fieldName}: ${boolValue} (entry: ${entryId})`)
+      submissionData.append(entryId, boolValue)
+    } else if (fieldName === 'fecha') {
+      // Convertir fecha a formato YYYY-MM-DD para Google Forms
+      const convertedDate = convertDateForGoogleForms(value as string)
+      console.log('📅 Procesando fecha:', {
+        campo: fieldName,
+        valorOriginal: value,
+        valorConvertido: convertedDate,
+        entryId: entryId
+      })
+      submissionData.append(entryId, convertedDate)
     } else if (fieldName === 'tecnicoFirma' || fieldName === 'clienteFirma') {
       // Usar la función especializada para procesar firmas
       const processedSignature = processSignatureForGoogleForms(value as string)
@@ -130,24 +174,27 @@ export function prepareFormDataForSubmission(formData: AranFormData): FormData {
         original: value ? `${(value as string).substring(0, 50)}...` : 'vacío',
         originalLength: value ? (value as string).length : 0,
         processed: processedSignature,
-        processedLength: processedSignature.length
+        processedLength: processedSignature.length,
+        entryId: entryId
       })
       submissionData.append(entryId, processedSignature)
     } else {
-      // Log específico para insumos
-      if (fieldName === 'insumos') {
-        console.log('🚀 Enviando datos de insumos a Google Forms:', {
-          fieldName,
+      // Log para campos de texto
+      const stringValue = value || ""
+      if (fieldName === 'insumos' || fieldName === 'descripcion') {
+        console.log(`� ${fieldName}:`, {
           entryId,
-          value: value || "",
-          valueLength: value ? (value as string).length : 0,
-          preview: value ? `${(value as string).substring(0, 100)}...` : 'vacío'
+          length: (stringValue as string).length,
+          preview: (stringValue as string).substring(0, 100) + '...'
         })
+      } else {
+        console.log(`📝 ${fieldName}: ${stringValue} (entry: ${entryId})`)
       }
-      submissionData.append(entryId, value || "")
+      submissionData.append(entryId, stringValue)
     }
   })
   
+  console.log('✅ Todos los datos preparados para envío')
   return submissionData
 }
 
@@ -165,6 +212,10 @@ export function generatePrefilledUrl(formData: AranFormData): string {
     
     if (typeof value === 'boolean') {
       params.append(entryId, value ? "TRUE" : "FALSE")
+    } else if (fieldName === 'fecha') {
+      // Convertir fecha a formato YYYY-MM-DD para Google Forms
+      const convertedDate = convertDateForGoogleForms(value as string)
+      params.append(entryId, convertedDate)
     } else if (fieldName === 'tecnicoFirma' || fieldName === 'clienteFirma') {
       // Usar la función especializada para procesar firmas
       const processedSignature = processSignatureForGoogleForms(value as string)
@@ -227,8 +278,17 @@ export function validateFormDataForSubmission(formData: AranFormData): {
   }
   
   // Validar formato de fecha
-  if (formData.fecha && !/^\d{4}-\d{2}-\d{2}$/.test(formData.fecha)) {
-    errors.push("Formato de fecha inválido (debe ser YYYY-MM-DD)")
+  // Validar formato de fecha - aceptar AMBOS formatos (DD-MM-YYYY y YYYY-MM-DD)
+  if (formData.fecha) {
+    const isValidDDMMYYYY = /^\d{2}-\d{2}-\d{4}$/.test(formData.fecha)
+    const isValidYYYYMMDD = /^\d{4}-\d{2}-\d{2}$/.test(formData.fecha)
+    
+    if (!isValidDDMMYYYY && !isValidYYYYMMDD) {
+      console.error('❌ Formato de fecha inválido:', formData.fecha)
+      errors.push("Formato de fecha inválido (debe ser DD-MM-YYYY o YYYY-MM-DD)")
+    } else {
+      console.log('✅ Formato de fecha válido:', formData.fecha)
+    }
   }
   
   // Validar CUIT si está presente
