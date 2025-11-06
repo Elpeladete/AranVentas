@@ -128,6 +128,7 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
   }>({})
   const [showDigitalSignature, setShowDigitalSignature] = useState<'tecnico' | 'cliente' | null>(null)
   const [clienteManualSignatureComplete, setClienteManualSignatureComplete] = useState(false)
+  const [isSignatureLoading, setIsSignatureLoading] = useState(false) // Estado de carga de firma digital
 
   // Inicializar sincronización automática al cargar el componente
   useEffect(() => {
@@ -991,6 +992,10 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
                         description: `Firma ${signature.type} guardada exitosamente`
                       })
                     }}
+                    onLoadingChange={(loading) => {
+                      console.log('🔄 Estado de carga de firma digital:', loading)
+                      setIsSignatureLoading(loading)
+                    }}
                     className="border rounded-lg p-4"
                   />
                   
@@ -1102,10 +1107,21 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
 
           {/* Botones responsivos - SIEMPRE VISIBLES AL FONDO */}
           <div className={`flex gap-2 p-3 md:p-4 pt-2 border-t border-gray-200 bg-gray-50 flex-shrink-0 ${isMobile ? 'flex-col' : 'flex-row'}`}>
-            <Button onClick={handleApplyValue} size="sm" className="flex-1">
-              ✅ Aplicar
+            <Button 
+              onClick={handleApplyValue} 
+              size="sm" 
+              className="flex-1"
+              disabled={isSignatureLoading}
+            >
+              {isSignatureLoading ? '⏳ Procesando firma...' : '✅ Aplicar'}
             </Button>
-            <Button variant="outline" onClick={handleCancelEdit} size="sm" className="flex-1">
+            <Button 
+              variant="outline" 
+              onClick={handleCancelEdit} 
+              size="sm" 
+              className="flex-1"
+              disabled={isSignatureLoading}
+            >
               ✖️ Cancelar
             </Button>
           </div>

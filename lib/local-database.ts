@@ -12,7 +12,7 @@ export interface OrderRecord {
   numeroOrden: string
   createdAt: Date
   updatedAt: Date
-  status: 'draft' | 'completed' | 'sent' | 'archived'
+  status: 'draft' | 'completed' | 'pending-offline' | 'sent' | 'archived'
   formData: AranFormData
   imageUrl?: string
   googleFormsSent: boolean
@@ -24,6 +24,7 @@ export interface DatabaseStats {
   total: number
   drafts: number
   completed: number
+  pendingOffline: number
   sent: number
   archived: number
   lastUpdate?: Date
@@ -229,6 +230,9 @@ export function getDatabaseStats(): DatabaseStats {
         case 'completed':
           acc.completed++
           break
+        case 'pending-offline':
+          acc.pendingOffline++
+          break
         case 'sent':
           acc.sent++
           break
@@ -243,13 +247,14 @@ export function getDatabaseStats(): DatabaseStats {
       
       return acc
     },
-    { total: 0, drafts: 0, completed: 0, sent: 0, archived: 0, lastUpdate: undefined as Date | undefined }
+    { total: 0, drafts: 0, completed: 0, pendingOffline: 0, sent: 0, archived: 0, lastUpdate: undefined as Date | undefined }
   )
   
   return {
     total: stats.total,
     drafts: stats.drafts,
     completed: stats.completed,
+    pendingOffline: stats.pendingOffline,
     sent: stats.sent,
     archived: stats.archived,
     lastUpdate: stats.lastUpdate

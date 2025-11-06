@@ -13,6 +13,7 @@ import {
   cleanupOldSubmissions,
   type PendingFormSubmission 
 } from "./offline-storage"
+import { getOrdersByNumber, updateOrder } from "./local-database"
 
 export type SyncEventType = 'started' | 'progress' | 'completed' | 'error' | 'form-uploaded'
 
@@ -189,17 +190,36 @@ class OfflineSyncManager {
   }
 
   /**
-   * Procesa un formulario individual: sube firmas y envía a Google Forms
+   * Procesa un formulario individual: sube firmas e imágenes a ImgBB, luego envía a Google Forms
    */
   private async processSubmission(submission: PendingFormSubmission): Promise<void> {
     let processedFormData = { ...submission.formData }
 
-    // Procesar firmas base64 si las hay
+    // PASO 1: Procesar imagen del formulario (aux1) si está en base64
+    if (submission.formData.aux1?.startsWith('data:image')) {
+      console.log(`🖼️ Subiendo imagen del formulario (${submission.id})`)
+      try {
+        const base64Data = submission.formData.aux1.split(',')[1]
+        const result = await uploadImageToImgBB(
+          base64Data,
+          `orden-${submission.formData.numeroOrden}-${submission.id}`
+        )
+        processedFormData.aux1 = result.data.url
+        console.log(`✅ Imagen del formulario subida: ${result.data.url}`)
+      } catch (error) {
+        console.warn(`⚠️ Error subiendo imagen del formulario:`, error)
+        // Mantener base64 si falla la subida
+        processedFormData.aux1 = "[Imagen del formulario - Error al subir]"
+      }
+    }
+
+    // PASO 2: Procesar firma del técnico si está en base64
     if (submission.formData.tecnicoFirma?.startsWith('data:image')) {
       console.log(`🔄 Subiendo firma del técnico (${submission.id})`)
       try {
+        const base64Data = submission.formData.tecnicoFirma.split(',')[1]
         const result = await uploadImageToImgBB(
-          submission.formData.tecnicoFirma,
+          base64Data,
           `firma-tecnico-${submission.formData.numeroOrden}-${submission.id}`
         )
         processedFormData.tecnicoFirma = result.data.url
@@ -210,11 +230,13 @@ class OfflineSyncManager {
       }
     }
 
+    // PASO 3: Procesar firma del cliente si está en base64
     if (submission.formData.clienteFirma?.startsWith('data:image')) {
       console.log(`🔄 Subiendo firma del cliente (${submission.id})`)
       try {
+        const base64Data = submission.formData.clienteFirma.split(',')[1]
         const result = await uploadImageToImgBB(
-          submission.formData.clienteFirma,
+          base64Data,
           `firma-cliente-${submission.formData.numeroOrden}-${submission.id}`
         )
         processedFormData.clienteFirma = result.data.url
@@ -225,12 +247,39 @@ class OfflineSyncManager {
       }
     }
 
-    // Enviar a Google Forms
+    // PASO 4: Enviar a Google Forms con todas las URLs procesadas
     console.log(`📤 Enviando formulario a Google Forms (${submission.id})`)
+    console.log(`📋 Datos procesados:`, {
+      aux1: processedFormData.aux1?.substring(0, 50) + '...',
+      tecnicoFirma: processedFormData.tecnicoFirma?.substring(0, 50) + '...',
+      clienteFirma: processedFormData.clienteFirma?.substring(0, 50) + '...'
+    })
+    
     const result = await submitFormToGoogle(processedFormData)
     
     if (!result.success) {
       throw new Error(result.error || 'Error enviando a Google Forms')
+    }
+    
+    console.log(`✅ Formulario enviado exitosamente a Google Forms (${submission.id})`)
+    
+    // PASO 5: Actualizar estado en BD local a 'sent'
+    try {
+      const orders = getOrdersByNumber(submission.formData.numeroOrden || '')
+      const pendingOrder = orders.find(order => order.status === 'pending-offline')
+      
+      if (pendingOrder) {
+        updateOrder(pendingOrder.id, {
+          status: 'sent',
+          googleFormsSent: true,
+          sentAt: new Date(),
+          imageUrl: processedFormData.aux1 // URL final de ImgBB
+        })
+        console.log(`🗃️ BD Local actualizada: ${pendingOrder.id} -> sent`)
+      }
+    } catch (dbError) {
+      console.warn('⚠️ Error actualizando BD local después del envío:', dbError)
+      // No es crítico, el envío ya fue exitoso
     }
   }
 

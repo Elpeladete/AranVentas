@@ -10,6 +10,9 @@ import { toast } from "@/lib/toast"
 import { validateForm, validateRequiredFields } from "@/lib/validations"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { sendServiceOrderToWhatsApp } from "@/lib/wazzup-api"
+import { submitFormToGoogle } from "@/lib/google-forms"
+import { addPendingSubmission } from "@/lib/offline-storage"
+import { syncManager } from "@/lib/offline-sync"
 import html2canvas from "html2canvas"
 import { addNewOrder, updateOrder, markOrderAsSent, getOrdersByNumber } from "@/lib/local-database"
 import { formatDateForDisplay } from "@/lib/utils"
@@ -103,9 +106,14 @@ export function FormActions({
       
 
       
-      // PASO 2: Capturar y guardar imagen localmente
+      // PASO 2: Capturar imagen SIEMPRE (online u offline)
       console.log('🚀 Capturando imagen de la orden...')
+      console.log('🔍 Buscando contenedor del formulario...')
+      console.log('   formRef:', formRef)
+      console.log('   formRef?.current:', formRef?.current)
+      
       const formContainer = formRef?.current || document.querySelector('.relative.mx-auto') as HTMLElement
+      let imageBase64: string | null = null
       let imageUrl: string | null = null
       
       if (formContainer) {
@@ -116,11 +124,37 @@ export function FormActions({
           className: formContainer.className
         })
         
+        // Verificar que hay una imagen dentro
+        const imgElement = formContainer.querySelector('img')
+        console.log('🖼️ Imagen encontrada dentro del contenedor:', imgElement)
+        if (imgElement) {
+          console.log('   src:', imgElement.src)
+          console.log('   width:', imgElement.width, 'height:', imgElement.height)
+        }
+        
         try {
+          console.log('📸 Llamando a captureOrderToCanvas...')
           const captureResult = await captureOrderToCanvas(formContainer)
+          console.log('📸 Resultado de captureOrderToCanvas:', captureResult ? 'SUCCESS' : 'NULL')
           
           if (captureResult) {
             const { blob, filename } = captureResult
+            
+            // SIEMPRE convertir a base64 para almacenamiento offline
+            console.log('📝 Convirtiendo imagen a base64...')
+            imageBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onloadend = () => {
+                const result = reader.result as string
+                console.log('✅ Base64 generado, longitud:', result.length)
+                resolve(result) // Incluye el prefijo data:image/png;base64,
+              }
+              reader.onerror = (error) => {
+                console.error('❌ Error leyendo blob como base64:', error)
+                reject(error)
+              }
+              reader.readAsDataURL(blob)
+            })
             
             // Guardar imagen localmente (descarga automática)
             const localUrl = URL.createObjectURL(blob)
@@ -132,56 +166,39 @@ export function FormActions({
             document.body.removeChild(link)
             URL.revokeObjectURL(localUrl)
             
-            toast.success("Imagen guardada localmente", { 
-              description: "Orden capturada y descargada" 
+            toast.success("Imagen capturada", { 
+              description: "Orden guardada localmente" 
             })
 
-            // PASO 3: Intentar subir imagen a ImgBB (opcional)
-            try {
-              console.log('☁️ Iniciando subida a ImgBB...')
-              toast.info("Subiendo imagen...", { description: "Obteniendo URL para compartir" })
-              
-              const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader()
-                reader.onloadend = () => {
-                  const result = reader.result as string
-                  const base64Data = result.split(',')[1]
-                  console.log('📝 Base64 generado, length:', base64Data.length)
-                  resolve(base64Data)
-                }
-                reader.onerror = (error) => {
-                  console.error('❌ Error leyendo blob como base64:', error)
-                  reject(error)
-                }
-                reader.readAsDataURL(blob)
-              })
-
-              console.log('🚀 Llamando a uploadImageToImgBB...')
-              const uploadResult = await uploadImageToImgBB(base64, filename.replace('.png', ''))
-              imageUrl = uploadResult.data.url
-              
-              console.log('💾 URL de imagen obtenida:', imageUrl)
-              toast.success("URL de imagen obtenida", { 
-                description: "Imagen disponible online para compartir" 
-              })
-              
-            } catch (uploadError) {
-              console.error('❌ Error completo en subida a ImgBB:', uploadError)
-              console.error('❌ Stack trace:', uploadError instanceof Error ? uploadError.stack : 'No stack')
-              
-              // Usar referencia local como fallback
-              imageUrl = `Local: ${filename}`
-              toast.error("Error subiendo imagen", { 
-                description: `Error subiendo imagen: ${uploadError instanceof Error ? uploadError.message : 'Error desconocido'}. La imagen se guardó localmente.` 
-              })
-              
-              // Mostrar mensaje sobre compartir manualmente
-              setTimeout(() => {
-                toast.info("Imagen disponible localmente", {
-                  description: "Use la imagen descargada desde su dispositivo",
-                  duration: 5000
+            // PASO 3: Si hay conexión, intentar subir a ImgBB
+            if (isOnline) {
+              try {
+                console.log('☁️ Conexión disponible - Subiendo a ImgBB...')
+                toast.info("Subiendo imagen...", { description: "Obteniendo URL para compartir" })
+                
+                const base64Data = imageBase64.split(',')[1]
+                const uploadResult = await uploadImageToImgBB(base64Data, filename.replace('.png', ''))
+                imageUrl = uploadResult.data.url
+                
+                console.log('💾 URL de ImgBB obtenida:', imageUrl)
+                toast.success("Imagen subida a ImgBB", { 
+                  description: "Disponible online para compartir" 
                 })
-              }, 2000)
+                
+              } catch (uploadError) {
+                console.error('❌ Error subiendo a ImgBB (se usará base64):', uploadError)
+                // No mostrar error, se usará base64 en su lugar
+                toast.info("Imagen guardada localmente", {
+                  description: "Se subirá automáticamente cuando haya mejor conexión",
+                  duration: 3000
+                })
+              }
+            } else {
+              console.log('📱 Modo offline - Imagen guardada como base64')
+              toast.info("Modo offline", {
+                description: "La imagen se subirá cuando haya conexión",
+                duration: 3000
+              })
             }
           }
           
@@ -193,20 +210,46 @@ export function FormActions({
         }
       } else {
         console.error('❌ No se encontró el contenedor del formulario')
-        console.log('🔍 Elementos disponibles con clase "relative":', document.querySelectorAll('.relative'))
-        console.log('🔍 Elementos disponibles con clase "mx-auto":', document.querySelectorAll('.mx-auto'))
         toast.error("Error", {
           description: "No se pudo encontrar el formulario para capturar"
         })
       }
 
-      // PASO 4: Actualizar campo AUX1 con la URL (si se obtuvo)
-      if (imageUrl) {
-        onUpdateField('aux1', imageUrl)
-        console.log('📝 Campo AUX1 actualizado con:', imageUrl)
+      // PASO 4: Actualizar campo AUX1 con URL de ImgBB O base64
+      // Prioridad: URL de ImgBB > base64 > null
+      const aux1Value = imageUrl || imageBase64
+      if (aux1Value) {
+        console.log('📝 Actualizando campo AUX1:', imageUrl ? 'URL de ImgBB' : 'base64')
+        console.log('📋 AUX1 ANTES de actualizar:', formData.aux1?.substring(0, 50))
+        
+        onUpdateField('aux1', aux1Value)
+        
+        // ⏱️ CRÍTICO: Esperar a que React procese la actualización del estado
+        console.log('⏳ Esperando actualización del estado de React (1.5 segundos)...')
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        
+        console.log('✅ Continuando después de espera')
+        console.log('📋 AUX1 DESPUÉS de espera:', formData.aux1?.substring(0, 50))
+        
+        // Verificar si se actualizó
+        if (formData.aux1 === aux1Value) {
+          console.log('✅ AUX1 actualizado correctamente')
+        } else {
+          console.warn('⚠️ AUX1 NO se actualizó correctamente')
+        }
+      } else {
+        console.warn('⚠️ No se obtuvo imagen para AUX1')
       }
 
       // PASO 5: Validar formulario antes de enviar
+      // Nota: formData debe estar actualizado aquí con aux1 nuevo
+      console.log('📋 FormData FINAL para validación y envío:', {
+        aux1: formData.aux1,
+        numeroOrden: formData.numeroOrden,
+        fecha: formData.fecha,
+        aux1Length: formData.aux1?.length || 0
+      })
+      
       toast.info("Validando formulario...", { description: "Verificando datos antes del envío" })
       const validation = validateRequiredFields(formData)
       
@@ -263,34 +306,115 @@ export function FormActions({
         })
       }
 
-      // PASO 6: Enviar al formulario 
-      toast.info("Enviando formulario...", { description: "Transmitiendo datos al servidor" })
+      // PASO 6: Enviar a Google Forms (con manejo offline)
+      console.log('📤 Preparando envío a Google Forms...')
       
-      await new Promise<void>((resolve, reject) => {
-        // Envolver onSubmit en una promesa para manejar su resultado
+      if (!isOnline) {
+        // SIN CONEXIÓN: Guardar en cola offline
+        console.log('📱 Modo offline - Guardando en cola para envío posterior')
+        toast.info("Modo offline", { description: "Guardando en cola de sincronización" })
+        
         try {
-          onSubmit()
-          // Asumir éxito si no hay excepción inmediata
-          setTimeout(resolve, 1000) // Dar tiempo para posibles errores asíncronos
-        } catch (error) {
-          reject(error)
+          await addPendingSubmission(formData)
+          toast.success("Orden guardada offline", { 
+            description: "Se enviará automáticamente cuando haya conexión",
+            duration: 5000
+          })
+          
+          // NO marcar como enviado completamente, sino como pendiente
+          setHasBeenSubmitted(false) // Permitir reenvío cuando haya conexión
+          lastSubmittedData.current = null
+          
+          // Actualizar BD local como PENDIENTE OFFLINE
+          try {
+            updateOrder(orderId, { 
+              status: 'pending-offline',
+              imageUrl: imageBase64 || undefined 
+            })
+            console.log('🗃️ Estado actualizado en BD local: pending-offline')
+          } catch (dbError) {
+            console.error('❌ Error actualizando BD local:', dbError)
+          }
+          
+        } catch (offlineError) {
+          console.error('❌ Error guardando en cola offline:', offlineError)
+          toast.error("Error crítico", {
+            description: "No se pudo guardar la orden",
+            duration: 6000
+          })
+          return // Salir si falla el guardado offline
         }
-      })
-      
-      // PASO 7: Marcar como enviado solo si llegamos hasta aquí sin errores
-      setHasBeenSubmitted(true)
-      lastSubmittedData.current = { ...formData }
-      
-      // PASO 7A: Actualizar estado en base de datos local
-      try {
-        markOrderAsSent(orderId, imageUrl || undefined)
-        console.log('🗃️ Estado actualizado en BD local: enviado')
-      } catch (dbError) {
-        console.error('❌ Error actualizando BD local:', dbError)
-        // No es crítico, el envío ya fue exitoso
+        
+      } else {
+        // CON CONEXIÓN: Intentar envío inmediato
+        console.log('☁️ Modo online - Intentando envío inmediato')
+        toast.info("Enviando formulario...", { description: "Transmitiendo a Google Forms" })
+        
+        try {
+          const result = await submitFormToGoogle(formData)
+          
+          if (result.success) {
+            console.log('✅ Formulario enviado exitosamente a Google Forms')
+            toast.success("¡Formulario enviado!", { 
+              description: "Los datos se han guardado correctamente",
+              duration: 5000 
+            })
+            
+            // Marcar como enviado
+            setHasBeenSubmitted(true)
+            lastSubmittedData.current = { ...formData }
+            
+            // Actualizar BD local
+            try {
+              markOrderAsSent(orderId, imageUrl || imageBase64 || undefined)
+              console.log('🗃️ Estado actualizado en BD local: enviado')
+            } catch (dbError) {
+              console.error('❌ Error actualizando BD local:', dbError)
+            }
+            
+          } else {
+            throw new Error(result.error || 'Error desconocido en envío')
+          }
+          
+        } catch (sendError) {
+          // Error en envío online - guardar en cola offline como respaldo
+          console.error('❌ Error en envío online, guardando offline:', sendError)
+          
+          try {
+            await addPendingSubmission(formData)
+            toast.warning("Error en envío directo", { 
+              description: "Guardado en cola para reintento automático",
+              duration: 5000 
+            })
+            
+            // NO marcar como enviado completamente
+            setHasBeenSubmitted(false)
+            lastSubmittedData.current = null
+            
+            // Actualizar BD local como PENDIENTE OFFLINE
+            try {
+              updateOrder(orderId, { 
+                status: 'pending-offline',
+                imageUrl: imageBase64 || undefined 
+              })
+              console.log('🗃️ Estado actualizado en BD local: pending-offline (reintento)')
+            } catch (dbError) {
+              console.error('❌ Error actualizando BD local:', dbError)
+            }
+            
+          } catch (offlineError) {
+            console.error('❌ Error guardando en cola offline:', offlineError)
+            toast.error("Error crítico", {
+              description: "No se pudo enviar ni guardar para reintento",
+              duration: 6000
+            })
+            return // Salir si falla todo
+          }
+        }
       }
       
-      // PASO 8: Enviar por WhatsApp si hay número de teléfono y imagen
+      // PASO 7: Enviar por WhatsApp si hay número de teléfono y imagen URL de ImgBB
+      // (No se envía si solo tenemos base64, ya que WhatsApp necesita URL pública)
       if (formData.telefono && imageUrl && imageUrl.startsWith('http')) {
         // Verificar si esta orden ya fue enviada por WhatsApp anteriormente
         // y si tiene CAMBIOS respecto a la versión anterior
@@ -432,17 +556,27 @@ export function FormActions({
       }
       
       // Crear una nueva imagen para asegurar que esté cargada
+      console.log('⏳ Cargando imagen de fondo...')
       const bgImage = new Image()
       bgImage.crossOrigin = 'anonymous'
       
       await new Promise((resolve, reject) => {
-        bgImage.onload = () => resolve(true)
-        bgImage.onerror = reject
+        bgImage.onload = () => {
+          console.log('✅ Imagen de fondo cargada exitosamente')
+          console.log('   Dimensiones:', bgImage.width, 'x', bgImage.height)
+          resolve(true)
+        }
+        bgImage.onerror = (err) => {
+          console.error('❌ Error cargando imagen de fondo:', err)
+          reject(err)
+        }
         bgImage.src = originalImage.src
       })
 
       // Dibujar imagen de fondo
+      console.log('🖌️ Dibujando imagen de fondo en canvas...')
       ctx.drawImage(bgImage, 0, 0, 850, 1200)
+      console.log('✅ Imagen de fondo dibujada')
 
       // Definir posiciones de campos
       const fieldPositions = {
@@ -702,13 +836,22 @@ export function FormActions({
         }
       }
 
+      console.log('🖊️ Dibujando firmas...')
       await drawSignatures()
+      console.log('✅ Firmas dibujadas')
 
       // Convertir canvas a blob
+      console.log('💾 Convirtiendo canvas a blob...')
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((blob) => {
-          if (blob) resolve(blob)
-          else reject(new Error('No se pudo crear blob'))
+          if (blob) {
+            console.log('✅ Blob creado:', blob.size, 'bytes')
+            resolve(blob)
+          }
+          else {
+            console.error('❌ No se pudo crear blob')
+            reject(new Error('No se pudo crear blob'))
+          }
         }, 'image/png', 0.95)
       })
 
@@ -716,10 +859,14 @@ export function FormActions({
       const filename = `ARAN-OrdenServicio-${formData.numeroOrden || 'nueva'}-${timestamp}.png`
       
       console.log('✅ Captura completada exitosamente')
+      console.log('   Filename:', filename)
+      console.log('   Blob size:', blob.size, 'bytes')
       return { blob, filename }
 
     } catch (error) {
       console.error('❌ Error en captura con canvas:', error)
+      console.error('   Tipo de error:', error instanceof Error ? error.message : String(error))
+      console.error('   Stack:', error instanceof Error ? error.stack : 'N/A')
       throw error
     }
   }

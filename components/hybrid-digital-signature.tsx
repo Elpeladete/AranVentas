@@ -36,6 +36,7 @@ interface HybridDigitalSignatureProps {
   documentData: any
   signerInfo: Partial<SignerInfo>
   onSignatureComplete: (signature: DigitalSignature) => void
+  onLoadingChange?: (isLoading: boolean) => void // Nuevo callback para notificar estado de carga
   className?: string
 }
 
@@ -43,6 +44,7 @@ export function HybridDigitalSignature({
   documentData,
   signerInfo: initialSignerInfo,
   onSignatureComplete,
+  onLoadingChange,
   className
 }: HybridDigitalSignatureProps) {
   const { isOnline } = useNetworkStatus()
@@ -86,6 +88,13 @@ export function HybridDigitalSignature({
   useEffect(() => {
     setOptions(prev => ({ ...prev, requestLegalValidation: isOnline }))
   }, [isOnline])
+
+  // Notificar al padre cuando cambia el estado de carga
+  useEffect(() => {
+    if (onLoadingChange) {
+      onLoadingChange(isLoading)
+    }
+  }, [isLoading, onLoadingChange])
 
   // Crear un nuevo certificado
   const handleCreateCertificate = async () => {
