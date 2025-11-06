@@ -108,6 +108,8 @@ export function FormActions({
       
       // PASO 2: Capturar imagen SIEMPRE (online u offline) - CRÍTICO PARA OFFLINE
       console.log('🚀 Capturando imagen de la orden...')
+      toast.info("Capturando imagen...", { description: "Buscando formulario en pantalla" })
+      
       console.log('🔍 Buscando contenedor del formulario...')
       console.log('   formRef:', formRef)
       console.log('   formRef?.current:', formRef?.current)
@@ -116,16 +118,37 @@ export function FormActions({
       let formContainer: HTMLElement | null = formRef?.current || null
       
       if (!formContainer) {
-        console.log('⚠️ formRef no disponible, buscando por selector...')
+        console.log('⚠️ formRef no disponible, buscando por selector .relative.mx-auto...')
         formContainer = document.querySelector('.relative.mx-auto') as HTMLElement | null
+        console.log('   Resultado:', formContainer ? 'ENCONTRADO' : 'NULL')
       }
       
       if (!formContainer) {
-        console.log('⚠️ Selector .relative.mx-auto no encontrado, buscando alternativas...')
-        // Intentar otros selectores comunes
-        formContainer = (document.querySelector('[class*="max-w"]') ||
-                       document.querySelector('main > div > div') ||
-                       document.querySelector('.card')) as HTMLElement | null
+        console.log('⚠️ Selector .relative.mx-auto no encontrado, buscando div con imagen...')
+        // Buscar directamente el div que contiene la imagen del formulario
+        const allDivs = document.querySelectorAll('div')
+        console.log('   Total de divs en página:', allDivs.length)
+        
+        for (const div of allDivs) {
+          const img = div.querySelector('img[src*="orden-servicio"]') || 
+                     div.querySelector('img[src*="placeholder"]') ||
+                     div.querySelector('img[alt*="Orden"]')
+          if (img) {
+            formContainer = div as HTMLElement
+            console.log('✅ Encontrado div con imagen del formulario:', div)
+            console.log('   Imagen src:', (img as HTMLImageElement).src)
+            break
+          }
+        }
+        
+        if (!formContainer) {
+          console.log('⚠️ No se encontró por imagen, buscando selectores alternativos...')
+          formContainer = (document.querySelector('[class*="max-w"]') ||
+                         document.querySelector('main > div > div') ||
+                         document.querySelector('.card') ||
+                         document.querySelector('main')) as HTMLElement | null
+          console.log('   Resultado:', formContainer ? 'ENCONTRADO' : 'NULL')
+        }
       }
       
       let imageBase64: string | null = null
@@ -137,24 +160,54 @@ export function FormActions({
         console.log('📐 Dimensiones del contenedor:', {
           width: formContainer.offsetWidth,
           height: formContainer.offsetHeight,
-          className: formContainer.className
+          className: formContainer.className,
+          tagName: formContainer.tagName
+        })
+        
+        toast.success("Contenedor encontrado", { 
+          description: `${formContainer.offsetWidth}x${formContainer.offsetHeight}px`,
+          duration: 2000
         })
         
         // Verificar que hay una imagen dentro
         const imgElement = formContainer.querySelector('img')
-        console.log('🖼️ Imagen encontrada dentro del contenedor:', imgElement)
+        console.log('🖼️ Buscando imagen dentro del contenedor...')
+        console.log('   Resultado:', imgElement ? 'ENCONTRADA' : 'NULL')
+        
         if (imgElement) {
+          console.log('✅ Imagen encontrada:', imgElement)
           console.log('   src:', imgElement.src)
           console.log('   width:', imgElement.width, 'height:', imgElement.height)
           console.log('   naturalWidth:', imgElement.naturalWidth, 'naturalHeight:', imgElement.naturalHeight)
           console.log('   complete:', imgElement.complete)
+          
+          if (!imgElement.complete) {
+            console.warn('⚠️ La imagen aún no se ha cargado completamente')
+            toast.warning("Esperando imagen", {
+              description: "La imagen del formulario se está cargando...",
+              duration: 3000
+            })
+            // Esperar a que la imagen se cargue
+            await new Promise((resolve) => {
+              if (imgElement.complete) {
+                resolve(true)
+              } else {
+                imgElement.onload = () => resolve(true)
+                imgElement.onerror = () => resolve(false)
+                setTimeout(() => resolve(false), 5000) // timeout de 5 segundos
+              }
+            })
+          }
         } else {
           console.error('❌ NO SE ENCONTRÓ IMAGEN DENTRO DEL CONTENEDOR')
+          console.error('   Contenedor:', formContainer)
+          console.error('   innerHTML preview:', formContainer.innerHTML.substring(0, 200))
+          
           toast.error("Error crítico", {
-            description: "No se encontró la imagen del formulario. Verifique que el formulario se haya cargado correctamente.",
+            description: "No se encontró la imagen del formulario. La orden se guardará sin imagen.",
             duration: 6000
           })
-          // Aún así intentar continuar sin imagen
+          // Continuar sin imagen
         }
         
         try {
