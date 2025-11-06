@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Send, RotateCcw, AlertCircle, CheckCircle, Camera, Wifi, WifiOff, Clock, AlertTriangle } from "lucide-react"
 import type { FormData } from "@/hooks/use-form-data"
@@ -16,6 +16,9 @@ import { syncManager } from "@/lib/offline-sync"
 import html2canvas from "html2canvas"
 import { addNewOrder, updateOrder, markOrderAsSent, getOrdersByNumber } from "@/lib/local-database"
 import { formatDateForDisplay } from "@/lib/utils"
+
+// Cache global para la imagen de fondo (precargada)
+let cachedBackgroundImage: HTMLImageElement | null = null
 
 interface FormActionsProps {
   formData: FormData
@@ -47,6 +50,40 @@ export function FormActions({
   // Estados para rastrear envíos
   const [hasBeenSubmitted, setHasBeenSubmitted] = useState(false)
   const lastSubmittedData = useRef<FormData | null>(null)
+
+  // 🚀 Precargar imagen de fondo cuando el componente se monta
+  useEffect(() => {
+    const precacheBackgroundImage = async () => {
+      if (cachedBackgroundImage) {
+        console.log('✅ Imagen de fondo ya está en caché')
+        return
+      }
+
+      console.log('📥 Precargando imagen de fondo para uso offline...')
+      try {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => {
+            cachedBackgroundImage = img
+            console.log('✅ Imagen de fondo precargada exitosamente')
+            console.log('   Dimensiones:', img.width, 'x', img.height)
+            resolve()
+          }
+          img.onerror = (err) => {
+            console.error('❌ Error precargando imagen:', err)
+            reject(err)
+          }
+          img.src = '/images/orden-servicio-aran.png'
+        })
+      } catch (error) {
+        console.error('❌ No se pudo precargar la imagen:', error)
+      }
+    }
+
+    precacheBackgroundImage()
+  }, [])
 
   // Función para comparar si el formulario actual es igual al último enviado
   const isFormUnchangedSinceSubmit = (): boolean => {
@@ -681,34 +718,45 @@ export function FormActions({
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, 850, 1200)
 
-      // Buscar y cargar la imagen de fondo
-      const originalImage = formContainer.querySelector('img') as HTMLImageElement
-      if (!originalImage) {
-        throw new Error('No se encontró la imagen del formulario')
+      // 🎯 USAR IMAGEN CACHEADA (no cargar desde red)
+      console.log('🔍 Verificando imagen de fondo cacheada...')
+      
+      if (!cachedBackgroundImage) {
+        console.error('❌ Imagen de fondo no está cacheada, intentando cargar...')
+        // Intentar cargar de emergencia (solo funcionará si hay conexión)
+        const originalImage = formContainer.querySelector('img') as HTMLImageElement
+        if (!originalImage) {
+          throw new Error('No se encontró la imagen del formulario y no hay caché disponible')
+        }
+        
+        const bgImage = new Image()
+        bgImage.crossOrigin = 'anonymous'
+        
+        await new Promise((resolve, reject) => {
+          bgImage.onload = () => {
+            cachedBackgroundImage = bgImage
+            console.log('✅ Imagen cargada de emergencia')
+            resolve(true)
+          }
+          bgImage.onerror = (err) => {
+            console.error('❌ Error cargando imagen de emergencia:', err)
+            reject(err)
+          }
+          bgImage.src = originalImage.src
+        })
+      } else {
+        console.log('✅ Usando imagen de fondo cacheada (offline-safe)')
+        console.log('   Dimensiones:', cachedBackgroundImage.width, 'x', cachedBackgroundImage.height)
+      }
+
+      // Dibujar imagen de fondo desde caché
+      if (!cachedBackgroundImage) {
+        throw new Error('No hay imagen de fondo disponible')
       }
       
-      // Crear una nueva imagen para asegurar que esté cargada
-      console.log('⏳ Cargando imagen de fondo...')
-      const bgImage = new Image()
-      bgImage.crossOrigin = 'anonymous'
-      
-      await new Promise((resolve, reject) => {
-        bgImage.onload = () => {
-          console.log('✅ Imagen de fondo cargada exitosamente')
-          console.log('   Dimensiones:', bgImage.width, 'x', bgImage.height)
-          resolve(true)
-        }
-        bgImage.onerror = (err) => {
-          console.error('❌ Error cargando imagen de fondo:', err)
-          reject(err)
-        }
-        bgImage.src = originalImage.src
-      })
-
-      // Dibujar imagen de fondo
       console.log('🖌️ Dibujando imagen de fondo en canvas...')
-      ctx.drawImage(bgImage, 0, 0, 850, 1200)
-      console.log('✅ Imagen de fondo dibujada')
+      ctx.drawImage(cachedBackgroundImage, 0, 0, 850, 1200)
+      console.log('✅ Imagen de fondo dibujada desde caché')
 
       // Definir posiciones de campos
       const fieldPositions = {
