@@ -106,15 +106,31 @@ export function FormActions({
       
 
       
-      // PASO 2: Capturar imagen SIEMPRE (online u offline)
+      // PASO 2: Capturar imagen SIEMPRE (online u offline) - CRÍTICO PARA OFFLINE
       console.log('🚀 Capturando imagen de la orden...')
       console.log('🔍 Buscando contenedor del formulario...')
       console.log('   formRef:', formRef)
       console.log('   formRef?.current:', formRef?.current)
       
-      const formContainer = formRef?.current || document.querySelector('.relative.mx-auto') as HTMLElement
+      // Intentar múltiples estrategias para encontrar el contenedor
+      let formContainer: HTMLElement | null = formRef?.current || null
+      
+      if (!formContainer) {
+        console.log('⚠️ formRef no disponible, buscando por selector...')
+        formContainer = document.querySelector('.relative.mx-auto') as HTMLElement | null
+      }
+      
+      if (!formContainer) {
+        console.log('⚠️ Selector .relative.mx-auto no encontrado, buscando alternativas...')
+        // Intentar otros selectores comunes
+        formContainer = (document.querySelector('[class*="max-w"]') ||
+                       document.querySelector('main > div > div') ||
+                       document.querySelector('.card')) as HTMLElement | null
+      }
+      
       let imageBase64: string | null = null
       let imageUrl: string | null = null
+      let captureSuccess = false
       
       if (formContainer) {
         console.log('✅ Contenedor del formulario encontrado:', formContainer)
@@ -130,6 +146,15 @@ export function FormActions({
         if (imgElement) {
           console.log('   src:', imgElement.src)
           console.log('   width:', imgElement.width, 'height:', imgElement.height)
+          console.log('   naturalWidth:', imgElement.naturalWidth, 'naturalHeight:', imgElement.naturalHeight)
+          console.log('   complete:', imgElement.complete)
+        } else {
+          console.error('❌ NO SE ENCONTRÓ IMAGEN DENTRO DEL CONTENEDOR')
+          toast.error("Error crítico", {
+            description: "No se encontró la imagen del formulario. Verifique que el formulario se haya cargado correctamente.",
+            duration: 6000
+          })
+          // Aún así intentar continuar sin imagen
         }
         
         try {
@@ -139,6 +164,7 @@ export function FormActions({
           
           if (captureResult) {
             const { blob, filename } = captureResult
+            captureSuccess = true
             
             // SIEMPRE convertir a base64 para almacenamiento offline
             console.log('📝 Convirtiendo imagen a base64...')
@@ -147,6 +173,7 @@ export function FormActions({
               reader.onloadend = () => {
                 const result = reader.result as string
                 console.log('✅ Base64 generado, longitud:', result.length)
+                console.log('   Primeros 100 caracteres:', result.substring(0, 100))
                 resolve(result) // Incluye el prefijo data:image/png;base64,
               }
               reader.onerror = (error) => {
@@ -157,6 +184,7 @@ export function FormActions({
             })
             
             // Guardar imagen localmente (descarga automática)
+            console.log('💾 Descargando imagen localmente...')
             const localUrl = URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = localUrl
@@ -165,6 +193,7 @@ export function FormActions({
             link.click()
             document.body.removeChild(link)
             URL.revokeObjectURL(localUrl)
+            console.log('✅ Imagen descargada:', filename)
             
             toast.success("Imagen capturada", { 
               description: "Orden guardada localmente" 
@@ -200,19 +229,54 @@ export function FormActions({
                 duration: 3000
               })
             }
+          } else {
+            console.error('❌ captureOrderToCanvas retornó null')
+            toast.error("Error en captura", {
+              description: "La función de captura no retornó resultado",
+              duration: 5000
+            })
           }
           
         } catch (captureError) {
           console.error('❌ Error en captura de imagen:', captureError)
-          toast.warning("Error en captura", { 
-            description: "No se pudo capturar la imagen" 
+          console.error('   Tipo:', captureError instanceof Error ? captureError.constructor.name : typeof captureError)
+          console.error('   Mensaje:', captureError instanceof Error ? captureError.message : String(captureError))
+          console.error('   Stack:', captureError instanceof Error ? captureError.stack : 'N/A')
+          
+          toast.error("Error en captura", { 
+            description: captureError instanceof Error ? captureError.message : "No se pudo capturar la imagen",
+            duration: 6000
           })
         }
       } else {
-        console.error('❌ No se encontró el contenedor del formulario')
-        toast.error("Error", {
-          description: "No se pudo encontrar el formulario para capturar"
+        console.error('❌ No se encontró el contenedor del formulario después de múltiples intentos')
+        console.error('   Selectores intentados:')
+        console.error('   - formRef?.current')
+        console.error('   - .relative.mx-auto')
+        console.error('   - [class*="max-w"]')
+        console.error('   - main > div > div')
+        console.error('   - .card')
+        
+        toast.error("Error crítico", {
+          description: "No se pudo encontrar el formulario para capturar. El formulario debe estar visible en pantalla.",
+          duration: 6000
         })
+      }
+      
+      // VERIFICACIÓN FINAL: ¿Tenemos imagen para offline?
+      if (!isOnline && !imageBase64) {
+        console.error('🚨 PROBLEMA CRÍTICO: Modo offline sin imagen capturada')
+        console.error('   isOnline:', isOnline)
+        console.error('   captureSuccess:', captureSuccess)
+        console.error('   imageBase64:', imageBase64 ? 'EXISTS' : 'NULL')
+        
+        toast.error("Advertencia offline", {
+          description: "No se pudo capturar la imagen. La orden se guardará sin imagen adjunta.",
+          duration: 7000
+        })
+      } else if (!isOnline && imageBase64) {
+        console.log('✅ Modo offline con imagen capturada correctamente')
+        console.log('   imageBase64 length:', imageBase64.length)
       }
 
       // PASO 4: Actualizar campo AUX1 con URL de ImgBB O base64
@@ -310,12 +374,25 @@ export function FormActions({
       console.log('📤 Preparando envío a Google Forms...')
       
       if (!isOnline) {
-        // SIN CONEXIÓN: Guardar en cola offline
+        // SIN CONEXIÓN: Guardar en cola offline CON IMAGEN
         console.log('📱 Modo offline - Guardando en cola para envío posterior')
+        console.log('   imageBase64:', imageBase64 ? `EXISTS (${imageBase64.length} chars)` : 'NULL')
         toast.info("Modo offline", { description: "Guardando en cola de sincronización" })
         
         try {
-          await addPendingSubmission(formData)
+          // CRÍTICO: Crear una copia del formData con la imagen incluida
+          const formDataWithImage = {
+            ...formData,
+            aux1: imageBase64 || formData.aux1 // Usar imagen capturada o la existente
+          }
+          
+          console.log('💾 Guardando formData con imagen en cola offline:')
+          console.log('   aux1 length:', formDataWithImage.aux1?.length || 0)
+          console.log('   numeroOrden:', formDataWithImage.numeroOrden)
+          
+          await addPendingSubmission(formDataWithImage)
+          
+          console.log('✅ Orden guardada en cola offline')
           toast.success("Orden guardada offline", { 
             description: "Se enviará automáticamente cuando haya conexión",
             duration: 5000
@@ -332,12 +409,14 @@ export function FormActions({
               imageUrl: imageBase64 || undefined 
             })
             console.log('🗃️ Estado actualizado en BD local: pending-offline')
+            console.log('   imageUrl guardada:', imageBase64 ? 'SÍ' : 'NO')
           } catch (dbError) {
             console.error('❌ Error actualizando BD local:', dbError)
           }
           
         } catch (offlineError) {
           console.error('❌ Error guardando en cola offline:', offlineError)
+          console.error('   Detalles:', offlineError instanceof Error ? offlineError.message : String(offlineError))
           toast.error("Error crítico", {
             description: "No se pudo guardar la orden",
             duration: 6000
