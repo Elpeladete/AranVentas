@@ -95,6 +95,43 @@ class OfflineSyncManager {
   }
 
   /**
+   * Verifica si realmente hay conectividad antes de intentar sincronizar
+   */
+  private async checkRealConnectivity(): Promise<boolean> {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      
+      const response = await fetch('https://www.google.com/favicon.ico', {
+        method: 'HEAD',
+        mode: 'no-cors',
+        cache: 'no-cache',
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      return true
+    } catch {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 3000)
+        
+        const response = await fetch('https://httpbin.org/status/200', {
+          method: 'HEAD',
+          mode: 'no-cors',
+          cache: 'no-cache',
+          signal: controller.signal
+        })
+        
+        clearTimeout(timeoutId)
+        return true
+      } catch {
+        return false
+      }
+    }
+  }
+
+  /**
    * Ejecuta una sincronización manual
    */
   async syncPendingSubmissions(): Promise<void> {
@@ -105,6 +142,22 @@ class OfflineSyncManager {
 
     try {
       this.isRunning = true
+      
+      // PASO 0: Verificar conectividad REAL antes de intentar nada
+      if (!navigator.onLine) {
+        console.log('⚠️ Sin conexión (navigator.onLine = false), omitiendo sincronización')
+        return
+      }
+      
+      console.log('🔍 Verificando conectividad real...')
+      const hasRealConnectivity = await this.checkRealConnectivity()
+      
+      if (!hasRealConnectivity) {
+        console.log('⚠️ Sin conectividad real, omitiendo sincronización (se reintentará en 60s)')
+        return
+      }
+      
+      console.log('✅ Conectividad confirmada, procediendo con sincronización')
       
       // Limpiar formularios antiguos primero
       cleanupOldSubmissions()

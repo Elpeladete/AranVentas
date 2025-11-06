@@ -9,6 +9,7 @@ import { ScreenSizeIndicator } from '@/components/screen-size-indicator'
 import { ClientOnly } from '@/components/client-only'
 import { OfflineStatus } from '@/components/offline-status'
 import { OfflineDataInitializer } from '@/components/offline-data-initializer'
+import { SyncStatusLogger } from '@/components/sync-status-logger'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -65,6 +66,7 @@ export default function RootLayout({
           <ScreenSizeIndicator position="top-right" compact={true} />
           <OfflineStatus />
           <OfflineDataInitializer />
+          <SyncStatusLogger />
         </ClientOnly>
         <BuildInfoLogger />
         <Analytics />

@@ -46,17 +46,22 @@ export interface ImgBBResponse {
 }
 
 /**
- * Sube una imagen en base64 a ImgBB
+ * Sube una imagen en base64 a ImgBB con reintentos automáticos
  * @param base64Image - Imagen en formato base64 (con o sin prefijo data:image)
  * @param name - Nombre opcional para la imagen
+ * @param retryCount - Número de reintentos (para uso interno)
  * @returns Promise con la respuesta de ImgBB
  */
 export async function uploadImageToImgBB(
   base64Image: string, 
-  name: string = 'signature'
+  name: string = 'signature',
+  retryCount: number = 0
 ): Promise<ImgBBResponse> {
+  const maxRetries = 3
+  const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 10000) // Backoff exponencial: 1s, 2s, 4s, max 10s
+  
   try {
-    console.log(`🚀 Iniciando upload a ImgBB para: ${name}`)
+    console.log(`🚀 Iniciando upload a ImgBB para: ${name}${retryCount > 0 ? ` (Reintento ${retryCount}/${maxRetries})` : ''}`)
     console.log(`📏 Tamaño del base64: ${base64Image.length} caracteres`)
     
     // Limpiar el base64 (remover prefijo data:image/png;base64, si existe)
@@ -107,10 +112,21 @@ export async function uploadImageToImgBB(
     return result
     
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('❌ Timeout en upload a ImgBB (30s)')
+    const isNetworkError = error instanceof TypeError && error.message.includes('fetch')
+    const isTimeoutError = error instanceof Error && error.name === 'AbortError'
+    const shouldRetry = (isNetworkError || isTimeoutError) && retryCount < maxRetries
+    
+    if (shouldRetry) {
+      console.warn(`⚠️ Error de red en upload a ImgBB, reintentando en ${retryDelay}ms...`)
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
+      return uploadImageToImgBB(base64Image, name, retryCount + 1)
+    }
+    
+    if (isTimeoutError) {
+      console.error('❌ Timeout en upload a ImgBB después de reintentos')
       throw new Error('Upload timeout - La subida tomó demasiado tiempo')
     }
+    
     console.error('❌ Error uploading to ImgBB:', error)
     throw error
   }

@@ -128,6 +128,7 @@ export function updateSubmissionStatus(
 
 /**
  * Obtiene solo los formularios que están listos para reintento
+ * Usa backoff exponencial: 1min, 5min, 15min
  */
 export function getSubmissionsReadyForRetry(): PendingFormSubmission[] {
   const submissions = getPendingSubmissions()
@@ -148,9 +149,23 @@ export function getSubmissionsReadyForRetry(): PendingFormSubmission[] {
       return true
     }
     
-    // Esperar 5 minutos entre reintentos
+    // Backoff exponencial basado en el número de intentos
+    // Intento 1: esperar 1 minuto
+    // Intento 2: esperar 5 minutos
+    // Intento 3: esperar 15 minutos
+    const backoffMinutes = submission.attempts === 0 ? 1 : submission.attempts === 1 ? 5 : 15
+    const backoffMs = backoffMinutes * 60 * 1000
+    
     const timeSinceLastAttempt = Date.now() - submission.lastAttempt.getTime()
-    return timeSinceLastAttempt > 5 * 60 * 1000 // 5 minutos
+    const isReady = timeSinceLastAttempt > backoffMs
+    
+    if (!isReady) {
+      const remainingMs = backoffMs - timeSinceLastAttempt
+      const remainingMinutes = Math.ceil(remainingMs / 60000)
+      console.log(`⏳ Formulario ${submission.id}: esperando ${remainingMinutes}min más (intento ${submission.attempts}/${MAX_ATTEMPTS})`)
+    }
+    
+    return isReady
   })
 }
 

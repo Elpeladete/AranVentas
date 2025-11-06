@@ -229,29 +229,55 @@ export function generatePrefilledUrl(formData: AranFormData): string {
 }
 
 /**
- * Envía el formulario directamente a Google Forms
+ * Envía el formulario directamente a Google Forms con reintentos
  */
-export async function submitFormToGoogle(formData: AranFormData): Promise<{
+export async function submitFormToGoogle(
+  formData: AranFormData,
+  retryCount: number = 0
+): Promise<{
   success: boolean
   error?: string
 }> {
+  const maxRetries = 3
+  const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 10000) // Backoff: 1s, 2s, 4s, max 10s
+  
   try {
+    console.log(`📤 Enviando a Google Forms${retryCount > 0 ? ` (Reintento ${retryCount}/${maxRetries})` : ''}`)
+    
     const submitUrl = `${GOOGLE_FORMS_CONFIG.baseUrl}/formResponse`
     const submissionData = prepareFormDataForSubmission(formData)
+    
+    // Crear timeout controller
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 segundos timeout
     
     // Enviar usando fetch con mode no-cors
     await fetch(submitUrl, {
       method: "POST",
       body: submissionData,
-      mode: "no-cors" // Necesario para Google Forms
+      mode: "no-cors", // Necesario para Google Forms
+      signal: controller.signal
     })
+    
+    clearTimeout(timeoutId)
     
     // Con mode: "no-cors" no podemos verificar el status de respuesta
     // pero si no hay excepción, asumimos que se envió correctamente
+    console.log('✅ Formulario enviado a Google Forms exitosamente')
     return { success: true }
     
   } catch (error) {
-    console.error("Error al enviar formulario a Google:", error)
+    const isNetworkError = error instanceof TypeError && error.message.includes('fetch')
+    const isTimeoutError = error instanceof Error && error.name === 'AbortError'
+    const shouldRetry = (isNetworkError || isTimeoutError) && retryCount < maxRetries
+    
+    if (shouldRetry) {
+      console.warn(`⚠️ Error enviando a Google Forms, reintentando en ${retryDelay}ms...`)
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
+      return submitFormToGoogle(formData, retryCount + 1)
+    }
+    
+    console.error("❌ Error al enviar formulario a Google Forms:", error)
     return { 
       success: false, 
       error: error instanceof Error ? error.message : "Error desconocido"
