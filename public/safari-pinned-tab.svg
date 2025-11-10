@@ -1,13 +1,26 @@
-<!-- SVG temporal del logo ARAN basado en tu imagen adjunta -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-  <!-- Fondo circular -->
-  <circle cx="50" cy="50" r="48" fill="#ffffff" stroke="#000000" stroke-width="2"/>
-  
-  <!-- Letra A estilizada -->
-  <path d="M35 75 L40 60 L50 30 L60 60 L65 75" stroke="#000000" stroke-width="3" fill="none"/>
-  <line x1="42" y1="65" x2="58" y2="65" stroke="#000000" stroke-width="2"/>
-  
-  <!-- Detalle técnico/tecnológico -->
-  <circle cx="75" cy="25" r="3" fill="#000000"/>
-  <circle cx="25" cy="25" r="2" fill="#666666"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="700" viewBox="0 0 700 700"><!-- SVG temporal del logo ARAN basado en tu imagen adjunta -->
+
+  <rect width="700" height="700" fill="#000"/><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+
+    <!-- Fondo circular -->
+
+  <!-- Guion decorativo -->  <circle cx="50" cy="50" r="48" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+
+  <rect x="80" y="320" width="120" height="60" fill="#fff"/>  
+
+    <!-- Letra A estilizada -->
+
+  <!-- Texto "Os" -->  <path d="M35 75 L40 60 L50 30 L60 60 L65 75" stroke="#000000" stroke-width="3" fill="none"/>
+
+  <text x="420" y="490"   <line x1="42" y1="65" x2="58" y2="65" stroke="#000000" stroke-width="2"/>
+
+        font-family="system-ui, sans-serif"  
+
+        font-size="520"   <!-- Detalle técnico/tecnológico -->
+
+        font-weight="900"   <circle cx="75" cy="25" r="3" fill="#000000"/>
+
+        text-anchor="middle"   <circle cx="25" cy="25" r="2" fill="#666666"/>
+
+        fill="#fff">Os</text></svg>
 </svg>
