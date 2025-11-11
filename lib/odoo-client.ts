@@ -29,45 +29,46 @@ export class OdooClient {
   }
 
   /**
-   * Autentica con el servidor Odoo usando XML-RPC
+   * Autentica con el servidor Odoo usando XML-RPC a través de nuestra API
    */
   async authenticate(): Promise<OdooAuthResult> {
     try {
       console.log('🔐 Autenticando con Odoo...')
       
-      const response = await fetch(`${this.config.url}/web/session/authenticate`, {
+      // Usar nuestra API local en lugar de llamar directamente a Odoo (evita CORS)
+      const response = await fetch('/api/odoo/authenticate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'call',
-          params: {
-            db: this.config.database,
-            login: this.config.username,
-            password: this.config.password,
-          },
-        }),
+        body: JSON.stringify({}),
       })
 
       const data = await response.json()
 
-      if (data.error) {
+      if (data.error || !response.ok) {
         console.error('❌ Error de autenticación Odoo:', data.error)
         return {
           uid: 0,
           success: false,
-          error: data.error.data?.message || 'Error de autenticación',
+          error: data.error || 'Error de autenticación',
         }
       }
 
-      this.uid = data.result.uid
-      console.log('✅ Autenticación exitosa. UID:', this.uid)
+      if (data.result && data.result.uid) {
+        this.uid = data.result.uid
+        console.log('✅ Autenticación exitosa. UID:', this.uid)
+
+        return {
+          uid: this.uid || 0,
+          success: true,
+        }
+      }
 
       return {
-        uid: this.uid || 0,
-        success: true,
+        uid: 0,
+        success: false,
+        error: 'Respuesta inválida del servidor',
       }
     } catch (error) {
       console.error('❌ Error conectando con Odoo:', error)
@@ -80,7 +81,7 @@ export class OdooClient {
   }
 
   /**
-   * Ejecuta un método en Odoo
+   * Ejecuta un método en Odoo a través de nuestra API
    */
   async execute<T = any>(
     model: string,
@@ -98,37 +99,41 @@ export class OdooClient {
 
       console.log(`📡 Ejecutando ${model}.${method}`)
 
-      const response = await fetch(`${this.config.url}/web/dataset/call_kw`, {
+      // Usar nuestra API local en lugar de llamar directamente a Odoo (evita CORS)
+      const response = await fetch('/api/odoo/execute', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'call',
-          params: {
-            model,
-            method,
-            args,
-            kwargs,
-          },
+          model,
+          method,
+          args,
+          kwargs,
         }),
       })
 
       const data = await response.json()
 
-      if (data.error) {
+      if (data.error || !response.ok) {
         console.error(`❌ Error en ${model}.${method}:`, data.error)
         return {
           success: false,
-          error: data.error.data?.message || 'Error en la ejecución',
+          error: data.error || 'Error en la ejecución',
         }
       }
 
-      console.log(`✅ ${model}.${method} ejecutado exitosamente`)
+      if (data.result !== undefined) {
+        console.log(`✅ ${model}.${method} ejecutado exitosamente`)
+        return {
+          success: true,
+          data: data.result,
+        }
+      }
+
       return {
-        success: true,
-        data: data.result,
+        success: false,
+        error: 'Respuesta inválida del servidor',
       }
     } catch (error) {
       console.error(`❌ Error ejecutando ${model}.${method}:`, error)
@@ -159,6 +164,13 @@ export class OdooClient {
    */
   async write(model: string, ids: number[], values: Record<string, any>) {
     return this.execute(model, 'write', [ids, values])
+  }
+
+  /**
+   * Actualiza un único registro en Odoo (alias de write para un solo ID)
+   */
+  async update(model: string, id: number, values: Record<string, any>) {
+    return this.write(model, [id], values)
   }
 
   /**
@@ -211,11 +223,11 @@ let odooClientInstance: OdooClient | null = null
 export function getOdooClient(): OdooClient {
   if (!odooClientInstance) {
     const config: OdooConfig = {
-      url: process.env.NEXT_PUBLIC_ODOO_URL || '',
-      database: process.env.NEXT_PUBLIC_ODOO_DATABASE || '',
-      username: process.env.NEXT_PUBLIC_ODOO_USERNAME || '',
-      password: process.env.NEXT_PUBLIC_ODOO_PASSWORD || '',
-      apiKey: process.env.NEXT_PUBLIC_ODOO_API_KEY,
+      url: process.env.ODOO_URL || process.env.NEXT_PUBLIC_ODOO_URL || '',
+      database: process.env.ODOO_DB || process.env.NEXT_PUBLIC_ODOO_DB || '',
+      username: process.env.ODOO_USERNAME || process.env.NEXT_PUBLIC_ODOO_USERNAME || '',
+      password: process.env.ODOO_PASSWORD || process.env.NEXT_PUBLIC_ODOO_PASSWORD || '',
+      apiKey: process.env.ODOO_API_KEY || process.env.NEXT_PUBLIC_ODOO_API_KEY,
     }
 
     odooClientInstance = new OdooClient(config)
@@ -229,9 +241,9 @@ export function getOdooClient(): OdooClient {
  */
 export function isOdooConfigured(): boolean {
   return !!(
-    process.env.NEXT_PUBLIC_ODOO_URL &&
-    process.env.NEXT_PUBLIC_ODOO_DATABASE &&
-    process.env.NEXT_PUBLIC_ODOO_USERNAME &&
-    process.env.NEXT_PUBLIC_ODOO_PASSWORD
+    (process.env.ODOO_URL || process.env.NEXT_PUBLIC_ODOO_URL) &&
+    (process.env.ODOO_DB || process.env.NEXT_PUBLIC_ODOO_DB) &&
+    (process.env.ODOO_USERNAME || process.env.NEXT_PUBLIC_ODOO_USERNAME) &&
+    (process.env.ODOO_PASSWORD || process.env.NEXT_PUBLIC_ODOO_PASSWORD)
   )
 }

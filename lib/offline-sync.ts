@@ -319,7 +319,10 @@ class OfflineSyncManager {
     console.log(`✅ Formulario enviado exitosamente a Google Forms (${submission.id})`)
     
     // PASO 5: Sincronizar con Odoo FSM (si está configurado)
-    if (isOdooConfigured()) {
+    const odooConfigured = isOdooConfigured()
+    console.log(`🔍 Verificando configuración de Odoo: ${odooConfigured}`)
+    
+    if (odooConfigured) {
       console.log(`🔄 Sincronizando con Odoo FSM (${submission.id})`)
       try {
         const odooResult = await syncServiceOrderToOdoo(processedFormData)

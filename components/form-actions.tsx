@@ -524,6 +524,32 @@ export function FormActions({
           
           if (result.success) {
             console.log('✅ Formulario enviado exitosamente a Google Forms')
+            
+            // Sincronizar con Odoo FSM (si está configurado)
+            try {
+              const { isOdooConfigured } = await import('@/lib/odoo-client')
+              const { syncServiceOrderToOdoo } = await import('@/lib/odoo-service')
+              
+              const odooConfigured = isOdooConfigured()
+              console.log(`🔍 Verificando configuración de Odoo: ${odooConfigured}`)
+              
+              if (odooConfigured) {
+                console.log('🔄 Sincronizando con Odoo FSM')
+                const odooResult = await syncServiceOrderToOdoo(formData)
+                
+                if (odooResult.success) {
+                  console.log(`✅ Orden sincronizada con Odoo FSM: ID ${odooResult.orderId}`)
+                } else {
+                  console.warn(`⚠️ Error sincronizando con Odoo FSM:`, odooResult.error)
+                }
+              } else {
+                console.log('ℹ️ Odoo no configurado, omitiendo sincronización FSM')
+              }
+            } catch (odooError) {
+              console.warn('⚠️ Error en sincronización con Odoo:', odooError)
+              // No fallar el proceso si Odoo falla
+            }
+            
             toast.success("¡Formulario enviado!", { 
               description: "Los datos se han guardado correctamente",
               duration: 5000 

@@ -8,10 +8,13 @@ import { getOdooClient } from './odoo-client'
 
 export interface OdooServiceOrder {
   id?: number
-  name: string // Número de orden
-  partner_id: number // ID del cliente
-  date_order: string // Fecha en formato YYYY-MM-DD
-  user_id?: number // ID del técnico
+  name: string // Título de la tarea/orden
+  partner_id: number // ID delCLIENTE
+  date_order?: string // Fecha de orden (sale.order)
+  date_deadline?: string // Fecha límite (project.task)
+  date_assign?: string // Fecha planeada (project.task)
+  planned_hours?: number // Tiempo asignado en horas (project.task)
+  user_id?: number // ID del usuario asignado
   description?: string // Descripción del trabajo
   order_line?: Array<{
     product_id: number
@@ -24,12 +27,17 @@ export interface OdooServiceOrder {
   task_id?: number // Tarea asociada
   fsm_location?: string // Ubicación del servicio
   fsm_done?: boolean // Servicio completado
-  // Campos personalizados ARAN
+  // Campos personalizados ARAN (x_studio_* son campos personalizados en Odoo Studio)
   tecnico_nombre?: string
   tecnico_firma?: string
-  cliente_nombre?: string
-  cliente_firma?: string
+ CLIENTE_nombre?: string
+ CLIENTE_firma?: string
   orden_imagen?: string
+  x_studio_numero_orden?: string
+  x_studio_tecnico?: string
+  x_studio_firma_tecnico?: string
+  x_studio_firma_cliente?: string
+  x_studio_imagen_orden?: string
 }
 
 export interface OdooPartner {
@@ -45,11 +53,12 @@ export interface OdooPartner {
 }
 
 /**
- * Convierte los datos del formulario ARAN al formato de Odoo
+ * Convierte los datos del formulario ARAN al formato de Odoo project.task
  */
 export function convertAranToOdooServiceOrder(
   formData: AranFormData,
-  partnerId: number
+  partnerId: number,
+  projectId: number
 ): Partial<OdooServiceOrder> {
   // Convertir fecha de DD-MM-YYYY a YYYY-MM-DD
   let orderDate = new Date().toISOString().split('T')[0]
@@ -58,35 +67,143 @@ export function convertAranToOdooServiceOrder(
     orderDate = `${year}-${month}-${day}`
   }
 
-  // Construir descripción del servicio
-  const descripcion = [
-    formData.descripcion || '',
+  // Construir descripción del servicio (completa, ya que no hay campos personalizados)
+  const tiposServicio = [
     formData.servicioTecnico && 'Servicio Técnico',
     formData.instalacion && 'Instalación',
     formData.puestaEnMarcha && 'Puesta en Marcha',
     formData.capacitacion && 'Capacitación',
     formData.calibracion && 'Calibración',
-  ]
-    .filter(Boolean)
-    .join(' | ')
+  ].filter(Boolean).join(', ')
 
-  return {
-    name: formData.numeroOrden || '',
+  const modalidadCobro = [
+    formData.conCargo && 'Con Cargo',
+    formData.sinCargo && 'Sin Cargo',
+    formData.servicioEnGarantia && 'En Garantía',
+    formData.aConvenir && 'A Convenir',
+  ].filter(Boolean).join(', ')
+
+  const ubicacionServicio = [
+    formData.servicioACampo && 'A Campo',
+    formData.servicioEnOficina && 'En Oficina',
+  ].filter(Boolean).join(', ')
+
+  // Descripción en formato HTML para mejor visualización en Odoo
+  const descripcionCompleta = `<div style="font-family: Arial, sans-serif;">
+<h2 style="background-color: #2c3e50; color: white; padding: 10px; margin: 0;">ORDEN DE SERVICIO N° ${formData.numeroOrden}</h2>
+
+<h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">DESCRIPCIÓN DEL TRABAJO</h3>
+<p style="padding: 10px; background-color: #ecf0f1; margin: 0;">${formData.descripcion || 'Sin descripción'}</p>
+
+<h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">INFORMACIÓN DEL SERVICIO</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold; width: 40%;">Tipos de servicio:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${tiposServicio || 'N/A'}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Ubicación:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${ubicacionServicio || 'N/A'}</td>
+  </tr>
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Modalidad de cobro:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${modalidadCobro || 'N/A'}</td>
+  </tr>
+</table>
+
+<h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">EQUIPO Y UBICACIÓN</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold; width: 40%;">Máquina:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.maquina || 'N/A'}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Equipo:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.equipo || 'N/A'}</td>
+  </tr>
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Localidad:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.localidad || 'N/A'}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Provincia:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.provincia || 'N/A'}</td>
+  </tr>
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Distancia:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.distancia || 'N/A'} km</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Duración estimada:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.duracion || 'N/A'} hs</td>
+  </tr>
+</table>
+
+<h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">CONTACTO</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold; width: 40%;">Contacto:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.contacto || 'N/A'}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Teléfono:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.telefono || 'N/A'}</td>
+  </tr>
+</table>
+${formData.insumos ? `
+<h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">INSUMOS UTILIZADOS</h3>
+<div style="padding: 10px; background-color: #ecf0f1; white-space: pre-wrap;">${formData.insumos}</div>
+` : ''}
+<h3 style="background-color: #27ae60; color: white; padding: 8px; margin: 15px 0 5px 0;">TÉCNICO</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold; width: 40%;">Nombre:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.tecnicoNombre || 'N/A'}</td>
+  </tr>${formData.tecnicoFirma ? `
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Firma:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;"><a href="${formData.tecnicoFirma}" target="_blank" style="color: #2980b9;">Ver firma del técnico</a></td>
+  </tr>` : ''}
+</table>
+
+<h3 style="background-color: #e67e22; color: white; padding: 8px; margin: 15px 0 5px 0;">CLIENTE</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold; width: 40%;">Nombre:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.clienteNombre || 'N/A'}</td>
+  </tr>${formData.clienteFirma ? `
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Firma:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;"><a href="${formData.clienteFirma}" target="_blank" style="color: #2980b9;">Ver firma del cliente</a></td>
+  </tr>` : ''}
+</table>
+${formData.aux1 ? `
+<h3 style="background-color: #8e44ad; color: white; padding: 8px; margin: 15px 0 5px 0;">IMAGEN DE LA ORDEN</h3>
+<div style="padding: 10px; background-color: #ecf0f1;">
+  <a href="${formData.aux1}" target="_blank" style="color: #2980b9; font-weight: bold;">Ver imagen completa de la orden de servicio</a>
+</div>
+` : ''}</div>`.trim()
+
+  // Formato para project.task (solo campos estándar de Odoo)
+  // IMPORTANTE: project.task requiere un project_id obligatorio
+  // Los campos personalizados no están disponibles en esta instancia de Odoo,
+  // por lo que toda la información se incluye en la descripción
+  const taskData: Partial<OdooServiceOrder> = {
+    name: `OS ${formData.numeroOrden} - ${formData.razonSocial || 'Cliente'}`,
     partner_id: partnerId,
-    date_order: orderDate,
-    description: descripcion,
-    fsm_location: [formData.localidad, formData.provincia].filter(Boolean).join(', '),
-    fsm_done: false,
-    tecnico_nombre: formData.tecnicoNombre,
-    tecnico_firma: formData.tecnicoFirma,
-    cliente_nombre: formData.clienteNombre,
-    cliente_firma: formData.clienteFirma,
-    orden_imagen: formData.aux1,
+    project_id: projectId, // ID del proyecto obtenido o creado
+    date_deadline: orderDate, // Fecha límite
+    date_assign: orderDate, // Fecha planeada (misma que la orden)
+    planned_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado en horas
+    description: descripcionCompleta,
+    // Marcar tarea como completada (stage_id se establece después de crear la tarea)
   }
+
+  return taskData
 }
 
 /**
- * Busca o crea un cliente (partner) en Odoo
+ * Busca o crea unCLIENTE (partner) en Odoo
  */
 export async function findOrCreatePartner(
   formData: AranFormData
@@ -94,7 +211,7 @@ export async function findOrCreatePartner(
   const client = getOdooClient()
 
   try {
-    // Buscar cliente existente por CUIT o nombre
+    // BuscarCLIENTE existente por CUIT o nombre
     const searchDomain = []
     
     if (formData.cuit) {
@@ -102,7 +219,7 @@ export async function findOrCreatePartner(
     } else if (formData.razonSocial) {
       searchDomain.push(['name', 'ilike', formData.razonSocial])
     } else {
-      return { success: false, error: 'Faltan datos del cliente (CUIT o Razón Social)' }
+      return { success: false, error: 'Faltan datos delCLIENTE (CUIT o Razón Social)' }
     }
 
     const searchResult = await client.search('res.partner', searchDomain, { limit: 1 })
@@ -111,15 +228,15 @@ export async function findOrCreatePartner(
       return { success: false, error: searchResult.error }
     }
 
-    // Si encontró el cliente, retornar su ID
+    // Si encontró elCLIENTE, retornar su ID
     if (searchResult.data && searchResult.data.length > 0) {
       const partnerId = searchResult.data[0]
-      console.log(`✅ Cliente encontrado en Odoo: ID ${partnerId}`)
+      console.log(`✅CLIENTE encontrado en Odoo: ID ${partnerId}`)
       return { success: true, partnerId }
     }
 
-    // Si no existe, crear nuevo cliente
-    console.log('📝 Creando nuevo cliente en Odoo...')
+    // Si no existe, crear nuevoCLIENTE
+    console.log('📝 Creando nuevoCLIENTE en Odoo...')
     
     const partnerData: Partial<OdooPartner> = {
       name: formData.razonSocial || formData.clienteNombre || 'Cliente sin nombre',
@@ -135,10 +252,63 @@ export async function findOrCreatePartner(
       return { success: false, error: createResult.error }
     }
 
-    console.log(`✅ Cliente creado en Odoo: ID ${createResult.data}`)
+    console.log(`✅CLIENTE creado en Odoo: ID ${createResult.data}`)
     return { success: true, partnerId: createResult.data }
   } catch (error) {
-    console.error('❌ Error buscando/creando cliente:', error)
+    console.error('❌ Error buscando/creandoCLIENTE:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    }
+  }
+}
+
+/**
+ * Obtiene el ID de un proyecto por defecto para las tareas de servicio
+ * Si no existe, crea uno nuevo llamado "Órdenes de Servicio ARAN"
+ */
+async function getOrCreateDefaultProject(): Promise<{ success: boolean; projectId?: number; error?: string }> {
+  const client = getOdooClient()
+
+  try {
+    console.log('🔍 Buscando proyecto por defecto...')
+    
+    // Buscar proyecto llamado "Órdenes de Servicio ARAN"
+    const searchResult = await client.search('project.project', [
+      ['name', '=', 'Órdenes de Servicio ARAN']
+    ], { limit: 1 })
+
+    if (searchResult.success && searchResult.data && searchResult.data.length > 0) {
+      const projectId = searchResult.data[0]
+      console.log(`✅ Proyecto encontrado: ID ${projectId}`)
+      return { success: true, projectId }
+    }
+
+    // Si no existe, intentar obtener el primer proyecto disponible
+    console.log('📝 Buscando cualquier proyecto disponible...')
+    const anyProjectResult = await client.search('project.project', [], { limit: 1 })
+    
+    if (anyProjectResult.success && anyProjectResult.data && anyProjectResult.data.length > 0) {
+      const projectId = anyProjectResult.data[0]
+      console.log(`✅ Usando proyecto existente: ID ${projectId}`)
+      return { success: true, projectId }
+    }
+
+    // Si no hay ningún proyecto, intentar crear uno
+    console.log('📝 Creando nuevo proyecto "Órdenes de Servicio ARAN"...')
+    const createResult = await client.create('project.project', {
+      name: 'Órdenes de Servicio ARAN',
+      active: true,
+    })
+
+    if (!createResult.success) {
+      return { success: false, error: createResult.error }
+    }
+
+    console.log(`✅ Proyecto creado: ID ${createResult.data}`)
+    return { success: true, projectId: createResult.data }
+  } catch (error) {
+    console.error('❌ Error obteniendo/creando proyecto:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error desconocido',
@@ -157,29 +327,36 @@ export async function syncServiceOrderToOdoo(
   try {
     console.log('🔄 Sincronizando orden de servicio con Odoo FSM...')
 
-    // Paso 1: Buscar o crear el cliente
-    const partnerResult = await findOrCreatePartner(formData)
-    if (!partnerResult.success || !partnerResult.partnerId) {
-      return { success: false, error: partnerResult.error || 'No se pudo obtener ID del cliente' }
+    // Paso 1: Obtener o crear proyecto por defecto
+    const projectResult = await getOrCreateDefaultProject()
+    if (!projectResult.success || !projectResult.projectId) {
+      return { success: false, error: projectResult.error || 'No se pudo obtener ID del proyecto' }
     }
 
-    // Paso 2: Convertir datos al formato Odoo
-    const orderData = convertAranToOdooServiceOrder(formData, partnerResult.partnerId)
+    // Paso 2: Buscar o crear elCLIENTE
+    const partnerResult = await findOrCreatePartner(formData)
+    if (!partnerResult.success || !partnerResult.partnerId) {
+      return { success: false, error: partnerResult.error || 'No se pudo obtener ID delCLIENTE' }
+    }
 
-    // Paso 3: Crear la orden de servicio en Odoo
-    // Usar 'sale.order' o 'project.task' dependiendo de la configuración FSM
-    const createResult = await client.create('sale.order', orderData)
+    // Paso 3: Convertir datos al formato Odoo
+    const orderData = convertAranToOdooServiceOrder(formData, partnerResult.partnerId, projectResult.projectId)
+
+    // Paso 4: Crear la tarea/orden de servicio en Odoo usando project.task
+    console.log('📝 Creando tarea en Odoo con datos:', JSON.stringify(orderData, null, 2))
+    const createResult = await client.create('project.task', orderData)
 
     if (!createResult.success) {
       return { success: false, error: createResult.error }
     }
 
-    console.log(`✅ Orden de servicio creada en Odoo: ID ${createResult.data}`)
+    console.log(`✅ Tarea de servicio creada en Odoo: ID ${createResult.data}`)
 
-    // Paso 4: Si hay líneas de orden (repuestos, insumos), agregarlas
-    if (formData.insumos && createResult.data) {
-      await addServiceOrderLines(createResult.data, formData)
-    }
+    // Paso 5: Adjuntar imágenes como archivos en Odoo
+    await attachImagesToTask(createResult.data, formData)
+
+    // Paso 6: Marcar la tarea como completada
+    await markTaskAsCompleted(createResult.data, projectResult.projectId)
 
     return { success: true, orderId: createResult.data }
   } catch (error) {
@@ -188,6 +365,157 @@ export async function syncServiceOrderToOdoo(
       success: false,
       error: error instanceof Error ? error.message : 'Error desconocido',
     }
+  }
+}
+
+/**
+ * Marca una tarea como completada en Odoo
+ */
+async function markTaskAsCompleted(
+  taskId: number,
+  projectId: number
+): Promise<void> {
+  const client = getOdooClient()
+
+  try {
+    console.log('✅ Marcando tarea como completada...')
+
+    // Buscar el stage "Done" o "Completado" del proyecto
+    const stageSearchResult = await client.search('project.task.type', [
+      ['project_ids', 'in', [projectId]],
+      '|',
+      ['name', 'ilike', 'done'],
+      ['name', 'ilike', 'completado']
+    ], { limit: 1 })
+
+    let stageId = null
+    if (stageSearchResult.success && stageSearchResult.data && stageSearchResult.data.length > 0) {
+      stageId = stageSearchResult.data[0]
+      console.log(`✅ Stage "Completado" encontrado: ID ${stageId}`)
+    } else {
+      // Si no se encuentra, buscar cualquier stage con fold=true (cerrado)
+      console.log('⚠️ No se encontró stage "Completado", buscando stage cerrado...')
+      const foldedStageResult = await client.search('project.task.type', [
+        ['project_ids', 'in', [projectId]],
+        ['fold', '=', true]
+      ], { limit: 1 })
+
+      if (foldedStageResult.success && foldedStageResult.data && foldedStageResult.data.length > 0) {
+        stageId = foldedStageResult.data[0]
+        console.log(`✅ Stage cerrado encontrado: ID ${stageId}`)
+      }
+    }
+
+    // Actualizar la tarea
+    const updateData: any = {}
+    
+    if (stageId) {
+      updateData.stage_id = stageId
+    }
+
+    // Siempre marcar como completada independientemente del stage
+    updateData.kanban_state = 'done'
+    
+    console.log(`📝 Actualizando tarea ${taskId} con:`, updateData)
+    const updateResult = await client.update('project.task', taskId, updateData)
+
+    if (updateResult.success) {
+      console.log(`✅ Tarea ${taskId} marcada como completada`)
+    } else {
+      console.error(`⚠️ No se pudo marcar la tarea como completada:`, updateResult.error)
+    }
+  } catch (error) {
+    console.error('❌ Error marcando tarea como completada:', error)
+    // No lanzamos el error para no interrumpir el flujo principal
+  }
+}
+
+/**
+ * Adjunta las imágenes (firmas y orden completa) como archivos en una tarea de Odoo
+ */
+async function attachImagesToTask(
+  taskId: number,
+  formData: AranFormData
+): Promise<void> {
+  const client = getOdooClient()
+
+  try {
+    console.log('📎 Adjuntando imágenes a la tarea...')
+
+    const attachments = []
+
+    // Adjuntar firma del técnico
+    if (formData.tecnicoFirma) {
+      attachments.push({
+        url: formData.tecnicoFirma,
+        name: `Firma_Tecnico_${formData.numeroOrden}.png`,
+        description: `Firma del técnico: ${formData.tecnicoNombre || 'N/A'}`,
+      })
+    }
+
+    // Adjuntar firma del cliente
+    if (formData.clienteFirma) {
+      attachments.push({
+        url: formData.clienteFirma,
+        name: `Firma_Cliente_${formData.numeroOrden}.png`,
+        description: `Firma del cliente: ${formData.clienteNombre || 'N/A'}`,
+      })
+    }
+
+    // Adjuntar imagen de la orden completa
+    if (formData.aux1) {
+      attachments.push({
+        url: formData.aux1,
+        name: `Orden_Servicio_${formData.numeroOrden}.png`,
+        description: `Orden de servicio completa N° ${formData.numeroOrden}`,
+      })
+    }
+
+    // Descargar y adjuntar cada imagen
+    for (const attachment of attachments) {
+      try {
+        console.log(`📥 Descargando ${attachment.name}...`)
+        
+        // Descargar imagen desde ImgBB
+        const response = await fetch(attachment.url)
+        if (!response.ok) {
+          console.error(`❌ Error descargando ${attachment.name}: HTTP ${response.status}`)
+          continue
+        }
+
+        const arrayBuffer = await response.arrayBuffer()
+        const buffer = Buffer.from(arrayBuffer)
+        const base64Data = buffer.toString('base64')
+
+        console.log(`✅ Imagen descargada: ${attachment.name} (${buffer.length} bytes)`)
+
+        // Crear adjunto en Odoo usando ir.attachment
+        const attachmentData = {
+          name: attachment.name,
+          datas: base64Data,
+          res_model: 'project.task',
+          res_id: taskId,
+          description: attachment.description,
+          mimetype: 'image/png',
+        }
+
+        console.log(`📎 Creando adjunto en Odoo: ${attachment.name}`)
+        const createAttachmentResult = await client.create('ir.attachment', attachmentData)
+
+        if (createAttachmentResult.success) {
+          console.log(`✅ Adjunto creado en Odoo: ${attachment.name} (ID: ${createAttachmentResult.data})`)
+        } else {
+          console.error(`❌ Error creando adjunto ${attachment.name}:`, createAttachmentResult.error)
+        }
+      } catch (error) {
+        console.error(`❌ Error procesando ${attachment.name}:`, error)
+      }
+    }
+
+    console.log('✅ Proceso de adjuntar imágenes completado')
+  } catch (error) {
+    console.error('❌ Error adjuntando imágenes:', error)
+    // No lanzamos el error para no interrumpir el flujo principal
   }
 }
 
@@ -303,14 +631,39 @@ export async function testOdooConnection(): Promise<{
       return { success: false, message: 'No se pudo conectar con Odoo' }
     }
 
-    // Verificar que existe el modelo sale.order
-    const result = await client.search('sale.order', [], { limit: 1 })
+    // Verificar que podemos leer partners (contactos/clientes)
+    const result = await client.search('res.partner', [], { limit: 10 })
 
     if (!result.success) {
-      return { success: false, message: 'Odoo conectado pero sin acceso a órdenes de servicio' }
+      return { 
+        success: false, 
+        message: `Error al buscar partners: ${result.error}` 
+      }
     }
 
-    return { success: true, message: 'Conexión con Odoo FSM exitosa' }
+    const partnerCount = result.data?.length || 0
+
+    // Intentar verificar qué modelos de órdenes están disponibles
+    let orderModelAvailable = ''
+    
+    // Probar project.task (Proyectos/Tareas - más común)
+    const taskResult = await client.search('project.task', [], { limit: 1 })
+    if (taskResult.success) {
+      orderModelAvailable = 'project.task (Tareas de Proyecto)'
+    } else {
+      // Probar fsm.order (Field Service Management)
+      const fsmResult = await client.search('fsm.order', [], { limit: 1 })
+      if (fsmResult.success) {
+        orderModelAvailable = 'fsm.order (Field Service Management)'
+      } else {
+        orderModelAvailable = 'Ninguno disponible (instalar módulo Sale, FSM o Project)'
+      }
+    }
+
+    return { 
+      success: true, 
+      message: `✅ Conexión exitosa!\n📋 Partners encontrados: ${partnerCount}\n🔧 Modelo de órdenes: ${orderModelAvailable}` 
+    }
   } catch (error) {
     return {
       success: false,
