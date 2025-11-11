@@ -6,6 +6,8 @@
 import { type FormData as AranFormData } from "@/hooks/use-form-data"
 import { uploadImageToImgBB } from "./imgbb-upload"
 import { submitFormToGoogle } from "./google-forms"
+import { syncServiceOrderToOdoo } from "./odoo-service"
+import { isOdooConfigured } from "./odoo-client"
 import { 
   getPendingSubmissions, 
   getSubmissionsReadyForRetry, 
@@ -316,7 +318,27 @@ class OfflineSyncManager {
     
     console.log(`✅ Formulario enviado exitosamente a Google Forms (${submission.id})`)
     
-    // PASO 5: Actualizar estado en BD local a 'sent'
+    // PASO 5: Sincronizar con Odoo FSM (si está configurado)
+    if (isOdooConfigured()) {
+      console.log(`🔄 Sincronizando con Odoo FSM (${submission.id})`)
+      try {
+        const odooResult = await syncServiceOrderToOdoo(processedFormData)
+        
+        if (odooResult.success) {
+          console.log(`✅ Orden sincronizada con Odoo FSM: ID ${odooResult.orderId}`)
+        } else {
+          console.warn(`⚠️ Error sincronizando con Odoo FSM:`, odooResult.error)
+          // No fallar la sincronización completa si Odoo falla
+        }
+      } catch (odooError) {
+        console.warn(`⚠️ Error en sincronización con Odoo:`, odooError)
+        // No fallar la sincronización completa si Odoo falla
+      }
+    } else {
+      console.log('ℹ️ Odoo no configurado, omitiendo sincronización FSM')
+    }
+    
+    // PASO 6: Actualizar estado en BD local a 'sent'
     try {
       const orders = getOrdersByNumber(submission.formData.numeroOrden || '')
       const pendingOrder = orders.find(order => order.status === 'pending-offline')
