@@ -359,8 +359,12 @@ export async function syncServiceOrderToOdoo(
     if (formData.tecnicoNombre) {
       try {
         console.log('📝 Actualizando task_properties con técnico:', formData.tecnicoNombre)
+        // El formato de properties en Odoo es un objeto con el property-name como clave
+        // Basado en el HTML de Odoo: property-name="333a296f15b7206e" para Responsable
         const propertiesUpdate = await client.update('project.task', createResult.data, {
-          task_properties: { responsable: formData.tecnicoNombre }
+          task_properties: {
+            '333a296f15b7206e': formData.tecnicoNombre
+          }
         })
         if (propertiesUpdate.success) {
           console.log('✅ task_properties actualizado correctamente')
