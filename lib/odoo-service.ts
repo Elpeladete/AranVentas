@@ -199,7 +199,6 @@ ${formData.aux1 ? `
     planned_date_begin: `${orderDate} 00:00:00`, // Inicio del rango (datetime) - mismo día que la orden
     date_deadline: `${orderDate} 23:59:59`, // Fin del rango (datetime) - mismo día que la orden
     allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado (float) - campo verificado
-    task_properties: formData.tecnicoNombre ? { responsable: formData.tecnicoNombre } : undefined, // Propiedades: Responsable - campo verificado
     description: descripcionCompleta,
   }
 
@@ -355,6 +354,24 @@ export async function syncServiceOrderToOdoo(
     }
 
     console.log(`✅ Tarea de servicio creada en Odoo: ID ${createResult.data}`)
+
+    // Paso 4.5: Actualizar task_properties con el técnico responsable
+    if (formData.tecnicoNombre) {
+      try {
+        console.log('📝 Actualizando task_properties con técnico:', formData.tecnicoNombre)
+        const propertiesUpdate = await client.update('project.task', createResult.data, {
+          task_properties: { responsable: formData.tecnicoNombre }
+        })
+        if (propertiesUpdate.success) {
+          console.log('✅ task_properties actualizado correctamente')
+        } else {
+          console.error('⚠️ No se pudo actualizar task_properties:', propertiesUpdate.error)
+        }
+      } catch (error) {
+        console.error('❌ Error actualizando task_properties:', error)
+        // No interrumpir el flujo si falla
+      }
+    }
 
     // Paso 5: Adjuntar imágenes como archivos en Odoo
     await attachImagesToTask(createResult.data, formData)
