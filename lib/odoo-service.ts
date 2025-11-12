@@ -182,6 +182,13 @@ ${formData.insumos ? `
     <td style="padding: 8px; border: 1px solid #bdc3c7;"><a href="${formData.clienteFirma}" target="_blank" style="color: #2980b9;">Ver firma del cliente</a></td>
   </tr>` : ''}
 </table>
+${formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada' ? `
+<h3 style="background-color: #16a085; color: white; padding: 8px; margin: 15px 0 5px 0;">📍 UBICACIÓN DE FIRMA</h3>
+<div style="padding: 10px; background-color: #ecf0f1;">
+  <p style="margin: 0 0 8px 0;"><strong>Coordenadas:</strong> ${formData.aux2}</p>
+  <p style="margin: 0;"><a href="https://www.google.com/maps?q=${formData.aux2}" target="_blank" style="color: #2980b9; font-weight: bold;">📍 Ver en Google Maps</a></p>
+</div>
+` : ''}
 ${formData.aux1 ? `
 <h3 style="background-color: #8e44ad; color: white; padding: 8px; margin: 15px 0 5px 0;">IMAGEN DE LA ORDEN</h3>
 <div style="padding: 10px; background-color: #ecf0f1;">

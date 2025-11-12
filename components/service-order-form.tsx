@@ -958,6 +958,11 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                   <SignatureCanvas
                     value={tempValue as string}
                     onChange={handleTempValueChange}
+                    onGeolocationCapture={(geoLocation) => {
+                      // Guardar geolocalización en AUX2
+                      console.log('📍 Geolocalización recibida:', geoLocation)
+                      updateField('aux2', geoLocation)
+                    }}
                     width={isMobile ? Math.min(250, window.innerWidth - 60) : 280}
                     height={isMobile ? 100 : 120}
                     orderNumber={formData.numeroOrden}
@@ -965,6 +970,11 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                   />
                   <div className="text-xs text-gray-500">
                     Firma manual dibujada en canvas
+                    {activeField === 'clienteFirma' && (
+                      <span className="block text-blue-600 mt-1">
+                        📍 Se capturará la ubicación automáticamente
+                      </span>
+                    )}
                   </div>
                 </div>
               ) : (

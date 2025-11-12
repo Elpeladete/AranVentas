@@ -11,6 +11,7 @@ interface SignatureCanvasProps {
   onChange?: (signature: string) => void
   onSave?: (signature: string) => void
   onClear?: () => void
+  onGeolocationCapture?: (geolocation: string) => void // Callback para geolocalización
   width?: number
   height?: number
   className?: string
@@ -24,6 +25,7 @@ export function SignatureCanvas({
   onChange,
   onSave,
   onClear,
+  onGeolocationCapture,
   width = 400,
   height = 200,
   className = '',
@@ -100,6 +102,53 @@ export function SignatureCanvas({
     ctx.moveTo(pos.x, pos.y)
   }, [getEventPos])
 
+  // Capturar geolocalización
+  const captureGeolocation = useCallback(() => {
+    // Solo capturar geolocalización para firma del cliente
+    if (signatureType !== 'cliente' || !onGeolocationCapture) return
+
+    if (navigator.geolocation) {
+      console.log('📍 Solicitando geolocalización para firma del cliente...')
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const geoData = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: new Date().toISOString()
+          }
+          
+          const geoString = `${geoData.latitude},${geoData.longitude}`
+          onGeolocationCapture(geoString)
+          
+          console.log('✅ Geolocalización capturada:', geoData)
+          toast.success("Ubicación capturada", {
+            description: `Lat: ${geoData.latitude.toFixed(6)}, Lng: ${geoData.longitude.toFixed(6)}`,
+            duration: 3000
+          })
+        },
+        (error) => {
+          console.error('❌ Error obteniendo geolocalización:', error.message)
+          onGeolocationCapture('Geolocalización no disponible')
+          
+          toast.error("No se pudo obtener ubicación", {
+            description: error.code === 1 ? "Permiso denegado" : "Error del GPS",
+            duration: 3000
+          })
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        }
+      )
+    } else {
+      console.error('❌ Geolocalización no soportada')
+      onGeolocationCapture('Geolocalización no soportada')
+    }
+  }, [signatureType, onGeolocationCapture])
+
   // Subir firma a ImgBB
   const uploadSignature = useCallback(async (canvas: HTMLCanvasElement) => {
     if (!autoUpload || !orderNumber) return null
@@ -163,6 +212,11 @@ export function SignatureCanvas({
       // Pequeña pausa para asegurar que el dibujo se complete
       setTimeout(async () => {
         try {
+          // Capturar geolocalización ANTES de subir la firma (solo para clientes)
+          if (signatureType === 'cliente') {
+            captureGeolocation()
+          }
+          
           const uploadedUrl = await uploadSignature(canvas)
           if (uploadedUrl && onChange) {
             console.log(`🎯 SignatureCanvas: onChange llamado con URL: ${uploadedUrl}`)
@@ -187,7 +241,7 @@ export function SignatureCanvas({
         }
       }, 500) // Pausa de 500ms para completar el trazo
     }
-  }, [isDrawing, hasSignature, autoUpload, uploadSignature, onChange])
+  }, [isDrawing, hasSignature, autoUpload, signatureType, captureGeolocation, uploadSignature, onChange])
 
   // Eventos del mouse
   useEffect(() => {
