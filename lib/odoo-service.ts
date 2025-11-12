@@ -365,6 +365,12 @@ export async function syncServiceOrderToOdoo(
     console.log(`✅ Tarea de servicio creada en Odoo: ID ${createResult.data}`)
 
     // Paso 4.5: Actualizar task_properties con el técnico responsable y geolocalización
+    console.log('🔍 Verificando datos para task_properties:', {
+      tecnicoNombre: formData.tecnicoNombre,
+      aux2: formData.aux2,
+      aux2_length: formData.aux2?.length
+    })
+    
     if (formData.tecnicoNombre || formData.aux2) {
       try {
         const properties: Record<string, string> = {}
@@ -379,20 +385,24 @@ export async function syncServiceOrderToOdoo(
         if (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada') {
           const googleMapsLink = `https://www.google.com/maps?q=${formData.aux2}`
           properties['5f1a00a7af17172c'] = googleMapsLink
-          console.log('📍 Actualizando Geoposición:', googleMapsLink)
+          console.log('📍 Actualizando Geoposición con link:', googleMapsLink)
+        } else {
+          console.log('⚠️ aux2 no válido para Geoposición:', formData.aux2)
         }
         
         // El formato de properties en Odoo es un objeto con el property-name como clave
         // property-name="333a296f15b7206e" para Responsable
         // property-name="5f1a00a7af17172c" para Geoposición
+        console.log('📦 Enviando task_properties a Odoo:', JSON.stringify(properties, null, 2))
+        
         const propertiesUpdate = await client.update('project.task', createResult.data, {
           task_properties: properties
         })
         
         if (propertiesUpdate.success) {
-          console.log('✅ task_properties actualizado correctamente:', Object.keys(properties).join(', '))
+          console.log('✅ task_properties actualizado correctamente. Propiedades enviadas:', Object.keys(properties).join(', '))
         } else {
-          console.error('⚠️ No se pudo actualizar task_properties:', propertiesUpdate.error)
+          console.error('⚠️ No se pudo actualizar task_properties:', JSON.stringify(propertiesUpdate.error, null, 2))
         }
       } catch (error) {
         console.error('❌ Error actualizando task_properties:', error)
