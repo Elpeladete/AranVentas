@@ -196,7 +196,7 @@ ${formData.aux1 ? `
     partner_id: partnerId,
     partner_phone: formData.telefono, // Número de contacto
     project_id: projectId, // ID del proyecto obtenido o creado
-    user_id: 15, // Asignar a Axel Dadone (UID 15)
+    // user_id: 15, // TODO: Asignar a Axel Dadone (UID 15) - temporalmente deshabilitado para debug
     planned_date_begin: `${orderDate} 00:00:00`, // Inicio del rango (datetime) - mismo día que la orden
     date_deadline: `${orderDate} 23:59:59`, // Fin del rango (datetime) - mismo día que la orden
     allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado (float) - campo verificado
