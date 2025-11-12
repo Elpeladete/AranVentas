@@ -396,7 +396,7 @@ export async function syncServiceOrderToOdoo(
 }
 
 /**
- * Mueve una tarea al stage "Orden Completada" en Odoo (sin marcar como hecha)
+ * Mueve una tarea al stage "Done" en Odoo (sin marcar como hecha)
  */
 async function markTaskAsCompleted(
   taskId: number,
@@ -405,21 +405,21 @@ async function markTaskAsCompleted(
   const client = getOdooClient()
 
   try {
-    console.log('✅ Moviendo tarea al stage "Orden Completada"...')
+    console.log('✅ Moviendo tarea al stage "Done"...')
 
-    // Buscar el stage "Orden Completada" del proyecto
+    // Buscar el stage "Done" del proyecto
     const stageSearchResult = await client.search('project.task.type', [
       ['project_ids', 'in', [projectId]],
-      ['name', 'ilike', 'orden completada']
+      ['name', 'ilike', 'done']
     ], { limit: 1 })
 
     if (!stageSearchResult.success || !stageSearchResult.data || stageSearchResult.data.length === 0) {
-      console.error('⚠️ No se encontró el stage "Orden Completada"')
+      console.error('⚠️ No se encontró el stage "Done"')
       return
     }
 
     const stageId = stageSearchResult.data[0]
-    console.log(`✅ Stage "Orden Completada" encontrado: ID ${stageId}`)
+    console.log(`✅ Stage "Done" encontrado: ID ${stageId}`)
 
     // Actualizar solo el stage_id de la tarea (sin marcarla como hecha)
     const updateResult = await client.update('project.task', taskId, {
@@ -427,7 +427,7 @@ async function markTaskAsCompleted(
     })
 
     if (updateResult.success) {
-      console.log(`✅ Tarea ${taskId} movida al stage "Orden Completada"`)
+      console.log(`✅ Tarea ${taskId} movida al stage "Done"`)
     } else {
       console.error(`⚠️ No se pudo mover la tarea:`, JSON.stringify(updateResult.error, null, 2))
     }
