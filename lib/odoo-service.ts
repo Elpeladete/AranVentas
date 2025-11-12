@@ -14,8 +14,8 @@ export interface OdooServiceOrder {
   date_order?: string // Fecha de orden (sale.order)
   date_deadline?: string // Fecha límite (project.task) - se repetirá la fecha de la orden
   date_assign?: string // Fecha planeada (project.task)
-  allocated_hours?: number // Tiempo asignado en horas (project.task)
-  task_properties?: any // Propiedades personalizadas (campo de tipo Properties)
+  planned_hours?: number // Tiempo asignado en horas (project.task) - campo estándar de Odoo
+  x_responsable?: string // Campo personalizado de propiedades para el técnico responsable
   user_id?: number // ID del usuario asignado
   description?: string // Descripción del trabajo
   order_line?: Array<{
@@ -197,8 +197,8 @@ ${formData.aux1 ? `
     project_id: projectId, // ID del proyecto obtenido o creado
     date_deadline: orderDate, // Fecha límite (repetida de la fecha de orden)
     date_assign: orderDate, // Fecha planeada (misma que la orden)
-    allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado en horas
-    task_properties: formData.tecnicoNombre ? { tecnico_asociado: formData.tecnicoNombre } : undefined, // Propiedades personalizadas
+    planned_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado en horas (campo estándar Odoo)
+    x_responsable: formData.tecnicoNombre, // Campo personalizado de propiedades para técnico responsable
     description: descripcionCompleta,
     // Marcar tarea como completada (stage_id se establece después de crear la tarea)
   }
