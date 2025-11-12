@@ -376,10 +376,10 @@ export async function syncServiceOrderToOdoo(
           console.log('📝 Responsable:', formData.tecnicoNombre)
         }
         
-        // Geoposición - property-name: 5f1a00a7af17172c (texto plano con link de Google Maps)
+        // Geoposición - property-name: 4910c19dcf4f3f0f (texto plano con link de Google Maps)
         if (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada') {
           const googleMapsLink = `https://www.google.com/maps?q=${formData.aux2}`
-          properties['5f1a00a7af17172c'] = googleMapsLink
+          properties['4910c19dcf4f3f0f'] = googleMapsLink
           console.log('📍 Geoposición:', googleMapsLink)
         }
         
