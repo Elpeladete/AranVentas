@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Servicio para integración con Odoo Field Service Management (FSM)
  * Maneja la sincronización de órdenes de servicio con Odoo
  */
@@ -196,6 +196,7 @@ ${formData.aux1 ? `
     partner_id: partnerId,
     partner_phone: formData.telefono, // Número de contacto
     project_id: projectId, // ID del proyecto obtenido o creado
+    user_id: 15, // Asignar a Axel Dadone (UID 15)
     planned_date_begin: `${orderDate} 00:00:00`, // Inicio del rango (datetime) - mismo día que la orden
     date_deadline: `${orderDate} 23:59:59`, // Fin del rango (datetime) - mismo día que la orden
     allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado (float) - campo verificado
@@ -394,7 +395,7 @@ export async function syncServiceOrderToOdoo(
 }
 
 /**
- * Marca una tarea como completada en Odoo
+ * Mueve una tarea al stage "Orden Completada" en Odoo (sin marcar como hecha)
  */
 async function markTaskAsCompleted(
   taskId: number,
@@ -403,25 +404,34 @@ async function markTaskAsCompleted(
   const client = getOdooClient()
 
   try {
-    console.log('✅ Marcando tarea como completada usando action_fsm_validate...')
+    console.log('✅ Moviendo tarea al stage "Orden Completada"...')
 
-    // Llamar al método action_fsm_validate de Odoo FSM
-    // Este es el método que usa el botón "Marcar como hecho" en la interfaz de Odoo
-    const result = await client.execute(
-      'project.task',
-      'action_fsm_validate',
-      [[taskId]], // IDs de las tareas a validar
-      {}
-    )
+    // Buscar el stage "Orden Completada" del proyecto
+    const stageSearchResult = await client.search('project.task.type', [
+      ['project_ids', 'in', [projectId]],
+      ['name', 'ilike', 'orden completada']
+    ], { limit: 1 })
 
-    if (result.success) {
-      console.log(`✅ Tarea ${taskId} marcada como completada con action_fsm_validate`)
-      console.log('� Resultado:', JSON.stringify(result.data, null, 2))
+    if (!stageSearchResult.success || !stageSearchResult.data || stageSearchResult.data.length === 0) {
+      console.error('⚠️ No se encontró el stage "Orden Completada"')
+      return
+    }
+
+    const stageId = stageSearchResult.data[0]
+    console.log(`✅ Stage "Orden Completada" encontrado: ID ${stageId}`)
+
+    // Actualizar solo el stage_id de la tarea (sin marcarla como hecha)
+    const updateResult = await client.update('project.task', taskId, {
+      stage_id: stageId
+    })
+
+    if (updateResult.success) {
+      console.log(`✅ Tarea ${taskId} movida al stage "Orden Completada"`)
     } else {
-      console.error(`⚠️ No se pudo marcar la tarea como completada:`, JSON.stringify(result.error, null, 2))
+      console.error(`⚠️ No se pudo mover la tarea:`, JSON.stringify(updateResult.error, null, 2))
     }
   } catch (error) {
-    console.error('❌ Error marcando tarea como completada:', error)
+    console.error('❌ Error moviendo tarea al stage:', error)
     // No lanzamos el error para no interrumpir el flujo principal
   }
 }
