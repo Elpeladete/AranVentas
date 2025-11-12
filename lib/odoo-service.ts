@@ -12,10 +12,12 @@ export interface OdooServiceOrder {
   partner_id: number // ID delCLIENTE
   partner_phone?: string // Número de contacto (project.task)
   date_order?: string // Fecha de orden (sale.order)
-  date_deadline?: string // Fecha límite (project.task) - se repetirá la fecha de la orden
+  date_deadline?: string // Fecha límite (project.task) - datetime, fin del rango
+  planned_date_begin?: string // Fecha de inicio planeada (project.task) - datetime, inicio del rango
   date_assign?: string // Fecha planeada (project.task)
-  planned_hours?: number // Tiempo asignado en horas (project.task) - campo estándar de Odoo
-  x_responsable?: string // Campo personalizado de propiedades para el técnico responsable
+  allocated_hours?: number // Tiempo asignado en horas (float - campo verificado en Odoo)
+  task_properties?: any // Propiedades personalizadas (campo verificado en Odoo)
+  tag_ids?: number[][] // Etiquetas de la tarea (para incluir técnico)
   user_id?: number // ID del usuario asignado
   description?: string // Descripción del trabajo
   order_line?: Array<{
@@ -188,19 +190,17 @@ ${formData.aux1 ? `
 
   // Formato para project.task (solo campos estándar de Odoo)
   // IMPORTANTE: project.task requiere un project_id obligatorio
-  // Los campos personalizados no están disponibles en esta instancia de Odoo,
-  // por lo que toda la información se incluye en la descripción
+  // Todos los campos han sido verificados en la instancia de Odoo
   const taskData: Partial<OdooServiceOrder> = {
     name: `OS ${formData.numeroOrden} - ${formData.razonSocial || 'Cliente'}`,
     partner_id: partnerId,
     partner_phone: formData.telefono, // Número de contacto
     project_id: projectId, // ID del proyecto obtenido o creado
-    date_deadline: orderDate, // Fecha límite (repetida de la fecha de orden)
-    date_assign: orderDate, // Fecha planeada (misma que la orden)
-    planned_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado en horas (campo estándar Odoo)
-    // x_responsable: formData.tecnicoNombre, // TODO: Campo personalizado - necesita crearse en Odoo primero
+    planned_date_begin: `${orderDate} 00:00:00`, // Inicio del rango (datetime) - mismo día que la orden
+    date_deadline: `${orderDate} 23:59:59`, // Fin del rango (datetime) - mismo día que la orden
+    allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado (float) - campo verificado
+    task_properties: formData.tecnicoNombre ? { responsable: formData.tecnicoNombre } : undefined, // Propiedades: Responsable - campo verificado
     description: descripcionCompleta,
-    // Marcar tarea como completada (stage_id se establece después de crear la tarea)
   }
 
   return taskData
