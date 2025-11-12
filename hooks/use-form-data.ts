@@ -306,11 +306,22 @@ export function useFormData() {
     sonnerToast.success(`Nuevo número de orden generado: ${newOrderNumber}`)
   }
 
+  const loadFormData = (data: FormData) => {
+    console.log('📥 Cargando datos en formulario:', data)
+    setFormData(data)
+    setFieldErrors({})
+    localStorage.setItem("aran-form-data", JSON.stringify(data))
+    setLastSaveTime(new Date())
+    sonnerToast.success("Datos cargados", { 
+      description: "Orden lista para editar" 
+    })
+  }
+
   return {
     formData,
     updateField,
     resetForm,
-
+    loadFormData,
     importData,
     isLoading,
     fieldErrors,

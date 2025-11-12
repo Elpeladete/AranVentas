@@ -49,14 +49,15 @@ interface ClickableArea {
 
 interface ServiceOrderFormProps {
   onShowDatabase?: () => void
+  onLoadFormData?: (loadFn: (data: FormData) => void) => void
 }
 
-export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {}) {
+export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrderFormProps = {}) {
   const { 
     formData, 
     updateField, 
     resetForm, 
- 
+    loadFormData,
     importData, 
     isLoading,
     fieldErrors,
@@ -142,6 +143,13 @@ export function ServiceOrderForm({ onShowDatabase }: ServiceOrderFormProps = {})
       syncManager.stopAutoSync()
     }
   }, [])
+  
+  // Exponer función loadFormData al padre
+  useEffect(() => {
+    if (onLoadFormData) {
+      onLoadFormData(loadFormData)
+    }
+  }, [onLoadFormData, loadFormData])
 
   // Autocompletar datos cuando se selecciona un contacto de Odoo
   useEffect(() => {

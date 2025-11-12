@@ -34,14 +34,16 @@ const Icons = {
   RefreshCw: () => <span>🔄</span>,
   Calendar: () => <span>📅</span>,
   WhatsApp: () => <span>📱</span>,
-  Send: () => <span>📤</span>
+  Send: () => <span>📤</span>,
+  Edit: () => <span>✏️</span>
 }
 
 interface OrdersDatabaseViewerProps {
   onClose?: () => void
+  onEditOrder?: (order: OrderRecord) => void
 }
 
-export function OrdersDatabaseViewer({ onClose }: OrdersDatabaseViewerProps) {
+export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseViewerProps) {
   const [orders, setOrders] = useState<OrderRecord[]>([])
   const [filteredOrders, setFilteredOrders] = useState<OrderRecord[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -149,6 +151,27 @@ export function OrdersDatabaseViewer({ onClose }: OrdersDatabaseViewerProps) {
       console.error('Error en reenvío por WhatsApp:', error)
       toast.error("Error en reenvío", { 
         description: "No se pudo conectar con el servicio de WhatsApp" 
+      })
+    }
+  }
+  
+  const handleEdit = (order: OrderRecord) => {
+    if (order.status !== 'draft') {
+      toast.error("No se puede editar", { 
+        description: "Solo se pueden editar órdenes en estado Borrador" 
+      })
+      return
+    }
+    
+    const shouldEdit = confirm(
+      `¿Cargar la orden ${order.numeroOrden} en el formulario para editarla?\n\nLos datos actuales del formulario se sobrescribirán.`
+    )
+    
+    if (shouldEdit && onEditOrder) {
+      onEditOrder(order)
+      if (onClose) onClose()
+      toast.success("Orden cargada", { 
+        description: `${order.numeroOrden} lista para editar` 
       })
     }
   }
@@ -333,6 +356,17 @@ export function OrdersDatabaseViewer({ onClose }: OrdersDatabaseViewerProps) {
                         >
                           <Icons.Eye />
                         </Button>
+                        {order.status === 'draft' && onEditOrder && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 w-8 p-0 text-blue-600"
+                            onClick={() => handleEdit(order)}
+                            title="Editar borrador"
+                          >
+                            <Icons.Edit />
+                          </Button>
+                        )}
                         {order.status !== 'archived' && (
                           <Button
                             size="sm"
