@@ -198,7 +198,7 @@ ${formData.aux1 ? `
     date_deadline: orderDate, // Fecha límite (repetida de la fecha de orden)
     date_assign: orderDate, // Fecha planeada (misma que la orden)
     planned_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado en horas (campo estándar Odoo)
-    x_responsable: formData.tecnicoNombre, // Campo personalizado de propiedades para técnico responsable
+    // x_responsable: formData.tecnicoNombre, // TODO: Campo personalizado - necesita crearse en Odoo primero
     description: descripcionCompleta,
     // Marcar tarea como completada (stage_id se establece después de crear la tarea)
   }
