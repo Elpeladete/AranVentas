@@ -403,49 +403,22 @@ async function markTaskAsCompleted(
   const client = getOdooClient()
 
   try {
-    console.log('✅ Marcando tarea como completada...')
+    console.log('✅ Marcando tarea como completada usando action_fsm_validate...')
 
-    // Buscar el stage "Done" o "Completado" del proyecto
-    const stageSearchResult = await client.search('project.task.type', [
-      ['project_ids', 'in', [projectId]],
-      '|',
-      ['name', 'ilike', 'done'],
-      ['name', 'ilike', 'completado']
-    ], { limit: 1 })
+    // Llamar al método action_fsm_validate de Odoo FSM
+    // Este es el método que usa el botón "Marcar como hecho" en la interfaz de Odoo
+    const result = await client.execute(
+      'project.task',
+      'action_fsm_validate',
+      [[taskId]], // IDs de las tareas a validar
+      {}
+    )
 
-    let stageId = null
-    if (stageSearchResult.success && stageSearchResult.data && stageSearchResult.data.length > 0) {
-      stageId = stageSearchResult.data[0]
-      console.log(`✅ Stage "Completado" encontrado: ID ${stageId}`)
+    if (result.success) {
+      console.log(`✅ Tarea ${taskId} marcada como completada con action_fsm_validate`)
+      console.log('� Resultado:', JSON.stringify(result.data, null, 2))
     } else {
-      // Si no se encuentra, buscar cualquier stage con fold=true (cerrado)
-      console.log('⚠️ No se encontró stage "Completado", buscando stage cerrado...')
-      const foldedStageResult = await client.search('project.task.type', [
-        ['project_ids', 'in', [projectId]],
-        ['fold', '=', true]
-      ], { limit: 1 })
-
-      if (foldedStageResult.success && foldedStageResult.data && foldedStageResult.data.length > 0) {
-        stageId = foldedStageResult.data[0]
-        console.log(`✅ Stage cerrado encontrado: ID ${stageId}`)
-      }
-    }
-
-    // Actualizar la tarea solo con el stage_id
-    // NOTA: kanban_state no existe en project.task en Odoo 18.4
-    const updateData: any = {}
-    
-    if (stageId) {
-      updateData.stage_id = stageId
-    }
-    
-    console.log(`📝 Actualizando tarea ${taskId} con:`, JSON.stringify(updateData, null, 2))
-    const updateResult = await client.update('project.task', taskId, updateData)
-
-    if (updateResult.success) {
-      console.log(`✅ Tarea ${taskId} marcada como completada`)
-    } else {
-      console.error(`⚠️ No se pudo marcar la tarea como completada:`, JSON.stringify(updateResult.error, null, 2))
+      console.error(`⚠️ No se pudo marcar la tarea como completada:`, JSON.stringify(result.error, null, 2))
     }
   } catch (error) {
     console.error('❌ Error marcando tarea como completada:', error)
