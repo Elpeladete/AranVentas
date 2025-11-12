@@ -431,15 +431,13 @@ async function markTaskAsCompleted(
       }
     }
 
-    // Actualizar la tarea
+    // Actualizar la tarea solo con el stage_id
+    // NOTA: kanban_state no existe en project.task en Odoo 18.4
     const updateData: any = {}
     
     if (stageId) {
       updateData.stage_id = stageId
     }
-
-    // Siempre marcar como completada independientemente del stage
-    updateData.kanban_state = 'done'
     
     console.log(`📝 Actualizando tarea ${taskId} con:`, JSON.stringify(updateData, null, 2))
     const updateResult = await client.update('project.task', taskId, updateData)
