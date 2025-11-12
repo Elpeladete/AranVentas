@@ -10,10 +10,12 @@ export interface OdooServiceOrder {
   id?: number
   name: string // Título de la tarea/orden
   partner_id: number // ID delCLIENTE
+  partner_phone?: string // Número de contacto (project.task)
   date_order?: string // Fecha de orden (sale.order)
-  date_deadline?: string // Fecha límite (project.task)
+  date_deadline?: string // Fecha límite (project.task) - se repetirá la fecha de la orden
   date_assign?: string // Fecha planeada (project.task)
-  planned_hours?: number // Tiempo asignado en horas (project.task)
+  allocated_hours?: number // Tiempo asignado en horas (project.task)
+  task_properties?: any // Propiedades personalizadas (campo de tipo Properties)
   user_id?: number // ID del usuario asignado
   description?: string // Descripción del trabajo
   order_line?: Array<{
@@ -191,10 +193,12 @@ ${formData.aux1 ? `
   const taskData: Partial<OdooServiceOrder> = {
     name: `OS ${formData.numeroOrden} - ${formData.razonSocial || 'Cliente'}`,
     partner_id: partnerId,
+    partner_phone: formData.telefono, // Número de contacto
     project_id: projectId, // ID del proyecto obtenido o creado
-    date_deadline: orderDate, // Fecha límite
+    date_deadline: orderDate, // Fecha límite (repetida de la fecha de orden)
     date_assign: orderDate, // Fecha planeada (misma que la orden)
-    planned_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado en horas
+    allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado en horas
+    task_properties: formData.tecnicoNombre ? { tecnico_asociado: formData.tecnicoNombre } : undefined, // Propiedades personalizadas
     description: descripcionCompleta,
     // Marcar tarea como completada (stage_id se establece después de crear la tarea)
   }

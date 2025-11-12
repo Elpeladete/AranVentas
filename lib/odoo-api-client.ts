@@ -32,10 +32,10 @@ export interface OdooConnectionResult {
 export function isOdooConfigured(): boolean {
   const url = process.env.NEXT_PUBLIC_ODOO_URL
   const db = process.env.NEXT_PUBLIC_ODOO_DB
-  const user = process.env.NEXT_PUBLIC_ODOO_USER
+  const username = process.env.NEXT_PUBLIC_ODOO_USERNAME
   const password = process.env.NEXT_PUBLIC_ODOO_PASSWORD
 
-  return !!(url && db && user && password)
+  return !!(url && db && username && password)
 }
 
 /**
@@ -45,14 +45,14 @@ export function getOdooConfigStatus() {
   return {
     url: !!process.env.NEXT_PUBLIC_ODOO_URL,
     db: !!process.env.NEXT_PUBLIC_ODOO_DB,
-    user: !!process.env.NEXT_PUBLIC_ODOO_USER,
+    username: !!process.env.NEXT_PUBLIC_ODOO_USERNAME,
     password: !!process.env.NEXT_PUBLIC_ODOO_PASSWORD,
     configured: isOdooConfigured()
   }
 }
 
 /**
- * Probar conexión con Odoo
+ * Probar conexión con Odoo usando nuestras rutas API
  */
 export async function testOdooConnection(): Promise<OdooConnectionResult> {
   try {
@@ -65,14 +65,12 @@ export async function testOdooConnection(): Promise<OdooConnectionResult> {
       }
     }
 
-    const response = await fetch('/api/odoo', {
+    const response = await fetch('/api/odoo/authenticate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        action: 'test'
-      }),
+      body: JSON.stringify({}),
     })
 
     if (!response.ok) {
@@ -85,17 +83,22 @@ export async function testOdooConnection(): Promise<OdooConnectionResult> {
 
     const result = await response.json()
     
-    if (result.success) {
-      console.log('✅ Conexión con Odoo exitosa')
+    if (result.result && result.result.uid) {
+      console.log('✅ Conexión con Odoo exitosa. UID:', result.result.uid)
       return {
         success: true,
-        uid: result.uid
+        uid: result.result.uid
       }
-    } else {
+    } else if (result.error) {
       console.error('❌ Error de autenticación:', result.error)
       return {
         success: false,
         error: result.error
+      }
+    } else {
+      return {
+        success: false,
+        error: 'Respuesta inválida del servidor'
       }
     }
 
@@ -109,7 +112,7 @@ export async function testOdooConnection(): Promise<OdooConnectionResult> {
 }
 
 /**
- * Buscar contactos en Odoo
+ * Buscar contactos en Odoo usando nuestras rutas API
  */
 export async function searchOdooContacts(searchTerm: string): Promise<OdooSearchResult> {
   try {
@@ -130,14 +133,20 @@ export async function searchOdooContacts(searchTerm: string): Promise<OdooSearch
       }
     }
 
-    const response = await fetch('/api/odoo', {
+    // Buscar partners (contactos/clientes) en Odoo usando searchRead
+    const response = await fetch('/api/odoo/execute', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        action: 'search',
-        searchTerm: searchTerm.trim()
+        model: 'res.partner',
+        method: 'search_read',
+        args: [[['name', 'ilike', searchTerm.trim()]]],
+        kwargs: {
+          fields: ['id', 'name', 'vat', 'phone', 'street', 'city', 'state_id'],
+          limit: 10
+        }
       }),
     })
 
@@ -152,18 +161,35 @@ export async function searchOdooContacts(searchTerm: string): Promise<OdooSearch
 
     const result = await response.json()
     
-    if (result.success) {
-      console.log(`✅ Encontrados ${result.contacts.length} contactos`)
+    if (result.result && Array.isArray(result.result)) {
+      // Mapear resultados al formato OdooContact
+      const contacts: OdooContact[] = result.result.map((partner: any) => ({
+        id: partner.id,
+        name: partner.name || '',
+        vat: partner.vat || '',
+        phone: partner.phone || '',
+        street: partner.street || '',
+        city: partner.city || '',
+        state: partner.state_id ? (Array.isArray(partner.state_id) ? partner.state_id[1] : partner.state_id) : ''
+      }))
+      
+      console.log(`✅ Encontrados ${contacts.length} contactos`)
       return {
         success: true,
-        contacts: result.contacts
+        contacts
       }
-    } else {
+    } else if (result.error) {
       console.error('❌ Error en búsqueda:', result.error)
       return {
         success: false,
         contacts: [],
         error: result.error
+      }
+    } else {
+      return {
+        success: false,
+        contacts: [],
+        error: 'Respuesta inválida del servidor'
       }
     }
 
