@@ -373,7 +373,7 @@ export async function syncServiceOrderToOdoo(
     
     if (formData.tecnicoNombre || formData.aux2) {
       try {
-        const properties: Record<string, any> = {}
+        const properties: Record<string, string> = {}
         
         // Responsable (técnico)
         if (formData.tecnicoNombre) {
@@ -390,14 +390,7 @@ export async function syncServiceOrderToOdoo(
           console.log('⚠️ aux2 no válido para Geoposición:', formData.aux2)
         }
         
-        // El formato de properties en Odoo es un objeto con el property-name como clave
-        // property-name="333a296f15b7206e" para Responsable
-        // property-name="5f1a00a7af17172c" para Geoposición
         console.log('📦 Enviando task_properties a Odoo:', JSON.stringify(properties, null, 2))
-        
-        // Primero intentar leer las properties actuales
-        const currentTask = await client.read('project.task', createResult.data, ['task_properties'])
-        console.log('📖 Properties actuales en la tarea:', JSON.stringify(currentTask.data?.task_properties || {}, null, 2))
         
         const propertiesUpdate = await client.update('project.task', createResult.data, {
           task_properties: properties
@@ -405,10 +398,6 @@ export async function syncServiceOrderToOdoo(
         
         if (propertiesUpdate.success) {
           console.log('✅ task_properties actualizado correctamente. Propiedades enviadas:', Object.keys(properties).join(', '))
-          
-          // Verificar que se guardó correctamente
-          const verifyTask = await client.read('project.task', createResult.data, ['task_properties'])
-          console.log('✔️ Verificación post-update - Properties guardadas:', JSON.stringify(verifyTask.data?.task_properties || {}, null, 2))
         } else {
           console.error('⚠️ No se pudo actualizar task_properties:', JSON.stringify(propertiesUpdate.error, null, 2))
         }
