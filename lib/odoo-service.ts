@@ -441,13 +441,13 @@ async function markTaskAsCompleted(
     // Siempre marcar como completada independientemente del stage
     updateData.kanban_state = 'done'
     
-    console.log(`📝 Actualizando tarea ${taskId} con:`, updateData)
+    console.log(`📝 Actualizando tarea ${taskId} con:`, JSON.stringify(updateData, null, 2))
     const updateResult = await client.update('project.task', taskId, updateData)
 
     if (updateResult.success) {
       console.log(`✅ Tarea ${taskId} marcada como completada`)
     } else {
-      console.error(`⚠️ No se pudo marcar la tarea como completada:`, updateResult.error)
+      console.error(`⚠️ No se pudo marcar la tarea como completada:`, JSON.stringify(updateResult.error, null, 2))
     }
   } catch (error) {
     console.error('❌ Error marcando tarea como completada:', error)
