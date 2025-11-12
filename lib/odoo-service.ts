@@ -18,7 +18,8 @@ export interface OdooServiceOrder {
   allocated_hours?: number // Tiempo asignado en horas (float - campo verificado en Odoo)
   task_properties?: any // Propiedades personalizadas (campo verificado en Odoo)
   tag_ids?: number[][] // Etiquetas de la tarea (para incluir técnico)
-  user_id?: number // ID del usuario asignado
+  user_id?: number // ID del usuario asignado (many2one - un solo usuario)
+  user_ids?: Array<[number, number, number[]]> // IDs de usuarios asignados (many2many - múltiples usuarios, etiqueta "Personas asignadas")
   description?: string // Descripción del trabajo
   order_line?: Array<{
     product_id: number
@@ -196,7 +197,7 @@ ${formData.aux1 ? `
     partner_id: partnerId,
     partner_phone: formData.telefono, // Número de contacto
     project_id: projectId, // ID del proyecto obtenido o creado
-    user_id: 15, // Asignar a Axel Dadone (UID 15)
+    user_ids: [[6, 0, [15]]], // Asignar a Axel Dadone (UID 15) - formato many2many: [(6, 0, [ids])]
     planned_date_begin: `${orderDate} 00:00:00`, // Inicio del rango (datetime) - mismo día que la orden
     date_deadline: `${orderDate} 23:59:59`, // Fin del rango (datetime) - mismo día que la orden
     allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado (float) - campo verificado
