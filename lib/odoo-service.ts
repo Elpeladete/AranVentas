@@ -373,31 +373,32 @@ export async function syncServiceOrderToOdoo(
     
     if (formData.tecnicoNombre || formData.aux2) {
       try {
-        const properties: Record<string, string> = {}
+        // Formato correcto para properties en Odoo 19: array de [property_name, value]
+        const propertiesArray: [string, any][] = []
         
         // Responsable (técnico)
         if (formData.tecnicoNombre) {
-          properties['333a296f15b7206e'] = formData.tecnicoNombre
+          propertiesArray.push(['333a296f15b7206e', formData.tecnicoNombre])
           console.log('📝 Actualizando Responsable:', formData.tecnicoNombre)
         }
         
         // Geoposición con enlace a Google Maps
         if (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada') {
           const googleMapsLink = `https://www.google.com/maps?q=${formData.aux2}`
-          properties['5f1a00a7af17172c'] = googleMapsLink
+          propertiesArray.push(['5f1a00a7af17172c', googleMapsLink])
           console.log('📍 Actualizando Geoposición con link:', googleMapsLink)
         } else {
           console.log('⚠️ aux2 no válido para Geoposición:', formData.aux2)
         }
         
-        console.log('📦 Enviando task_properties a Odoo:', JSON.stringify(properties, null, 2))
+        console.log('📦 Enviando task_properties a Odoo (formato array):', JSON.stringify(propertiesArray, null, 2))
         
         const propertiesUpdate = await client.update('project.task', createResult.data, {
-          task_properties: properties
+          task_properties: Object.fromEntries(propertiesArray)
         })
         
         if (propertiesUpdate.success) {
-          console.log('✅ task_properties actualizado correctamente. Propiedades enviadas:', Object.keys(properties).join(', '))
+          console.log('✅ task_properties actualizado correctamente. Propiedades enviadas:', propertiesArray.map(p => p[0]).join(', '))
         } else {
           console.error('⚠️ No se pudo actualizar task_properties:', JSON.stringify(propertiesUpdate.error, null, 2))
         }
