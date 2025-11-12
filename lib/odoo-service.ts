@@ -364,19 +364,33 @@ export async function syncServiceOrderToOdoo(
 
     console.log(`✅ Tarea de servicio creada en Odoo: ID ${createResult.data}`)
 
-    // Paso 4.5: Actualizar task_properties con el técnico responsable
-    if (formData.tecnicoNombre) {
+    // Paso 4.5: Actualizar task_properties con el técnico responsable y geolocalización
+    if (formData.tecnicoNombre || formData.aux2) {
       try {
-        console.log('📝 Actualizando task_properties con técnico:', formData.tecnicoNombre)
+        const properties: Record<string, string> = {}
+        
+        // Responsable (técnico)
+        if (formData.tecnicoNombre) {
+          properties['333a296f15b7206e'] = formData.tecnicoNombre
+          console.log('📝 Actualizando Responsable:', formData.tecnicoNombre)
+        }
+        
+        // Geoposición con enlace a Google Maps
+        if (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada') {
+          const googleMapsLink = `https://www.google.com/maps?q=${formData.aux2}`
+          properties['5f1a00a7af17172c'] = googleMapsLink
+          console.log('📍 Actualizando Geoposición:', googleMapsLink)
+        }
+        
         // El formato de properties en Odoo es un objeto con el property-name como clave
-        // Basado en el HTML de Odoo: property-name="333a296f15b7206e" para Responsable
+        // property-name="333a296f15b7206e" para Responsable
+        // property-name="5f1a00a7af17172c" para Geoposición
         const propertiesUpdate = await client.update('project.task', createResult.data, {
-          task_properties: {
-            '333a296f15b7206e': formData.tecnicoNombre
-          }
+          task_properties: properties
         })
+        
         if (propertiesUpdate.success) {
-          console.log('✅ task_properties actualizado correctamente')
+          console.log('✅ task_properties actualizado correctamente:', Object.keys(properties).join(', '))
         } else {
           console.error('⚠️ No se pudo actualizar task_properties:', propertiesUpdate.error)
         }
