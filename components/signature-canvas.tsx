@@ -217,6 +217,7 @@ export function SignatureCanvas({
             captureGeolocation()
           }
           
+          // uploadSignature maneja isUploading internamente
           const uploadedUrl = await uploadSignature(canvas)
           if (uploadedUrl && onChange) {
             console.log(`🎯 SignatureCanvas: onChange llamado con URL: ${uploadedUrl}`)
