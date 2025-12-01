@@ -209,6 +209,9 @@ export function SignatureCanvas({
       const canvas = canvasRef.current
       if (!canvas) return
       
+      // Deshabilitar botón INMEDIATAMENTE mientras se procesa
+      setIsUploading(true)
+      
       // Pequeña pausa para asegurar que el dibujo se complete
       setTimeout(async () => {
         try {
@@ -217,14 +220,15 @@ export function SignatureCanvas({
             captureGeolocation()
           }
           
-          // uploadSignature maneja isUploading internamente
+          // uploadSignature maneja su propio isUploading, pero ya lo establecimos arriba
+          // para cubrir el tiempo del setTimeout
           const uploadedUrl = await uploadSignature(canvas)
           if (uploadedUrl && onChange) {
             console.log(`🎯 SignatureCanvas: onChange llamado con URL: ${uploadedUrl}`)
             onChange(uploadedUrl) // Pasar URL directamente
           } else {
-            console.log(`🎯 SignatureCanvas: Fallback a base64`)
-            // Fallback: usar base64 local
+            console.log(`🎯 SignatureCanvas: Fallback a base64 (modo offline o error)`)
+            // Fallback: usar base64 local (modo offline o error de red)
             const localSignature = canvas.toDataURL('image/png')
             if (onChange) {
               console.log(`🎯 SignatureCanvas: onChange llamado con base64 (length: ${localSignature.length})`)
@@ -239,6 +243,9 @@ export function SignatureCanvas({
             console.log(`🎯 SignatureCanvas: onChange llamado con base64 de emergencia (length: ${localSignature.length})`)
             onChange(localSignature)
           }
+        } finally {
+          // SIEMPRE habilitar botón al final, sin importar si fue exitoso o offline
+          setIsUploading(false)
         }
       }, 500) // Pausa de 500ms para completar el trazo
     }
@@ -355,10 +362,12 @@ export function SignatureCanvas({
         {isUploading ? (
           <span className="text-blue-600 flex items-center justify-center gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
-            Subiendo a la nube...
+            Procesando firma...
           </span>
         ) : uploadedUrl ? (
           <span className="text-green-600">✓ Firma guardada en la nube</span>
+        ) : hasSignature && !uploadedUrl && autoUpload ? (
+          <span className="text-amber-600">✓ Firma guardada localmente (se subirá cuando haya conexión)</span>
         ) : hasSignature ? (
           <span className="text-green-600">✓ Firma capturada</span>
         ) : (
