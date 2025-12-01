@@ -157,7 +157,34 @@ export function convertAranToOdooServiceOrder(
 </table>
 ${formData.insumos ? `
 <h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">INSUMOS UTILIZADOS</h3>
-<div style="padding: 10px; background-color: #ecf0f1; white-space: pre-wrap;">${formData.insumos}</div>
+<table style="width: 100%; border-collapse: collapse;">
+  <thead>
+    <tr style="background-color: #2c3e50; color: white;">
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: center; width: 10%;">Cant.</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: left; width: 25%;">Código</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: left; width: 50%;">Descripción</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: right; width: 15%;">Precio</th>
+    </tr>
+  </thead>
+  <tbody>
+${formData.insumos.split('\n').filter(line => line.trim()).map((line, index) => {
+  const parts = line.split(';;')
+  const cantidad = parts[0] || ''
+  const resto = parts[1] ? parts[1].split(';') : []
+  const codigo = resto[0] || ''
+  const descripcion = resto[1] || ''
+  const precio = resto[2] || ''
+  const bgColor = index % 2 === 0 ? '#ecf0f1' : '#ffffff'
+  
+  return `    <tr style="background-color: ${bgColor};">
+      <td style="padding: 8px; border: 1px solid #bdc3c7; text-align: center;">${cantidad}</td>
+      <td style="padding: 8px; border: 1px solid #bdc3c7;">${codigo}</td>
+      <td style="padding: 8px; border: 1px solid #bdc3c7;">${descripcion}</td>
+      <td style="padding: 8px; border: 1px solid #bdc3c7; text-align: right;">${precio}</td>
+    </tr>`
+}).join('\n')}
+  </tbody>
+</table>
 ` : ''}
 <h3 style="background-color: #27ae60; color: white; padding: 8px; margin: 15px 0 5px 0;">TÉCNICO</h3>
 <table style="width: 100%; border-collapse: collapse;">
