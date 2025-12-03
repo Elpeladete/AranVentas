@@ -15,6 +15,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState<string>('')
+  const hasScannedRef = useRef(false) // Prevenir múltiples escaneos
 
   useEffect(() => {
     const startScanner = async () => {
@@ -31,15 +32,22 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         await scanner.start(
           { facingMode: "environment" }, // Cámara trasera
           config,
-          (decodedText) => {
-            // Código escaneado exitosamente
+          async (decodedText) => {
+            // Prevenir múltiples escaneos del mismo código
+            if (hasScannedRef.current) return
+            
+            hasScannedRef.current = true
             console.log('📷 Código escaneado:', decodedText)
+            
+            // Detener inmediatamente el escáner
+            await stopScanner()
+            
+            // Mostrar toast y ejecutar callback
             toast.success('Código escaneado', {
               description: decodedText,
               duration: 2000
             })
             onScan(decodedText)
-            stopScanner()
           },
           (errorMessage) => {
             // Error de escaneo (se llama constantemente mientras busca)
