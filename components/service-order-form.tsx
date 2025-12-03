@@ -428,22 +428,16 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
       
       // Detectar cuando se completa la firma manual del cliente
       if (activeField === "clienteFirma" && typeof value === "string" && value.length > 0 && !value.startsWith('digital_signature:')) {
-        console.log('🖊️ Firma manual del cliente completada, iniciando secuencia de firma digital...')
+        console.log('🖊️ Firma manual del cliente completada')
         setClienteManualSignatureComplete(true)
         
         // Mostrar toast informativo
-        toast.success('Firma manual completada', {
-          description: 'Ahora puedes agregar la firma digital para mayor validez legal',
+        toast.success('Firma manual guardada correctamente', {
+          description: 'Puedes continuar con la firma digital cuando estés listo',
           duration: 4000
         })
         
-        // Auto-abrir la firma digital después de un breve delay
-        setTimeout(() => {
-          if (activeField === "clienteFirma") {
-            setShowDigitalSignature('cliente')
-            console.log('🔒 Abriendo automáticamente la firma digital del cliente')
-          }
-        }, 1500)
+        // NO abrir automáticamente la firma digital - el usuario decidirá cuándo continuar
       }
     }
     setTempValue(value)
