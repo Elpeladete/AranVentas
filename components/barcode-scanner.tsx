@@ -40,14 +40,22 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             console.log('📷 Código escaneado:', decodedText)
             
             // Detener inmediatamente el escáner
-            await stopScanner()
+            try {
+              await scanner.stop()
+              scanner.clear()
+              setIsScanning(false)
+            } catch (err) {
+              console.error('Error deteniendo escáner:', err)
+            }
             
-            // Mostrar toast y ejecutar callback
-            toast.success('Código escaneado', {
-              description: decodedText,
-              duration: 2000
-            })
-            onScan(decodedText)
+            // Ejecutar callback DESPUÉS de detener el escáner
+            setTimeout(() => {
+              toast.success('Código escaneado', {
+                description: decodedText,
+                duration: 2000
+              })
+              onScan(decodedText)
+            }, 100)
           },
           (errorMessage) => {
             // Error de escaneo (se llama constantemente mientras busca)
