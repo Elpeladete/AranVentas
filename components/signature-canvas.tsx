@@ -315,26 +315,32 @@ export function SignatureCanvas({
   // Guardar firma (con subida automática a ImgBB si está habilitada)
   const saveSignature = useCallback(async () => {
     const canvas = canvasRef.current
-    if (!canvas || !hasSignature) return
+    if (!canvas || !hasSignature || isUploading) return // No permitir si ya está subiendo
 
-    const localSignature = canvas.toDataURL('image/png')
+    setIsUploading(true)
     
-    // Si autoUpload está habilitado, subir a ImgBB
-    let finalSignature = localSignature
-    if (autoUpload) {
-      const uploadedUrl = await uploadSignature(canvas)
-      if (uploadedUrl) {
-        finalSignature = uploadedUrl // Usar URL de ImgBB en lugar de base64
+    try {
+      const localSignature = canvas.toDataURL('image/png')
+      
+      // Si autoUpload está habilitado, subir a ImgBB
+      let finalSignature = localSignature
+      if (autoUpload) {
+        const uploadedUrl = await uploadSignature(canvas)
+        if (uploadedUrl) {
+          finalSignature = uploadedUrl // Usar URL de ImgBB en lugar de base64
+        }
       }
+      
+      if (onChange) {
+        onChange(finalSignature)
+      }
+      if (onSave) {
+        onSave(finalSignature)
+      }
+    } finally {
+      setIsUploading(false)
     }
-    
-    if (onChange) {
-      onChange(finalSignature)
-    }
-    if (onSave) {
-      onSave(finalSignature)
-    }
-  }, [hasSignature, autoUpload, uploadSignature, onChange, onSave])
+  }, [hasSignature, isUploading, autoUpload, uploadSignature, onChange, onSave])
 
   // Subir manualmente a ImgBB
   const manualUpload = useCallback(async () => {
