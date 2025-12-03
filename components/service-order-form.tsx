@@ -352,6 +352,18 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
   ]
 
   const handleAreaClick = (area: ClickableArea, event: React.MouseEvent) => {
+    // Si es un checkbox, cambiar estado directamente sin abrir overlay
+    if (area.type === "checkbox") {
+      const currentValue = formData[area.id] as boolean
+      const newValue = !currentValue
+      updateField(area.id, newValue)
+      toast.success("Campo actualizado", { 
+        description: `${area.label} ${newValue ? 'activado' : 'desactivado'}`,
+        duration: 2000 
+      })
+      return
+    }
+
     const rect = imageRef.current?.getBoundingClientRect()
     if (!rect) return
 
