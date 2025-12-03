@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from 'react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Camera } from 'lucide-react'
 import { InsumoAutocomplete } from "@/components/insumo-autocomplete"
 import { ArticuloAutocomplete } from "@/components/articulo-autocomplete"
+import { BarcodeScanner } from "@/components/barcode-scanner"
 import type { InsumoData } from "@/lib/insumos-search"
 
 interface InsumoRow {
@@ -22,6 +24,9 @@ interface InsumosTableProps {
 }
 
 export function InsumosTable({ value, onChange, className = "" }: InsumosTableProps) {
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const [scanningRowIndex, setScanningRowIndex] = useState<number | null>(null)
+  
   // Inicializar con 12 filas vacías
   const [rows, setRows] = useState<InsumoRow[]>(() => {
     // Si hay un valor existente, intentar parsearlo
@@ -192,7 +197,30 @@ export function InsumosTable({ value, onChange, className = "" }: InsumosTablePr
     ])
   }
 
+  const openScanner = (rowIndex: number) => {
+    setScanningRowIndex(rowIndex)
+    setScannerOpen(true)
+  }
+
+  const handleScan = (code: string) => {
+    if (scanningRowIndex !== null) {
+      updateCell(scanningRowIndex, 'numeroSerie', code)
+    }
+    setScannerOpen(false)
+    setScanningRowIndex(null)
+  }
+
+  const closeScanner = () => {
+    setScannerOpen(false)
+    setScanningRowIndex(null)
+  }
+
   return (
+    <>
+      {scannerOpen && (
+        <BarcodeScanner onScan={handleScan} onClose={closeScanner} />
+      )}
+      
     <div className={`w-full ${className}`}>
       {/* Header de la tabla */}
       <div className="mb-2">
@@ -237,15 +265,25 @@ export function InsumosTable({ value, onChange, className = "" }: InsumosTablePr
                   title="Solo números enteros"
                 />
               </div>
-              <div className="border-r border-gray-200 flex items-start">
+              <div className="border-r border-gray-200 flex items-stretch">
                 <Input
                   value={row.numeroSerie}
                   onChange={(e) => updateCell(rowIndex, 'numeroSerie', e.target.value)}
                   placeholder="ABC123"
-                  className="border-0 rounded-none text-xs min-h-7 focus:ring-1 focus:ring-blue-500 text-right"
+                  className="border-0 rounded-none text-xs min-h-7 focus:ring-1 focus:ring-blue-500 flex-1"
                   type="text"
                   title="Número de serie (alfanumérico)"
                 />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => openScanner(rowIndex)}
+                  className="h-7 w-7 p-0 rounded-none border-l hover:bg-blue-50"
+                  title="Escanear código de barras o QR"
+                >
+                  <Camera className="h-3 w-3 text-blue-600" />
+                </Button>
               </div>
               <div className="border-r border-gray-200">
                 <InsumoAutocomplete
@@ -352,5 +390,6 @@ export function InsumosTable({ value, onChange, className = "" }: InsumosTablePr
         </div>
       )}
     </div>
+    </>
   )
 }
