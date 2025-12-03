@@ -1129,25 +1129,28 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
           </div>
 
           {/* Botones responsivos - SIEMPRE VISIBLES AL FONDO */}
-          <div className={`flex gap-2 p-3 md:p-4 pt-2 border-t border-gray-200 bg-gray-50 flex-shrink-0 ${isMobile ? 'flex-col' : 'flex-row'}`}>
-            <Button 
-              onClick={handleApplyValue} 
-              size="sm" 
-              className="flex-1"
-              disabled={isSignatureLoading}
-            >
-              {isSignatureLoading ? '⏳ Procesando firma...' : '✅ Aplicar'}
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={handleCancelEdit} 
-              size="sm" 
-              className="flex-1"
-              disabled={isSignatureLoading}
-            >
-              ✖️ Cancelar
-            </Button>
-          </div>
+          {/* Ocultar botones para checkbox ya que se aplica automáticamente */}
+          {field.type !== "checkbox" && (
+            <div className={`flex gap-2 p-3 md:p-4 pt-2 border-t border-gray-200 bg-gray-50 flex-shrink-0 ${isMobile ? 'flex-col' : 'flex-row'}`}>
+              <Button 
+                onClick={handleApplyValue} 
+                size="sm" 
+                className="flex-1"
+                disabled={isSignatureLoading}
+              >
+                {isSignatureLoading ? '⏳ Procesando firma...' : '✅ Aplicar'}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleCancelEdit} 
+                size="sm" 
+                className="flex-1"
+                disabled={isSignatureLoading}
+              >
+                ✖️ Cancelar
+              </Button>
+            </div>
+          )}
         </div>
       </>
     )
