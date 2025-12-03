@@ -1356,9 +1356,23 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
       {showBarcodeScanner && (
         <BarcodeScanner 
           onScan={(code) => {
-            // Agregar el código escaneado al textarea
+            // Agregar el código escaneado en formato de lista separada por comas
             const currentValue = tempValue as string || ''
-            const newValue = currentValue ? `${currentValue}\n${code}` : code
+            
+            // Verificar si ya existe la sección de SN
+            const snPrefix = 'Se agregan los siguientes SN: '
+            const hasSNSection = currentValue.includes(snPrefix)
+            
+            let newValue: string
+            if (hasSNSection) {
+              // Ya existe la sección, agregar el código separado por coma
+              newValue = currentValue + `, ${code}`
+            } else {
+              // No existe la sección, crearla
+              const separator = currentValue.trim() ? '\n\n' : ''
+              newValue = currentValue + separator + snPrefix + code
+            }
+            
             handleTempValueChange(newValue)
             setShowBarcodeScanner(false)
             
