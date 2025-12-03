@@ -892,6 +892,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                   rows={isMobile ? 3 : 4}
                   placeholder={`Ingrese ${field.label.toLowerCase()}`}
                   className="text-sm"
+                  autoFocus
                 />
               )}
               {getFieldHint(activeField) && (
@@ -1094,6 +1095,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                 placeholder={`Ingrese ${field.label.toLowerCase()}`}
                 className="text-sm"
                 type={field.id === "fecha" ? "date" : "text"}
+                autoFocus
               />
               {getFieldHint(activeField) && (
                 <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
