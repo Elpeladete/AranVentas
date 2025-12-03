@@ -160,24 +160,27 @@ ${formData.insumos ? `
 <table style="width: 100%; border-collapse: collapse;">
   <thead>
     <tr style="background-color: #2c3e50; color: white;">
-      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: center; width: 10%;">Cant.</th>
-      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: left; width: 25%;">Código</th>
-      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: left; width: 50%;">Descripción</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: center; width: 8%;">Cant.</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: left; width: 18%;">N° Serie</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: left; width: 20%;">Código</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: left; width: 39%;">Descripción</th>
       <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: right; width: 15%;">Precio</th>
     </tr>
   </thead>
   <tbody>
-${formData.insumos.split('\n').filter(line => line.trim()).map((line, index) => {
-  const parts = line.split(';;')
+${formData.insumos.split('|').filter(line => line.trim()).map((line, index) => {
+  // Formato: cantidad;numeroSerie;codigo;articulo;precioNeto
+  const parts = line.split(';')
   const cantidad = parts[0] || ''
-  const resto = parts[1] ? parts[1].split(';') : []
-  const codigo = resto[0] || ''
-  const descripcion = resto[1] || ''
-  const precio = resto[2] || ''
+  const numeroSerie = parts[1] || ''
+  const codigo = parts[2] || ''
+  const descripcion = parts[3] || ''
+  const precio = parts[4] || ''
   const bgColor = index % 2 === 0 ? '#ecf0f1' : '#ffffff'
   
   return `    <tr style="background-color: ${bgColor};">
       <td style="padding: 8px; border: 1px solid #bdc3c7; text-align: center;">${cantidad}</td>
+      <td style="padding: 8px; border: 1px solid #bdc3c7;">${numeroSerie}</td>
       <td style="padding: 8px; border: 1px solid #bdc3c7;">${codigo}</td>
       <td style="padding: 8px; border: 1px solid #bdc3c7;">${descripcion}</td>
       <td style="padding: 8px; border: 1px solid #bdc3c7; text-align: right;">${precio}</td>
