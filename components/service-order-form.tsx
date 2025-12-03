@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { X, CheckCircle } from "lucide-react"
+import { X, CheckCircle, Camera } from "lucide-react"
 import { useFormData, type FormData } from "@/hooks/use-form-data"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { FormActions } from "@/components/form-actions"
@@ -24,6 +24,7 @@ import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { addPendingSubmission } from "@/lib/offline-storage"
 import { syncManager } from "@/lib/offline-sync"
 import type { DigitalSignature } from "@/lib/digital-signature-hybrid"
+import { BarcodeScanner } from "@/components/barcode-scanner"
 
 
 import { ValidationStatus } from "@/components/validation-status"
@@ -130,6 +131,10 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
   const [showDigitalSignature, setShowDigitalSignature] = useState<'tecnico' | 'cliente' | null>(null)
   const [clienteManualSignatureComplete, setClienteManualSignatureComplete] = useState(false)
   const [isSignatureLoading, setIsSignatureLoading] = useState(false) // Estado de carga de firma digital
+  
+  // Estados para escáner de código de barras
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Inicializar sincronización automática al cargar el componente
   useEffect(() => {
@@ -907,14 +912,31 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                 />
               ) : (
                 /* Textarea normal para otros campos como descripción */
-                <Textarea
-                  value={tempValue as string}
-                  onChange={(e) => handleTempValueChange(e.target.value)}
-                  rows={isMobile ? 3 : 4}
-                  placeholder={`Ingrese ${field.label.toLowerCase()}`}
-                  className="text-sm"
-                  autoFocus
-                />
+                <>
+                  <div className="relative">
+                    <Textarea
+                      ref={textareaRef}
+                      value={tempValue as string}
+                      onChange={(e) => handleTempValueChange(e.target.value)}
+                      rows={isMobile ? 3 : 4}
+                      placeholder={`Ingrese ${field.label.toLowerCase()}`}
+                      className="text-sm pr-10"
+                      autoFocus
+                    />
+                    {activeField === "descripcion" && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowBarcodeScanner(true)}
+                        className="absolute top-2 right-2 h-8 w-8 p-0"
+                        title="Escanear código de barras o QR"
+                      >
+                        <Camera className="h-4 w-4 text-blue-600" />
+                      </Button>
+                    )}
+                  </div>
+                </>
               )}
               {getFieldHint(activeField) && (
                 <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
@@ -1330,6 +1352,24 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
         </Card>
       </div>
 
+      {/* Escáner de código de barras para descripción */}
+      {showBarcodeScanner && (
+        <BarcodeScanner 
+          onScan={(code) => {
+            // Agregar el código escaneado al textarea
+            const currentValue = tempValue as string || ''
+            const newValue = currentValue ? `${currentValue}\n${code}` : code
+            handleTempValueChange(newValue)
+            setShowBarcodeScanner(false)
+            
+            // Enfocar el textarea después de un momento
+            setTimeout(() => {
+              textareaRef.current?.focus()
+            }, 100)
+          }}
+          onClose={() => setShowBarcodeScanner(false)}
+        />
+      )}
 
       
 
