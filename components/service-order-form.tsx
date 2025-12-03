@@ -870,7 +870,16 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
               <div className="flex items-center space-x-2">
                 <Checkbox
                   checked={tempValue as boolean}
-                  onCheckedChange={handleTempValueChange}
+                  onCheckedChange={(checked) => {
+                    handleTempValueChange(checked)
+                    // Aplicar inmediatamente el cambio y cerrar el overlay
+                    updateField(activeField!, checked)
+                    setActiveField(null)
+                    toast.success("Campo actualizado", { 
+                      description: `${field.label} ${checked ? 'activado' : 'desactivado'}`,
+                      duration: 2000 
+                    })
+                  }}
                 />
                 <Label>{field.label}</Label>
               </div>
