@@ -58,6 +58,27 @@ export interface OdooPartner {
 }
 
 /**
+ * Extrae los números de serie de la descripción del trabajo
+ */
+function extractSerialNumbersFromDescription(descripcion: string): string[] {
+  const snPrefix = 'Se agregan los siguientes SN: '
+  const index = descripcion.indexOf(snPrefix)
+  
+  if (index === -1) return []
+  
+  // Extraer la parte después del prefijo
+  const snSection = descripcion.substring(index + snPrefix.length)
+  
+  // Buscar hasta el final de la línea o del texto
+  const snLine = snSection.split('\n')[0]
+  
+  // Separar por coma y espacio, limpiar espacios
+  const serialNumbers = snLine.split(',').map(sn => sn.trim()).filter(sn => sn.length > 0)
+  
+  return serialNumbers
+}
+
+/**
  * Convierte los datos del formulario ARAN al formato de Odoo project.task
  */
 export function convertAranToOdooServiceOrder(
@@ -70,6 +91,27 @@ export function convertAranToOdooServiceOrder(
   if (formData.fecha) {
     const [day, month, year] = formData.fecha.split('-')
     orderDate = `${year}-${month}-${day}`
+  }
+  
+  // Extraer números de serie de la descripción
+  const serialNumbersFromDescription = formData.descripcion 
+    ? extractSerialNumbersFromDescription(formData.descripcion)
+    : []
+  
+  // Combinar insumos existentes con los SN extraídos
+  let insumosCompletos = formData.insumos || ''
+  
+  if (serialNumbersFromDescription.length > 0) {
+    // Agregar SN como filas de insumos con formato: cantidad;numeroSerie;codigo;articulo;precioNeto
+    const snRows = serialNumbersFromDescription.map(sn => `1;${sn};;;`).join('|')
+    
+    if (insumosCompletos) {
+      insumosCompletos += '|' + snRows
+    } else {
+      insumosCompletos = snRows
+    }
+    
+    console.log(`📦 Se agregaron ${serialNumbersFromDescription.length} números de serie desde la descripción`)
   }
 
   // Construir descripción del servicio (completa, ya que no hay campos personalizados)

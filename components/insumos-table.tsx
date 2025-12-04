@@ -21,11 +21,28 @@ interface InsumosTableProps {
   value: string
   onChange: (value: string) => void
   className?: string
+  descripcionText?: string // Texto de descripción para extraer SNs
 }
 
-export function InsumosTable({ value, onChange, className = "" }: InsumosTableProps) {
+export function InsumosTable({ value, onChange, className = "", descripcionText = "" }: InsumosTableProps) {
   const [scannerOpen, setScannerOpen] = useState(false)
   const [scanningRowIndex, setScanningRowIndex] = useState<number | null>(null)
+  
+  // Función para extraer códigos SN de la descripción
+  const extractSerialNumbers = (text: string): string[] => {
+    const snPrefix = 'Se agregan los siguientes SN: '
+    const startIndex = text.indexOf(snPrefix)
+    
+    if (startIndex === -1) return []
+    
+    const snSection = text.substring(startIndex + snPrefix.length)
+    const serialNumbers = snSection
+      .split(',')
+      .map(sn => sn.trim())
+      .filter(sn => sn.length > 0)
+    
+    return serialNumbers
+  }
   
   // Inicializar con 12 filas vacías
   const [rows, setRows] = useState<InsumoRow[]>(() => {
@@ -100,6 +117,64 @@ export function InsumosTable({ value, onChange, className = "" }: InsumosTablePr
     
     onChange(concatenatedValue)
   }, [rows, onChange])
+
+  // Detectar SNs de la descripción y agregar filas automáticamente
+  useEffect(() => {
+    if (!descripcionText) return
+    
+    const serialNumbers = extractSerialNumbers(descripcionText)
+    if (serialNumbers.length === 0) return
+    
+    // Verificar si ya existen estos SNs en la tabla
+    const existingSNs = rows.map(r => r.numeroSerie.trim()).filter(sn => sn.length > 0)
+    const newSNs = serialNumbers.filter(sn => !existingSNs.includes(sn))
+    
+    if (newSNs.length === 0) return
+    
+    console.log('📋 SNs detectados en descripción:', newSNs)
+    
+    // Agregar filas con los nuevos SNs
+    setRows(prevRows => {
+      const updatedRows = [...prevRows]
+      let insertIndex = 0
+      
+      // Encontrar la primera fila vacía
+      while (insertIndex < updatedRows.length && (
+        updatedRows[insertIndex].cantidad.trim() ||
+        updatedRows[insertIndex].numeroSerie.trim() ||
+        updatedRows[insertIndex].codigo.trim() ||
+        updatedRows[insertIndex].articulo.trim() ||
+        updatedRows[insertIndex].precioNeto.trim()
+      )) {
+        insertIndex++
+      }
+      
+      // Agregar cada SN en una fila
+      newSNs.forEach((sn, index) => {
+        const targetIndex = insertIndex + index
+        if (targetIndex < updatedRows.length) {
+          updatedRows[targetIndex] = {
+            cantidad: '1',
+            numeroSerie: sn,
+            codigo: '',
+            articulo: '',
+            precioNeto: ''
+          }
+        } else {
+          // Si no hay espacio, agregar nueva fila
+          updatedRows.push({
+            cantidad: '1',
+            numeroSerie: sn,
+            codigo: '',
+            articulo: '',
+            precioNeto: ''
+          })
+        }
+      })
+      
+      return updatedRows
+    })
+  }, [descripcionText])
 
   const updateCell = (rowIndex: number, field: keyof InsumoRow, value: string) => {
     // Aplicar validaciones según el tipo de campo
