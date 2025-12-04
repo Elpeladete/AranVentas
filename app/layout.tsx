@@ -5,7 +5,6 @@ import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 import { BuildInfoDisplay } from '@/components/build-info'
 import { BuildInfoLogger } from '@/components/build-info-logger'
-import { ScreenSizeIndicator } from '@/components/screen-size-indicator'
 import { ClientOnly } from '@/components/client-only'
 import { OfflineStatus } from '@/components/offline-status'
 import { OfflineDataInitializer } from '@/components/offline-data-initializer'
@@ -74,7 +73,6 @@ export default function RootLayout({
         <Toaster position="top-right" richColors closeButton />
         <BuildInfoDisplay position="bottom-left" compact={true} />
         <ClientOnly>
-          <ScreenSizeIndicator position="top-right" compact={true} />
           <OfflineStatus />
           <OfflineDataInitializer />
           <SyncStatusLogger />
