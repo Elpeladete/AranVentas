@@ -1206,9 +1206,12 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
       {/* Header */}
       <div className="bg-card border-b border-border p-1.5 sm:p-2">
         <div className="max-w-[1240px] mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-          <div>
-            <h1 className="text-lg sm:text-xl font-bold text-primary">ARAN Tecnologías</h1>
-            <p className="text-xs text-muted-foreground">Sistema de Órdenes de Servicio</p>
+          <div className="flex items-center">
+            <img 
+              src="/logo-claro.png" 
+              alt="ARAN Tecnologías" 
+              className="h-8 sm:h-10 w-auto"
+            />
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
 
