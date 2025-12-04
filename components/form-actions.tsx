@@ -1140,64 +1140,62 @@ export function FormActions({
   }
 
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 flex-wrap">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-2 flex-wrap">
       {/* Estado del formulario */}
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-1.5 text-xs">
         {getStatusIcon()}
         <span className="font-medium text-gray-600">
-          Orden #{formData.numeroOrden}
+          #{formData.numeroOrden}
         </span>
         
         {/* Indicador de conectividad */}
-        <div className="flex items-center gap-1 ml-2">
+        <div className="flex items-center gap-1">
           {isOnline ? (
             <>
-              <Wifi className="w-3 h-3 text-green-600" />
-              <span className="text-green-600 text-xs hidden sm:inline">Online</span>
+              <Wifi className="w-2.5 h-2.5 text-green-600" />
+              <span className="text-green-600 text-[10px] hidden sm:inline">Online</span>
             </>
           ) : (
             <>
-              <WifiOff className="w-3 h-3 text-red-600" />
-              <span className="text-red-600 text-xs hidden sm:inline">Offline</span>
+              <WifiOff className="w-2.5 h-2.5 text-red-600" />
+              <span className="text-red-600 text-[10px] hidden sm:inline">Offline</span>
             </>
           )}
         </div>
         
         {lastSaveTime && (
-          <span className="text-muted-foreground hidden sm:inline">
-            • Guardado automáticamente {lastSaveTime.toLocaleTimeString()}
+          <span className="text-muted-foreground text-[10px] hidden sm:inline">
+            • {lastSaveTime.toLocaleTimeString()}
           </span>
         )}
       </div>
 
       {/* Botones de acción */}
-      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:ml-auto">
+      <div className="flex flex-col sm:flex-row gap-1.5 w-full sm:w-auto sm:ml-auto">
         <Button 
           variant="outline" 
           onClick={handleReset}
-          className="w-full sm:w-auto"
-          size="sm"
+          className="w-full sm:w-auto h-7 text-xs px-2"
         >
-          <RotateCcw className="h-4 w-4 mr-2" />
+          <RotateCcw className="h-3 w-3 mr-1" />
           <span className="hidden sm:inline">Limpiar</span>
-          <span className="sm:hidden">Limpiar Formulario</span>
+          <span className="sm:hidden">Limpiar</span>
         </Button>
 
         <Button 
           variant="outline" 
           onClick={onShowDatabase}
-          className="border-blue-200 text-blue-700 hover:bg-blue-50 w-full sm:w-auto"
-          size="sm"
+          className="border-blue-200 text-blue-700 hover:bg-blue-50 w-full sm:w-auto h-7 text-xs px-2"
           disabled={!onShowDatabase}
         >
-          <span className="mr-2">🗃️</span>
-          <span className="hidden sm:inline">Registros Anteriores</span>
-          <span className="sm:hidden">Ver Registros</span>
+          <span className="mr-1">🗃️</span>
+          <span className="hidden sm:inline">Registros</span>
+          <span className="sm:hidden">Registros</span>
         </Button>
 
         <Button 
           onClick={handleSubmit} 
-          className={`w-full sm:w-auto ${
+          className={`w-full sm:w-auto h-7 text-xs px-2 ${
             isFormUnchangedSinceSubmit()
               ? 'bg-gray-500 hover:bg-gray-600 cursor-not-allowed'
               : !isOnline 
@@ -1208,7 +1206,6 @@ export function FormActions({
                     ? 'bg-blue-600 hover:bg-blue-700'
                     : 'bg-primary hover:bg-primary/90'
           }`}
-          size="sm"
           disabled={isFormUnchangedSinceSubmit()}
           title={
             isFormUnchangedSinceSubmit()
@@ -1223,7 +1220,7 @@ export function FormActions({
           }
         >
           {getSubmitButtonIcon()}
-          <span className="ml-2">
+          <span className="ml-1">
             <span className="hidden sm:inline">{getSubmitButtonText()}</span>
             <span className="sm:hidden">{isOnline ? "Enviar" : "Guardar"}</span>
           </span>

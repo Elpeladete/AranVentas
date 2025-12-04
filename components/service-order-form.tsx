@@ -1204,13 +1204,13 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
   return (
     <div className="relative min-h-screen bg-muted/30">
       {/* Header */}
-      <div className="bg-card border-b border-border p-2 sm:p-4">
-        <div className="max-w-[1240px] mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-card border-b border-border p-1.5 sm:p-2">
+        <div className="max-w-[1240px] mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-primary">ARAN Tecnologías</h1>
-            <p className="text-sm text-muted-foreground">Sistema de Órdenes de Servicio</p>
+            <h1 className="text-lg sm:text-xl font-bold text-primary">ARAN Tecnologías</h1>
+            <p className="text-xs text-muted-foreground">Sistema de Órdenes de Servicio</p>
           </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
 
             
             {/* Mostrar estado de validación */}

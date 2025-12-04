@@ -19,20 +19,20 @@ export function ValidationStatus({ formData, onFieldFocus, mode = 'discrete' }: 
   if (mode === 'discrete') {
     if (validation.isValid) {
       return (
-        <div className="flex items-center space-x-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-md border border-green-200">
-          <div className="w-3 h-3 bg-green-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-xs">✓</span>
+        <div className="flex items-center space-x-1.5 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-200">
+          <div className="w-2.5 h-2.5 bg-green-500 rounded-full flex items-center justify-center">
+            <span className="text-white text-[8px]">✓</span>
           </div>
-          <span className="font-medium">Formulario completo</span>
+          <span className="font-medium">Completo</span>
         </div>
       )
     } else {
       return (
-        <div className="flex items-center space-x-2 text-sm text-orange-600 bg-orange-50 px-3 py-2 rounded-md border border-orange-200">
-          <div className="w-3 h-3 bg-orange-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-xs">{validation.missingFields.length}</span>
+        <div className="flex items-center space-x-1.5 text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-md border border-orange-200">
+          <div className="w-2.5 h-2.5 bg-orange-500 rounded-full flex items-center justify-center">
+            <span className="text-white text-[8px]">{validation.missingFields.length}</span>
           </div>
-          <span className="font-medium">Faltan {validation.missingFields.length} campos obligatorios</span>
+          <span className="font-medium">Faltan {validation.missingFields.length} campos</span>
         </div>
       )
     }
