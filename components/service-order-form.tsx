@@ -1001,6 +1001,10 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                       console.log('📍 Geolocalización recibida:', geoLocation)
                       updateField('aux2', geoLocation)
                     }}
+                    onLoadingChange={(loading) => {
+                      console.log('🔄 Estado de carga de firma manual:', loading)
+                      setIsSignatureLoading(loading)
+                    }}
                     width={isMobile ? Math.min(250, window.innerWidth - 60) : 280}
                     height={isMobile ? 100 : 120}
                     orderNumber={formData.numeroOrden}

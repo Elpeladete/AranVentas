@@ -12,6 +12,7 @@ interface SignatureCanvasProps {
   onSave?: (signature: string) => void
   onClear?: () => void
   onGeolocationCapture?: (geolocation: string) => void // Callback para geolocalización
+  onLoadingChange?: (isLoading: boolean) => void // Callback para notificar estado de carga
   width?: number
   height?: number
   className?: string
@@ -26,6 +27,7 @@ export function SignatureCanvas({
   onSave,
   onClear,
   onGeolocationCapture,
+  onLoadingChange,
   width = 1000,
   height = 500,
   className = '',
@@ -38,6 +40,13 @@ export function SignatureCanvas({
   const [hasSignature, setHasSignature] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadedUrl, setUploadedUrl] = useState<string>('')
+
+  // Notificar al padre cuando cambia el estado de carga
+  useEffect(() => {
+    if (onLoadingChange) {
+      onLoadingChange(isUploading)
+    }
+  }, [isUploading, onLoadingChange])
 
   // Configurar el canvas
   useEffect(() => {
