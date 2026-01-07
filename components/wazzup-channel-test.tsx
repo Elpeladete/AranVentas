@@ -12,6 +12,7 @@ export function WazzupChannelTest() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [availability, setAvailability] = useState<any>(null)
+  const [rawResponse, setRawResponse] = useState<any>(null)
 
   const testChannels = async () => {
     setIsLoading(true)
@@ -21,7 +22,9 @@ export function WazzupChannelTest() {
       
       const result = await getWazzupChannels()
       console.log('📋 Resultado completo:', result)
+      console.log('📋 Canales individuales:', JSON.stringify(result.channels, null, 2))
       
+      setRawResponse(result)
       setChannels(result.channels)
       setActiveChannel(result.activeChannel || null)
       
@@ -174,6 +177,15 @@ export function WazzupChannelTest() {
           <Wifi className="h-12 w-12 mx-auto mb-3 opacity-30" />
           <p>Haz clic en "Obtener Canales" para ver los canales disponibles</p>
         </div>
+      )}
+
+      {rawResponse && (
+        <Card className="p-4 bg-gray-50">
+          <h4 className="font-semibold text-sm mb-2">🔍 Respuesta Raw de la API</h4>
+          <pre className="text-xs bg-white p-3 rounded overflow-x-auto max-h-96">
+            {JSON.stringify(rawResponse, null, 2)}
+          </pre>
+        </Card>
       )}
     </Card>
   )

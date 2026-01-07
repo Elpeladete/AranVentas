@@ -36,7 +36,7 @@ export interface WazzupApiResponse {
 export interface WazzupChannel {
   id: string
   name: string
-  status: 'active' | 'inactive' | 'pending' | 'disconnected'
+  status: 'active' | 'inactive' | 'pending' | 'disconnected' | 'online' | 'connected' | 'ready' | string
   transport: string
   channelType: string
   phone?: string
@@ -93,11 +93,43 @@ export async function getWazzupChannels(config: WazzupConfig = DEFAULT_CONFIG): 
       }
     }
 
-    const channels: WazzupChannel[] = await response.json()
-    console.log('📋 Canales obtenidos:', channels)
+    const rawData = await response.json()
+    console.log('📋 Respuesta raw de la API:', rawData)
+    
+    // La API puede devolver directamente un array o un objeto con propiedad
+    const channelsArray = Array.isArray(rawData) ? rawData : (rawData.channels || rawData.data || [])
+    console.log('📋 Canales extraídos:', channelsArray)
 
-    // Filtrar canales activos
-    const activeChannels = channels.filter(channel => channel.status === 'active')
+    // Mapear la estructura real de Wazzup a nuestra interfaz
+    const channels: WazzupChannel[] = channelsArray.map((ch: any) => ({
+      id: ch.id || ch.channelId || ch.uuid || '',
+      name: ch.name || ch.channelName || ch.title || 'Sin nombre',
+      status: ch.status || ch.state || (ch.active ? 'active' : 'inactive'),
+      transport: ch.transport || ch.type || 'whatsapp',
+      channelType: ch.channelType || ch.category || ch.kind || '',
+      phone: ch.phone || ch.number || ch.phoneNumber || ''
+    }))
+
+    console.log('📋 Canales procesados:', channels)
+
+    // Filtrar canales activos (pueden ser 'active', 'online', 'connected', etc.)
+    const activeChannels = channels.filter(channel => 
+      channel.status === 'active' || 
+      channel.status === 'online' || 
+      channel.status === 'connected' ||
+      channel.status === 'ready'
+    )
+    
+    console.log(`✅ Canales activos encontrados: ${activeChannels.length}/${channels.length}`)
+    activeChannels.forEach(ch => {
+      console.log(`  - ${ch.name} (${ch.id}): ${ch.status}`)
+    })
+    
+    // Buscar el canal específico que estamos buscando
+    const targetChannel = channels.find(ch => ch.id === '5d636b50-9ebc-4690-8c8c-ad6fb44bbcc7')
+    if (targetChannel) {
+      console.log('🎯 Canal buscado encontrado:', targetChannel)
+    }
     
     // Buscar el canal configurado si está activo
     const configuredChannel = activeChannels.find(ch => ch.id === config.channelId)
@@ -109,6 +141,7 @@ export async function getWazzupChannels(config: WazzupConfig = DEFAULT_CONFIG): 
     if (activeChannel) {
       cachedActiveChannel = activeChannel
       cacheTimestamp = Date.now()
+      console.log('✅ Canal activo seleccionado:', activeChannel.name, activeChannel.id)
     }
 
     return {
