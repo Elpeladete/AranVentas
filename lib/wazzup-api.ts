@@ -51,8 +51,8 @@ export interface ChannelsResponse {
 // Configuración con credenciales reales de Wazzup
 const DEFAULT_CONFIG: WazzupConfig = {
   apiKey: '9a807d7e759044d78ae1049e5ef2e273',
-//  channelId: '5d636b50-9ebc-4690-8c8c-ad6fb44bbcc7',  // Canal anterior (comentado)
-  channelId: '3afb4472-71cf-4709-a226-840a0522bf63',      // Canal activo
+  channelId: '5d636b50-9ebc-4690-8c8c-ad6fb44bbcc7',      // Canal "Eventos" (ACTIVO)
+//  channelId: '3afb4472-71cf-4709-a226-840a0522bf63',      // Canal "Natalí" (bloqueado)
   baseUrl: 'https://api.wazzup24.com'
 }
 
