@@ -33,13 +33,33 @@ export interface WazzupApiResponse {
   error?: string
 }
 
+export interface WazzupChannel {
+  id: string
+  name: string
+  status: 'active' | 'inactive' | 'pending' | 'disconnected'
+  transport: string
+  channelType: string
+  phone?: string
+}
+
+export interface ChannelsResponse {
+  channels: WazzupChannel[]
+  activeChannel?: WazzupChannel
+  hasActiveChannels: boolean
+}
+
 // Configuración con credenciales reales de Wazzup
 const DEFAULT_CONFIG: WazzupConfig = {
   apiKey: '9a807d7e759044d78ae1049e5ef2e273',
-//  channelId: '5d636b50-9ebc-4690-8c8c-ad6fb44bbcc7',
-  channelId: '3afb4472-71cf-4709-a226-840a0522bf63',
+//  channelId: '5d636b50-9ebc-4690-8c8c-ad6fb44bbcc7',  // Canal anterior (comentado)
+  channelId: '3afb4472-71cf-4709-a226-840a0522bf63',      // Canal activo
   baseUrl: 'https://api.wazzup24.com'
 }
+
+// Variable para cachear el canal activo
+let cachedActiveChannel: WazzupChannel | null = null
+let cacheTimestamp: number = 0
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos en milisegundos
 
 // Función para verificar si Wazzup está configurado correctamente
 function isWazzupConfigured(config: WazzupConfig = DEFAULT_CONFIG): boolean {
@@ -47,6 +67,118 @@ function isWazzupConfigured(config: WazzupConfig = DEFAULT_CONFIG): boolean {
          config.channelId !== 'YOUR_CHANNEL_ID' &&
          config.apiKey.length > 10 && 
          config.channelId.length > 10
+}
+
+/**
+ * Obtiene la lista de canales disponibles en Wazzup
+ */
+export async function getWazzupChannels(config: WazzupConfig = DEFAULT_CONFIG): Promise<ChannelsResponse> {
+  try {
+    console.log('🔍 Obteniendo canales de Wazzup...')
+
+    const response = await fetch(`${config.baseUrl}/v3/channels`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('❌ Error obteniendo canales:', response.status, errorText)
+      return {
+        channels: [],
+        hasActiveChannels: false
+      }
+    }
+
+    const channels: WazzupChannel[] = await response.json()
+    console.log('📋 Canales obtenidos:', channels)
+
+    // Filtrar canales activos
+    const activeChannels = channels.filter(channel => channel.status === 'active')
+    
+    // Buscar el canal configurado si está activo
+    const configuredChannel = activeChannels.find(ch => ch.id === config.channelId)
+    
+    // Si no está activo el configurado, tomar el primero activo
+    const activeChannel = configuredChannel || activeChannels[0]
+
+    // Cachear el resultado
+    if (activeChannel) {
+      cachedActiveChannel = activeChannel
+      cacheTimestamp = Date.now()
+    }
+
+    return {
+      channels,
+      activeChannel,
+      hasActiveChannels: activeChannels.length > 0
+    }
+
+  } catch (error) {
+    console.error('❌ Error obteniendo canales:', error)
+    return {
+      channels: [],
+      hasActiveChannels: false
+    }
+  }
+}
+
+/**
+ * Obtiene un canal activo (usa caché si está disponible)
+ */
+export async function getActiveChannel(config: WazzupConfig = DEFAULT_CONFIG): Promise<WazzupChannel | null> {
+  // Verificar caché
+  const now = Date.now()
+  if (cachedActiveChannel && (now - cacheTimestamp) < CACHE_DURATION) {
+    console.log('✅ Usando canal activo desde caché:', cachedActiveChannel.name)
+    return cachedActiveChannel
+  }
+
+  // Obtener canales actualizados
+  const channelsResponse = await getWazzupChannels(config)
+  
+  if (channelsResponse.activeChannel) {
+    console.log('✅ Canal activo encontrado:', channelsResponse.activeChannel.name)
+    return channelsResponse.activeChannel
+  }
+
+  console.warn('⚠️ No hay canales activos disponibles')
+  return null
+}
+
+/**
+ * Verifica si hay un canal activo disponible antes de enviar
+ */
+export async function checkChannelAvailability(config: WazzupConfig = DEFAULT_CONFIG): Promise<{
+  available: boolean
+  channel?: WazzupChannel
+  message: string
+}> {
+  try {
+    const activeChannel = await getActiveChannel(config)
+    
+    if (activeChannel) {
+      return {
+        available: true,
+        channel: activeChannel,
+        message: `Canal activo: ${activeChannel.name} (${activeChannel.phone || activeChannel.id})`
+      }
+    } else {
+      return {
+        available: false,
+        message: 'No hay canales de WhatsApp activos disponibles. El mensaje se guardará localmente.'
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error verificando disponibilidad de canal:', error)
+    return {
+      available: false,
+      message: 'Error al verificar canales de WhatsApp. El mensaje se guardará localmente.'
+    }
+  }
 }
 
 /**
@@ -60,8 +192,23 @@ export async function sendWhatsAppText(
   try {
     console.log('📱 Enviando mensaje de texto por WhatsApp:', { chatId, textLength: text.length })
 
+    // Verificar canal activo antes de enviar
+    const channelCheck = await checkChannelAvailability(config)
+    
+    if (!channelCheck.available) {
+      console.warn('⚠️ No hay canal activo:', channelCheck.message)
+      return {
+        success: false,
+        error: channelCheck.message
+      }
+    }
+
+    // Usar el canal activo encontrado
+    const activeChannelId = channelCheck.channel!.id
+    console.log('✅ Usando canal activo:', activeChannelId)
+
     const payload = {
-      channelId: config.channelId,
+      channelId: activeChannelId,
       chatType: "whatsapp",
       chatId: chatId,
       text: text
@@ -116,11 +263,26 @@ export async function sendWhatsAppImage(
   try {
     console.log('�️ Enviando imagen por WhatsApp:', { chatId, imageUrl, caption })
 
+    // Verificar canal activo antes de enviar
+    const channelCheck = await checkChannelAvailability(config)
+    
+    if (!channelCheck.available) {
+      console.warn('⚠️ No hay canal activo:', channelCheck.message)
+      return {
+        success: false,
+        error: channelCheck.message
+      }
+    }
+
+    // Usar el canal activo encontrado
+    const activeChannelId = channelCheck.channel!.id
+    console.log('✅ Usando canal activo:', activeChannelId)
+
     // Extraer el nombre del archivo de la URL
     const filename = imageUrl.split('/').pop() || 'orden-servicio.png'
     
     const payload = {
-      channelId: config.channelId,
+      channelId: activeChannelId,
       chatType: "whatsapp",
       chatId: chatId,
       type: "image",
@@ -186,6 +348,18 @@ export async function sendServiceOrderToWhatsApp(
       return sendWhatsAppWebFallback(phoneNumber, orderData, imageUrl)
     }
 
+    // Verificar disponibilidad de canales ANTES de procesar
+    console.log('🔍 Verificando canales de Wazzup disponibles...')
+    const channelCheck = await checkChannelAvailability()
+    
+    if (!channelCheck.available) {
+      console.warn('⚠️ No hay canales activos:', channelCheck.message)
+      console.warn('📱 Usando fallback de WhatsApp Web')
+      return sendWhatsAppWebFallback(phoneNumber, orderData, imageUrl)
+    }
+
+    console.log('✅ Canal activo disponible:', channelCheck.channel?.name)
+
     // Formatear número de teléfono (agregar código de país si no lo tiene)
     let chatId = phoneNumber.replace(/\D/g, '') // Solo números
     if (!chatId.startsWith('54')) {
@@ -199,7 +373,8 @@ export async function sendServiceOrderToWhatsApp(
     console.log('📋 Enviando orden de servicio por Wazzup API:', { 
       chatId, 
       orderNumber: orderData.numeroOrden,
-      hasImage: !!imageUrl 
+      hasImage: !!imageUrl,
+      channel: channelCheck.channel?.name
     })
 
     // Enviar mensaje de texto primero
@@ -207,6 +382,11 @@ export async function sendServiceOrderToWhatsApp(
     
     if (!textResult.success) {
       console.error('❌ Falló envío de texto:', textResult.error)
+      // Si falló por problema de canal, usar fallback
+      if (textResult.error?.includes('canal')) {
+        console.warn('📱 Intentando con WhatsApp Web como fallback')
+        return sendWhatsAppWebFallback(phoneNumber, orderData, imageUrl)
+      }
       return textResult
     }
 
