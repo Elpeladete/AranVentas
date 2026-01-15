@@ -66,7 +66,7 @@ function parseContactsManually(xmlText: string): any[] {
 const ODOO_CONFIG = {
   url: process.env.NEXT_PUBLIC_ODOO_URL || '',
   db: process.env.NEXT_PUBLIC_ODOO_DB || '',
-  user: process.env.NEXT_PUBLIC_ODOO_USER || '',
+  user: process.env.NEXT_PUBLIC_ODOO_USERNAME || '',
   password: process.env.NEXT_PUBLIC_ODOO_PASSWORD || ''
 }
 

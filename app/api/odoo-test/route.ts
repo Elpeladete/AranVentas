@@ -29,23 +29,23 @@ export async function POST(request: NextRequest) {
     // Configuraciones de prueba
     const configs = {
       default: {
-        url: 'https://aran-tecnologias.odoo.com',
-        db: 'aran-tecnologias',
+        url: 'https://arantecnologias.odoo.com',
+        db: 'arantecnologias',
         user: 'martinaused@arantecnologias.com.ar',
         password: realPassword
       },
       
       // Probar con usuario sin dominio
       simple: {
-        url: 'https://aran-tecnologias.odoo.com',
-        db: 'aran-tecnologias',
+        url: 'https://arantecnologias.odoo.com',
+        db: 'arantecnologias',
         user: 'martinaused',
         password: realPassword
       },
       
       // Probar con db sin guión
       dbnoguion: {
-        url: 'https://aran-tecnologias.odoo.com',
+        url: 'https://arantecnologias.odoo.com',
         db: 'arantecnologias',
         user: 'martinaused@arantecnologias.com.ar',
         password: realPassword
@@ -53,16 +53,16 @@ export async function POST(request: NextRequest) {
 
       // Probar con email sin arroba
       emailsimple: {
-        url: 'https://aran-tecnologias.odoo.com',
-        db: 'aran-tecnologias',
+        url: 'https://arantecnologias.odoo.com',
+        db: 'arantecnologias',
         user: 'martinaused@arantecnologias.com.ar',
         password: realPassword
       },
 
       // Probar admin (usuario por defecto)
       admin: {
-        url: 'https://aran-tecnologias.odoo.com',
-        db: 'aran-tecnologias',
+        url: 'https://arantecnologias.odoo.com',
+        db: 'arantecnologias',
         user: 'admin',
         password: realPassword
       }

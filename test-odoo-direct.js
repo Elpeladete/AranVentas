@@ -6,8 +6,8 @@
 const fetch = require('node-fetch');
 
 const ODOO_CONFIG = {
-  url: 'https://aran-tecnologias.odoo.com',
-  db: 'aran-tecnologias', 
+  url: 'https://arantecnologias.odoo.com',
+  db: 'arantecnologias', 
   user: 'martinaused@arantecnologias.com.ar',
   password: 'AusedM'
 }

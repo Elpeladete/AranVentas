@@ -7,7 +7,7 @@
 const ODOO_CONFIG = {
   url: process.env.NEXT_PUBLIC_ODOO_URL || '',
   db: process.env.NEXT_PUBLIC_ODOO_DB || '',
-  username: process.env.NEXT_PUBLIC_ODOO_USER || '',
+  username: process.env.NEXT_PUBLIC_ODOO_USERNAME || '',
   password: process.env.NEXT_PUBLIC_ODOO_PASSWORD || ''
 }
 

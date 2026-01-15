@@ -68,7 +68,7 @@ async function diagnoseOdoo() {
   console.log('\n📋 1. CONFIGURACIÓN:')
   console.log('URL:', process.env.NEXT_PUBLIC_ODOO_URL || 'No configurada')
   console.log('DB:', process.env.NEXT_PUBLIC_ODOO_DB || 'No configurada')
-  console.log('User:', process.env.NEXT_PUBLIC_ODOO_USER || 'No configurado')
+  console.log('User:', process.env.NEXT_PUBLIC_ODOO_USERNAME || 'No configurado')
   console.log('Password:', process.env.NEXT_PUBLIC_ODOO_PASSWORD ? '***' : 'No configurada')
   
   // 2. Probar conexión

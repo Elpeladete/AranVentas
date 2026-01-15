@@ -15,16 +15,16 @@ Para que la sincronización con Odoo funcione en producción, **DEBES** configur
 
 #### Variables Server-Side (Backend - Rutas API):
 ```
-ODOO_URL=https://aran-tecnologias.odoo.com
-ODOO_DB=aran-tecnologias
+ODOO_URL=https://arantecnologias.odoo.com
+ODOO_DB=arantecnologias
 ODOO_USERNAME=martinaused@arantecnologias.com.ar
 ODOO_PASSWORD=cEiSa?f^E!rKf+2
 ```
 
 #### Variables Client-Side (Frontend - Navegador):
 ```
-NEXT_PUBLIC_ODOO_URL=https://aran-tecnologias.odoo.com
-NEXT_PUBLIC_ODOO_DB=aran-tecnologias
+NEXT_PUBLIC_ODOO_URL=https://arantecnologias.odoo.com
+NEXT_PUBLIC_ODOO_DB=arantecnologias
 NEXT_PUBLIC_ODOO_USERNAME=martinaused@arantecnologias.com.ar
 NEXT_PUBLIC_ODOO_PASSWORD=cEiSa?f^E!rKf+2
 ```

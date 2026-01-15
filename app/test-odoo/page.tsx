@@ -82,10 +82,10 @@ export default function OdooTestPage() {
       <div className="mt-6 p-4 bg-yellow-100 rounded">
         <h3 className="font-bold">🎯 Configuraciones que se van a probar:</h3>
         <ul className="mt-2 text-sm">
-          <li><strong>Original:</strong> martinaused@arantecnologias.com.ar @ aran-tecnologias</li>
-          <li><strong>Simple:</strong> martinaused @ aran-tecnologias</li>
+          <li><strong>Original:</strong> martinaused@arantecnologias.com.ar @ arantecnologias</li>
+          <li><strong>Simple:</strong> martinaused @ arantecnologias</li>
           <li><strong>DB Sin Guión:</strong> martinaused@arantecnologias.com.ar @ arantecnologias</li>
-          <li><strong>Admin:</strong> admin @ aran-tecnologias</li>
+          <li><strong>Admin:</strong> admin @ arantecnologias</li>
         </ul>
         
         <div className="mt-4 p-3 bg-red-50 rounded border-l-4 border-red-400">
