@@ -101,10 +101,17 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
     // Autocompletar el nombre del técnico
     setTempValue(tecnico.nombre)
     
+    // 📱 Guardar teléfono del técnico en aux3 para envío por WhatsApp
+    if (tecnico.telefono) {
+      onUpdateField('aux3', tecnico.telefono)
+      console.log('📱 Teléfono del técnico guardado:', tecnico.telefono)
+    }
+    
     // Mostrar información adicional en el toast
     const infoDetails = []
     if (tecnico.cargo) infoDetails.push(tecnico.cargo)
     if (tecnico.dni) infoDetails.push(`DNI: ${tecnico.dni}`)
+    if (tecnico.telefono) infoDetails.push(`Tel: ${tecnico.telefono}`)
     
     toast.success("Técnico seleccionado", {
       description: `${tecnico.nombre}${infoDetails.length > 0 ? ` - ${infoDetails.join(', ')}` : ''}`,

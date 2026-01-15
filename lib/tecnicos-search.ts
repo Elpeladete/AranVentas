@@ -1,6 +1,6 @@
 /**
  * Servicio para búsqueda de técnicos desde Google Sheets con soporte offline
- * Estructura esperada del CSV: Nombre,Email,DNI,Cargo
+ * Estructura esperada del CSV: Nombre,Email,DNI,Telefono,Cargo
  */
 
 import { offlineDataManager, checkConnectivity } from './offline-data-manager'
@@ -9,6 +9,7 @@ export interface TecnicoData {
   nombre: string
   email?: string
   dni?: string
+  telefono?: string
   cargo?: string
 }
 
@@ -16,6 +17,7 @@ export interface TecnicoSearchResult {
   nombre: string
   email?: string
   dni?: string
+  telefono?: string
   cargo?: string
   matchScore: number
 }
@@ -109,13 +111,15 @@ function parseTecnicosCsv(csvText: string): TecnicoData[] {
         const nombre = columns[0]?.trim()
         const email = columns[1]?.trim() || ''
         const dni = columns[2]?.trim() || ''
-        const cargo = columns[3]?.trim() || ''
+        const telefono = columns[3]?.trim() || ''
+        const cargo = columns[4]?.trim() || ''
         
         if (nombre) {
           tecnicos.push({
             nombre,
             email: email || undefined,
             dni: dni || undefined,
+            telefono: telefono || undefined,
             cargo: cargo || undefined
           })
         }

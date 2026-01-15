@@ -823,6 +823,8 @@ export function FormActions({
         
         // Intentar enviar por WhatsApp
         try {
+          // 📱 Enviar al CLIENTE
+          console.log('📱 Enviando WhatsApp al cliente:', formData.telefono)
           const whatsappResult = await sendServiceOrderToWhatsApp(
             formData.telefono,
             formData,
@@ -833,11 +835,45 @@ export function FormActions({
             // 📊 MARCAR PASO 6 COMO COMPLETADO
             submissionTracker.current.whatsappSent = true
             
-            console.log('✅ PASO 6 COMPLETADO: Enviado por WhatsApp exitosamente')
-            toast.success("✅ Paso 6 completado", { 
-              description: "Orden compartida por WhatsApp",
-              duration: 2000
-            })
+            console.log('✅ Enviado al cliente exitosamente')
+            
+            // 👨‍🔧 Enviar también al TÉCNICO si tiene teléfono (guardado en aux3)
+            if (formDataWithImage.aux3) {
+              console.log('📱 Enviando WhatsApp al técnico:', formDataWithImage.aux3)
+              try {
+                const tecnicoWhatsappResult = await sendServiceOrderToWhatsApp(
+                  formDataWithImage.aux3,
+                  formData,
+                  imageUrl
+                )
+                
+                if (tecnicoWhatsappResult.success) {
+                  console.log('✅ Enviado al técnico exitosamente')
+                  toast.success("✅ Paso 6 completado", { 
+                    description: "Orden compartida con cliente y técnico",
+                    duration: 2000
+                  })
+                } else {
+                  console.warn('⚠️ Falló envío al técnico:', tecnicoWhatsappResult.error)
+                  toast.success("✅ Paso 6 parcial", { 
+                    description: "Enviado al cliente. Fallo al enviar al técnico.",
+                    duration: 3000
+                  })
+                }
+              } catch (tecnicoError) {
+                console.warn('⚠️ Error enviando al técnico:', tecnicoError)
+                toast.success("✅ Paso 6 parcial", { 
+                  description: "Enviado al cliente. Fallo al enviar al técnico.",
+                  duration: 3000
+                })
+              }
+            } else {
+              console.log('ℹ️ Técnico sin teléfono, no se envía WhatsApp')
+              toast.success("✅ Paso 6 completado", { 
+                description: "Orden compartida con cliente",
+                duration: 2000
+              })
+            }
           } else {
             console.warn('⚠️ PASO 6 FALLIDO: WhatsApp falló:', whatsappResult.error)
             toast.warning("⚠️ Paso 6 falló", { 
