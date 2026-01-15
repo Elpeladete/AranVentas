@@ -477,40 +477,39 @@ export function FormActions({
       // PASO 4A: Actualizar campo AUX1 con URL de ImgBB O base64
       // Prioridad: URL de ImgBB > base64 > null
       const aux1Value = imageUrl || imageBase64
+      
+      // 🚀 CRÍTICO: Crear una copia del formData con aux1 actualizado
+      // para usar en los envíos (Google Forms y Odoo)
+      // React NO garantiza que el estado se actualice de forma síncrona,
+      // así que usamos una variable local inmediata
+      const formDataWithImage: AranFormData = {
+        ...formData,
+        aux1: aux1Value || formData.aux1 // Usar nueva imagen o mantener la existente
+      }
+      
       if (aux1Value) {
         console.log('📝 Actualizando campo AUX1:', imageUrl ? 'URL de ImgBB' : 'base64')
-        console.log('📋 AUX1 ANTES de actualizar:', formData.aux1?.substring(0, 50))
+        console.log('📋 AUX1 valor:', aux1Value.substring(0, 80))
         
+        // Actualizar el estado React (para la UI), pero NO esperar por él
         onUpdateField('aux1', aux1Value)
         
-        // ⏱️ CRÍTICO: Esperar a que React procese la actualización del estado
-        console.log('⏳ Esperando actualización del estado de React (1.5 segundos)...')
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        
-        console.log('✅ Continuando después de espera')
-        console.log('📋 AUX1 DESPUÉS de espera:', formData.aux1?.substring(0, 50))
-        
-        // Verificar si se actualizó
-        if (formData.aux1 === aux1Value) {
-          console.log('✅ AUX1 actualizado correctamente')
-        } else {
-          console.warn('⚠️ AUX1 NO se actualizó correctamente')
-        }
+        console.log('✅ AUX1 preparado para envío:', aux1Value.substring(0, 80))
       } else {
         console.warn('⚠️ No se obtuvo imagen para AUX1')
       }
 
       // PASO 4B: Validar formulario antes de enviar
-      // Nota: formData debe estar actualizado aquí con aux1 nuevo
+      // Usar formDataWithImage que tiene aux1 actualizado
       console.log('📋 FormData FINAL para validación y envío:', {
-        aux1: formData.aux1,
-        numeroOrden: formData.numeroOrden,
-        fecha: formData.fecha,
-        aux1Length: formData.aux1?.length || 0
+        aux1: formDataWithImage.aux1?.substring(0, 80),
+        numeroOrden: formDataWithImage.numeroOrden,
+        fecha: formDataWithImage.fecha,
+        aux1Length: formDataWithImage.aux1?.length || 0
       })
       
       toast.info("Validando formulario...", { description: "Verificando datos antes del envío" })
-      const validation = validateRequiredFields(formData)
+      const validation = validateRequiredFields(formDataWithImage)
       
       if (!validation.isValid) {
         // Activar modo prominente de validación
@@ -591,12 +590,6 @@ export function FormActions({
         toast.info("Modo offline", { description: "Guardando en cola de sincronización" })
         
         try {
-          // CRÍTICO: Crear una copia del formData con la imagen incluida
-          const formDataWithImage = {
-            ...formData,
-            aux1: imageBase64 || formData.aux1 // Usar imagen capturada o la existente
-          }
-          
           console.log('💾 Guardando formData con imagen en cola offline:')
           console.log('   aux1 length:', formDataWithImage.aux1?.length || 0)
           console.log('   numeroOrden:', formDataWithImage.numeroOrden)
@@ -638,10 +631,11 @@ export function FormActions({
       } else {
         // CON CONEXIÓN: Intentar envío inmediato
         console.log('☁️ Modo online - Intentando envío inmediato')
+        console.log('📋 Enviando formData con aux1:', formDataWithImage.aux1?.substring(0, 80))
         toast.info("Enviando formulario...", { description: "Transmitiendo a Google Forms" })
         
         try {
-          const result = await submitFormToGoogle(formData)
+          const result = await submitFormToGoogle(formDataWithImage)
           
           if (result.success) {
             // 📊 MARCAR PASO 5 COMO COMPLETADO
@@ -668,7 +662,8 @@ export function FormActions({
                 
                 if (odooConfigured) {
                   console.log('🔄 Sincronizando con Odoo FSM')
-                  const odooResult = await syncServiceOrderToOdoo(formData)
+                  console.log('📋 Datos para Odoo con aux1:', formDataWithImage.aux1?.substring(0, 80))
+                  const odooResult = await syncServiceOrderToOdoo(formDataWithImage)
                   
                   if (odooResult.success) {
                     // 📊 MARCAR ODOO COMO COMPLETADO
