@@ -110,7 +110,6 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
     // Mostrar información adicional en el toast
     const infoDetails = []
     if (tecnico.cargo) infoDetails.push(tecnico.cargo)
-    if (tecnico.dni) infoDetails.push(`DNI: ${tecnico.dni}`)
     if (tecnico.telefono) infoDetails.push(`Tel: ${tecnico.telefono}`)
     
     toast.success("Técnico seleccionado", {

@@ -1,6 +1,6 @@
 /**
  * Servicio para búsqueda de técnicos desde Google Sheets con soporte offline
- * Estructura esperada del CSV: Nombre,Email,DNI,Telefono,Cargo
+ * Estructura esperada del CSV: Nombre,Email,Telefono,Cargo (separado por TABs o comas)
  */
 
 import { offlineDataManager, checkConnectivity } from './offline-data-manager'
@@ -8,7 +8,6 @@ import { offlineDataManager, checkConnectivity } from './offline-data-manager'
 export interface TecnicoData {
   nombre: string
   email?: string
-  dni?: string
   telefono?: string
   cargo?: string
 }
@@ -16,7 +15,6 @@ export interface TecnicoData {
 export interface TecnicoSearchResult {
   nombre: string
   email?: string
-  dni?: string
   telefono?: string
   cargo?: string
   matchScore: number
@@ -105,20 +103,20 @@ function parseTecnicosCsv(csvText: string): TecnicoData[] {
   // Procesar cada línea (sin header, directamente los datos)
   lines.forEach((line, index) => {
     try {
-      const columns = line.split(',')
+      // Detectar separador: TAB o coma
+      const separator = line.includes('\t') ? '\t' : ','
+      const columns = line.split(separator)
       
       if (columns.length >= 1) {
         const nombre = columns[0]?.trim()
         const email = columns[1]?.trim() || ''
-        const dni = columns[2]?.trim() || ''
-        const telefono = columns[3]?.trim() || ''
-        const cargo = columns[4]?.trim() || ''
+        const telefono = columns[2]?.trim() || '' // Columna 3 = índice 2
+        const cargo = columns[3]?.trim() || ''
         
         if (nombre) {
           tecnicos.push({
             nombre,
             email: email || undefined,
-            dni: dni || undefined,
             telefono: telefono || undefined,
             cargo: cargo || undefined
           })
@@ -192,7 +190,7 @@ export async function searchTecnicos(
         results.push({
           nombre: tecnico.nombre,
           email: tecnico.email,
-          dni: tecnico.dni,
+          telefono: tecnico.telefono,
           cargo: tecnico.cargo,
           matchScore: score
         })
