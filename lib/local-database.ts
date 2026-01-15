@@ -12,10 +12,16 @@ export interface OrderRecord {
   numeroOrden: string
   createdAt: Date
   updatedAt: Date
-  status: 'draft' | 'completed' | 'pending-offline' | 'sent' | 'archived'
+  status: 'draft' | 'completed' | 'local-only' | 'partial' | 'sent' | 'archived'
   formData: AranFormData
   imageUrl?: string
+  
+  // 📊 Tracking granular de envíos
   googleFormsSent: boolean
+  odooSent: boolean
+  whatsappClientSent: boolean
+  whatsappTechSent: boolean
+  
   sentAt?: Date
   notes?: string
 }
@@ -24,8 +30,9 @@ export interface DatabaseStats {
   total: number
   drafts: number
   completed: number
-  pendingOffline: number
-  sent: number
+  localOnly: number  // Solo guardado local (rojo)
+  partial: number    // Envío parcial (amarillo)
+  sent: number       // Todo enviado (verde)
   archived: number
   lastUpdate?: Date
 }
@@ -92,7 +99,12 @@ export function addNewOrder(formData: AranFormData, status: OrderRecord['status'
     updatedAt: new Date(),
     status,
     formData: { ...formData }, // Crear copia profunda
-    googleFormsSent: false
+    
+    // Inicializar tracking de envíos
+    googleFormsSent: false,
+    odooSent: false,
+    whatsappClientSent: false,
+    whatsappTechSent: false
   }
   
   orders.unshift(newOrder) // Agregar al inicio (más reciente)
@@ -230,8 +242,11 @@ export function getDatabaseStats(): DatabaseStats {
         case 'completed':
           acc.completed++
           break
-        case 'pending-offline':
-          acc.pendingOffline++
+        case 'local-only':
+          acc.localOnly++
+          break
+        case 'partial':
+          acc.partial++
           break
         case 'sent':
           acc.sent++
@@ -247,18 +262,60 @@ export function getDatabaseStats(): DatabaseStats {
       
       return acc
     },
-    { total: 0, drafts: 0, completed: 0, pendingOffline: 0, sent: 0, archived: 0, lastUpdate: undefined as Date | undefined }
+    { total: 0, drafts: 0, completed: 0, localOnly: 0, partial: 0, sent: 0, archived: 0, lastUpdate: undefined as Date | undefined }
   )
   
   return {
     total: stats.total,
     drafts: stats.drafts,
     completed: stats.completed,
-    pendingOffline: stats.pendingOffline,
+    localOnly: stats.localOnly,
+    partial: stats.partial,
     sent: stats.sent,
     archived: stats.archived,
     lastUpdate: stats.lastUpdate
   }
+}
+
+/**
+ * Calcula el estado automáticamente basándose en los flags de envío
+ */
+export function calculateOrderStatus(order: OrderRecord): OrderRecord['status'] {
+  // Si está archivado, mantenerlo
+  if (order.status === 'archived') {
+    return 'archived'
+  }
+  
+  // Verificar cuántos envíos se completaron
+  const googleSent = order.googleFormsSent
+  const odooSent = order.odooSent
+  const whatsappClientSent = order.whatsappClientSent
+  // WhatsApp técnico es opcional
+  
+  // Si no se envió nada, es local-only
+  if (!googleSent && !odooSent && !whatsappClientSent) {
+    return 'local-only'
+  }
+  
+  // Si se enviaron los 3 requeridos (Google, Odoo, WhatsApp cliente)
+  if (googleSent && odooSent && whatsappClientSent) {
+    return 'sent'
+  }
+  
+  // Si se envió algo pero no todo, es partial
+  return 'partial'
+}
+
+/**
+ * Actualiza el estado de una orden basándose en sus flags de envío
+ */
+export function updateOrderStatus(id: string): boolean {
+  const order = getOrderById(id)
+  if (!order) return false
+  
+  const newStatus = calculateOrderStatus(order)
+  
+  return updateOrder(id, { status: newStatus })
 }
 
 /**

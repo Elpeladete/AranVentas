@@ -14,7 +14,7 @@ import { submitFormToGoogle } from "@/lib/google-forms"
 import { addPendingSubmission } from "@/lib/offline-storage"
 import { syncManager } from "@/lib/offline-sync"
 import html2canvas from "html2canvas"
-import { addNewOrder, updateOrder, markOrderAsSent, getOrdersByNumber } from "@/lib/local-database"
+import { addNewOrder, updateOrder, getOrdersByNumber, updateOrderStatus } from "@/lib/local-database"
 import { formatDateForDisplay } from "@/lib/utils"
 
 // Cache global para la imagen de fondo (precargada)
@@ -669,6 +669,15 @@ export function FormActions({
                     // 📊 MARCAR ODOO COMO COMPLETADO
                     submissionTracker.current.odooSent = true
                     
+                    // 📊 Actualizar BD local
+                    try {
+                      updateOrder(orderId, { odooSent: true })
+                      updateOrderStatus(orderId)
+                      console.log('🗃️ Odoo marcado como enviado en BD local')
+                    } catch (dbError) {
+                      console.error('❌ Error actualizando BD local:', dbError)
+                    }
+                    
                     console.log(`✅ PASO 5B COMPLETADO: Orden sincronizada con Odoo FSM: ID ${odooResult.orderId}`)
                     toast.success("✅ Sincronizado con Odoo", {
                       description: `Orden registrada en Odoo (ID: ${odooResult.orderId})`,
@@ -702,10 +711,16 @@ export function FormActions({
             setHasBeenSubmitted(true)
             lastSubmittedData.current = { ...formData }
             
-            // Actualizar BD local
+            // 📊 Actualizar BD local con flags granulares
             try {
-              markOrderAsSent(orderId, imageUrl || imageBase64 || undefined)
-              console.log('🗃️ Estado actualizado en BD local: enviado')
+              updateOrder(orderId, { 
+                googleFormsSent: true,
+                sentAt: new Date(),
+                imageUrl: imageUrl || imageBase64 || undefined
+              })
+              // Recalcular estado basado en flags
+              updateOrderStatus(orderId)
+              console.log('🗃️ Google Forms marcado como enviado en BD local')
             } catch (dbError) {
               console.error('❌ Error actualizando BD local:', dbError)
             }
@@ -835,6 +850,15 @@ export function FormActions({
             // 📊 MARCAR PASO 6 COMO COMPLETADO
             submissionTracker.current.whatsappSent = true
             
+            // 📊 Actualizar BD local - Cliente
+            try {
+              updateOrder(orderId, { whatsappClientSent: true })
+              updateOrderStatus(orderId)
+              console.log('🗃️ WhatsApp cliente marcado como enviado en BD local')
+            } catch (dbError) {
+              console.error('❌ Error actualizando BD local:', dbError)
+            }
+            
             console.log('✅ Enviado al cliente exitosamente')
             
             // 👨‍🔧 Enviar también al TÉCNICO si tiene teléfono (guardado en aux3)
@@ -848,6 +872,15 @@ export function FormActions({
                 )
                 
                 if (tecnicoWhatsappResult.success) {
+                  // 📊 Actualizar BD local - Técnico
+                  try {
+                    updateOrder(orderId, { whatsappTechSent: true })
+                    updateOrderStatus(orderId)
+                    console.log('🗃️ WhatsApp técnico marcado como enviado en BD local')
+                  } catch (dbError) {
+                    console.error('❌ Error actualizando BD local:', dbError)
+                  }
+                  
                   console.log('✅ Enviado al técnico exitosamente')
                   toast.success("✅ Paso 6 completado", { 
                     description: "Orden compartida con cliente y técnico",

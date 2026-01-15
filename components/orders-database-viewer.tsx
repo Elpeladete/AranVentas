@@ -106,6 +106,14 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
   }
   
   const handleWhatsAppResend = async (order: OrderRecord) => {
+    // 🔒 Si está en estado "sent" (todo enviado), informar que solo se reenvía WhatsApp
+    if (order.status === 'sent') {
+      toast.info("Reenvío de WhatsApp únicamente", { 
+        description: "Esta orden ya fue enviada completamente. Solo se reenviará por WhatsApp.",
+        duration: 3000
+      })
+    }
+    
     if (!order.formData.telefono) {
       toast.error("Sin teléfono", { 
         description: "Esta orden no tiene un número de teléfono registrado" 
@@ -120,8 +128,17 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
       return
     }
     
+    const statusMsg = order.status === 'sent' 
+      ? '✅ Estado: Enviado completamente\n⚠️ Solo se reenviará WhatsApp (Google Forms y Odoo ya registrados)'
+      : `📊 Estado: ${getStatusText(order.status)}\n⚠️ Se reenviará solo WhatsApp`
+    
     const shouldResend = confirm(
-      `¿Reenviar orden ${order.numeroOrden} por WhatsApp?\n\nSe enviará a: ${order.formData.telefono}\nCliente: ${order.formData.razonSocial || 'Sin especificar'}`
+      `¿Reenviar orden ${order.numeroOrden} por WhatsApp?\n\n` +
+      `${statusMsg}\n\n` +
+      `Se enviará a:\n` +
+      `📱 Cliente: ${order.formData.telefono}\n` +
+      (order.formData.aux3 ? `👨‍🔧 Técnico: ${order.formData.aux3}\n` : '') +
+      `\nRazón Social: ${order.formData.razonSocial || 'Sin especificar'}`
     )
     
     if (!shouldResend) return
@@ -131,6 +148,7 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
         description: `Enviando orden ${order.numeroOrden}` 
       })
       
+      // Enviar al cliente
       const result = await sendServiceOrderToWhatsApp(
         order.formData.telefono,
         order.formData,
@@ -138,10 +156,30 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
       )
       
       if (result.success) {
-        toast.success("¡Reenviado exitosamente!", { 
-          description: `Orden ${order.numeroOrden} enviada por WhatsApp`,
-          duration: 4000 
-        })
+        // Si tiene técnico, enviar también
+        if (order.formData.aux3) {
+          try {
+            await sendServiceOrderToWhatsApp(
+              order.formData.aux3,
+              order.formData,
+              order.imageUrl
+            )
+            toast.success("¡Reenviado exitosamente!", { 
+              description: `Orden ${order.numeroOrden} enviada al cliente y técnico`,
+              duration: 4000 
+            })
+          } catch (tecError) {
+            toast.success("Reenvío parcial", { 
+              description: `Enviado al cliente. Falló envío al técnico.`,
+              duration: 4000 
+            })
+          }
+        } else {
+          toast.success("¡Reenviado exitosamente!", { 
+            description: `Orden ${order.numeroOrden} enviada por WhatsApp`,
+            duration: 4000 
+          })
+        }
       } else {
         toast.error("Error en reenvío", { 
           description: `No se pudo reenviar: ${result.error || 'Error desconocido'}` 
@@ -180,8 +218,10 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
     switch (status) {
       case 'draft': return 'bg-gray-500'
       case 'completed': return 'bg-blue-500'
-      case 'sent': return 'bg-green-500'
-      case 'archived': return 'bg-yellow-600'
+      case 'local-only': return 'bg-red-500'      // Rojo: Solo local
+      case 'partial': return 'bg-yellow-500'      // Amarillo: Envío parcial
+      case 'sent': return 'bg-green-500'          // Verde: Todo enviado
+      case 'archived': return 'bg-gray-600'
       default: return 'bg-gray-400'
     }
   }
@@ -190,9 +230,20 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
     switch (status) {
       case 'draft': return 'Borrador'
       case 'completed': return 'Completado'
+      case 'local-only': return 'Solo Local'
+      case 'partial': return 'Envío Parcial'
       case 'sent': return 'Enviado'
       case 'archived': return 'Archivado'
       default: return 'Desconocido'
+    }
+  }
+  
+  const getStatusIcon = (status: OrderRecord['status']) => {
+    switch (status) {
+      case 'local-only': return '💾'  // Rojo
+      case 'partial': return '⚠️'     // Amarillo
+      case 'sent': return '✅'        // Verde
+      default: return '📄'
     }
   }
   
@@ -231,23 +282,32 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
           </div>
           
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-4 mb-4">
             <div className="text-center p-3 bg-gray-50 rounded-lg">
               <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
               <div className="text-sm text-gray-600">Total</div>
+            </div>
+            <div className="text-center p-3 bg-red-50 rounded-lg">
+              <div className="text-2xl font-bold text-red-600">{stats.localOnly}</div>
+              <div className="text-sm text-red-600">💾 Solo Local</div>
+            </div>
+            <div className="text-center p-3 bg-yellow-50 rounded-lg">
+              <div className="text-2xl font-bold text-yellow-600">{stats.partial}</div>
+              <div className="text-sm text-yellow-600">⚠️ Parcial</div>
+            </div>
+            <div className="text-center p-3 bg-green-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">{stats.sent}</div>
+              <div className="text-sm text-green-600">✅ Enviados</div>
             </div>
             <div className="text-center p-3 bg-gray-50 rounded-lg">
               <div className="text-2xl font-bold text-gray-600">{stats.drafts}</div>
               <div className="text-sm text-gray-600">Borradores</div>
             </div>
-            <div className="text-center p-3 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{stats.completed}</div>
-              <div className="text-sm text-blue-600">Completados</div>
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <div className="text-2xl font-bold text-gray-600">{stats.archived}</div>
+              <div className="text-sm text-gray-600">Archivados</div>
             </div>
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{stats.sent}</div>
-              <div className="text-sm text-green-600">Enviados</div>
-            </div>
+          </div>
             <div className="text-center p-3 bg-yellow-50 rounded-lg">
               <div className="text-2xl font-bold text-yellow-600">{stats.archived}</div>
               <div className="text-sm text-yellow-600">Archivados</div>
@@ -336,7 +396,7 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
                     </td>
                     <td className="px-4 py-3">
                       <Badge className={`${getStatusColor(order.status)} text-white text-xs`}>
-                        {getStatusText(order.status)}
+                        {getStatusIcon(order.status)} {getStatusText(order.status)}
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
@@ -458,14 +518,50 @@ function OrderDetailModal({ order, onClose }: { order: OrderRecord; onClose: () 
                 <label className="text-sm font-medium text-gray-600">Estado</label>
                 <p className="mt-1">
                   <Badge className={`${getStatusColor(order.status)} text-white`}>
-                    {getStatusText(order.status)}
+                    {getStatusIcon(order.status)} {getStatusText(order.status)}
                   </Badge>
                 </p>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-600">Enviado a Google</label>
+                <label className="text-sm font-medium text-gray-600">Google Forms</label>
                 <p className="mt-1">
                   {order.googleFormsSent ? (
+                    <span className="text-green-600 font-medium">✅ Enviado</span>
+                  ) : (
+                    <span className="text-red-600 font-medium">❌ No enviado</span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600">Odoo FSM</label>
+                <p className="mt-1">
+                  {order.odooSent ? (
+                    <span className="text-green-600 font-medium">✅ Enviado</span>
+                  ) : (
+                    <span className="text-red-600 font-medium">❌ No enviado</span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600">WhatsApp Cliente</label>
+                <p className="mt-1">
+                  {order.whatsappClientSent ? (
+                    <span className="text-green-600 font-medium">✅ Enviado</span>
+                  ) : (
+                    <span className="text-red-600 font-medium">❌ No enviado</span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600">WhatsApp Técnico</label>
+                <p className="mt-1">
+                  {order.whatsappTechSent ? (
+                    <span className="text-green-600 font-medium">✅ Enviado</span>
+                  ) : (
+                    <span className="text-gray-500 font-medium">➖ No enviado</span>
+                  )}
+                </p>
+              </div>
                     <Badge className="bg-green-500 text-white">Sí</Badge>
                   ) : (
                     <Badge className="bg-gray-500 text-white">No</Badge>
