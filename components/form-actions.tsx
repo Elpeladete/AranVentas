@@ -50,6 +50,25 @@ export function FormActions({
   // Estados para rastrear envíos
   const [hasBeenSubmitted, setHasBeenSubmitted] = useState(false)
   const lastSubmittedData = useRef<FormData | null>(null)
+  
+  // 🔒 SISTEMA DE PROTECCIÓN CONTRA ENVÍOS DUPLICADOS
+  const [isSubmitting, setIsSubmitting] = useState(false) // Lock para prevenir ejecución concurrente
+  const submissionTimestamp = useRef<number>(0) // Timestamp del último envío
+  const submissionTracker = useRef<{
+    orderId: string | null
+    googleFormsSent: boolean
+    odooSent: boolean
+    whatsappSent: boolean
+    imageCaptured: boolean
+    imageUploaded: boolean
+  }>({
+    orderId: null,
+    googleFormsSent: false,
+    odooSent: false,
+    whatsappSent: false,
+    imageCaptured: false,
+    imageUploaded: false
+  })
 
   // 🚀 Precargar imagen de fondo cuando el componente se monta
   useEffect(() => {
@@ -113,6 +132,49 @@ export function FormActions({
   }
 
   const handleSubmit = async () => {
+    // 🔒 GUARD #1: Prevenir ejecución concurrente
+    if (isSubmitting) {
+      console.warn('⚠️ GUARD: Envío ya en progreso, ignorando clic adicional')
+      toast.warning("Procesando...", { 
+        description: "El formulario se está enviando. Por favor espere.",
+        duration: 3000
+      })
+      return
+    }
+    
+    // 🔒 GUARD #2: Prevenir envíos duplicados en menos de 5 segundos
+    const now = Date.now()
+    const timeSinceLastSubmit = now - submissionTimestamp.current
+    if (timeSinceLastSubmit < 5000 && submissionTimestamp.current > 0) {
+      console.warn('⚠️ GUARD: Intento de envío duplicado en menos de 5 segundos')
+      toast.warning("Demasiado rápido", { 
+        description: `Espere ${Math.ceil((5000 - timeSinceLastSubmit) / 1000)}s antes de volver a enviar`,
+        duration: 3000
+      })
+      return
+    }
+    
+    // 🔒 ACTIVAR LOCK
+    setIsSubmitting(true)
+    submissionTimestamp.current = now
+    
+    // 📊 RESET TRACKER
+    submissionTracker.current = {
+      orderId: null,
+      googleFormsSent: false,
+      odooSent: false,
+      whatsappSent: false,
+      imageCaptured: false,
+      imageUploaded: false
+    }
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('🚀 INICIANDO PROCESO DE ENVÍO DE ORDEN')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('📋 Orden:', formData.numeroOrden)
+    console.log('🌐 Estado de red:', isOnline ? 'ONLINE' : 'OFFLINE')
+    console.log('⏰ Timestamp:', new Date().toISOString())
+    
     try {
       // Verificar si se intenta reenviar sin cambios
       if (isFormUnchangedSinceSubmit()) {
@@ -123,25 +185,40 @@ export function FormActions({
         return
       }
 
-      toast.info("Iniciando proceso...", { description: "Guardando en base de datos local" })
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // 📍 PASO 1: GUARDAR EN BASE DE DATOS LOCAL
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      console.log('\n📍 PASO 1: Guardando en base de datos local...')
+      toast.info("Paso 1/6: Base de datos", { description: "Registrando orden localmente" })
       
-      // PASO 1A: Guardar en base de datos local
-      console.log('🗃️ Guardando en base de datos local...')
       let orderId: string
       try {
         orderId = addNewOrder(formData, 'completed')
-        toast.success("Orden guardada en BD local", { 
-          description: `Orden ${formData.numeroOrden || 'nueva'} registrada` 
+        submissionTracker.current.orderId = orderId
+        
+        console.log('✅ PASO 1 COMPLETADO: Orden guardada en BD local')
+        console.log('   ID:', orderId)
+        console.log('   Número de orden:', formData.numeroOrden)
+        
+        toast.success("✅ Paso 1 completado", { 
+          description: `Orden ${formData.numeroOrden || 'nueva'} registrada localmente`,
+          duration: 2000
         })
       } catch (dbError) {
-        console.error('❌ Error guardando en BD local:', dbError)
-        toast.warning("Advertencia BD", { 
-          description: "No se pudo guardar en base de datos local, continuando..." 
+        console.error('❌ PASO 1 FALLIDO: Error guardando en BD local:', dbError)
+        toast.warning("⚠️ Advertencia BD", { 
+          description: "No se pudo guardar en BD local, continuando...",
+          duration: 3000
         })
         orderId = `temp-${Date.now()}`
+        submissionTracker.current.orderId = orderId
       }
       
-
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // 📍 PASO 2: CAPTURAR IMAGEN DE LA ORDEN
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      console.log('\n📍 PASO 2: Capturando imagen de la orden...')
+      toast.info("Paso 2/6: Captura de imagen", { description: "Generando imagen de la orden" })
       
       // PASO 2: Capturar imagen SIEMPRE (online u offline) - CRÍTICO PARA OFFLINE
       console.log('🚀 Capturando imagen de la orden...')
@@ -273,6 +350,17 @@ export function FormActions({
               reader.readAsDataURL(blob)
             })
             
+            // 📊 MARCAR PASO 2 COMO COMPLETADO
+            submissionTracker.current.imageCaptured = true
+            console.log('✅ PASO 2 COMPLETADO: Imagen capturada exitosamente')
+            console.log('   Formato:', imageUrl ? 'URL pública (ImgBB)' : 'Base64 local')
+            console.log('   Tamaño:', imageBase64.length, 'caracteres')
+            
+            toast.success("✅ Paso 2 completado", { 
+              description: "Imagen capturada y lista para compartir",
+              duration: 2000
+            })
+            
             // Guardar imagen localmente (descarga automática)
             console.log('💾 Descargando imagen localmente...')
             const localUrl = URL.createObjectURL(blob)
@@ -291,6 +379,12 @@ export function FormActions({
 
             // PASO 3: Si hay conexión, intentar subir a ImgBB
             if (isOnline) {
+              // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+              // 📍 PASO 3: SUBIR IMAGEN A IMGBB
+              // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+              console.log('\n📍 PASO 3: Subiendo imagen a ImgBB...')
+              toast.info("Paso 3/6: Subida de imagen", { description: "Obteniendo URL pública" })
+              
               try {
                 console.log('☁️ Conexión disponible - Subiendo a ImgBB...')
                 toast.info("Subiendo imagen...", { description: "Obteniendo URL para compartir" })
@@ -299,24 +393,29 @@ export function FormActions({
                 const uploadResult = await uploadImageToImgBB(base64Data, filename.replace('.png', ''))
                 imageUrl = uploadResult.data.url
                 
-                console.log('💾 URL de ImgBB obtenida:', imageUrl)
-                toast.success("Imagen subida a ImgBB", { 
-                  description: "Disponible online para compartir" 
+                // 📊 MARCAR PASO 3 COMO COMPLETADO
+                submissionTracker.current.imageUploaded = true
+                
+                console.log('✅ PASO 3 COMPLETADO: Imagen subida a ImgBB')
+                console.log('   URL pública:', imageUrl)
+                
+                toast.success("✅ Paso 3 completado", { 
+                  description: "Imagen disponible para compartir",
+                  duration: 2000
                 })
                 
               } catch (uploadError) {
-                console.error('❌ Error subiendo a ImgBB (se usará base64):', uploadError)
-                // No mostrar error, se usará base64 en su lugar
-                toast.info("Imagen guardada localmente", {
-                  description: "Se subirá automáticamente cuando haya mejor conexión",
+                console.error('❌ PASO 3 FALLIDO: Error subiendo a ImgBB:', uploadError)
+                toast.info("⚠️ Paso 3 omitido", {
+                  description: "Se usará imagen local. Se reintentará automáticamente.",
                   duration: 3000
                 })
               }
             } else {
-              console.log('📱 Modo offline - Imagen guardada como base64')
-              toast.info("Modo offline", {
+              console.log('📱 PASO 3 OMITIDO: Modo offline - Imagen guardada como base64')
+              toast.info("⏭️ Paso 3 omitido (offline)", {
                 description: "La imagen se subirá cuando haya conexión",
-                duration: 3000
+                duration: 2000
               })
             }
           } else {
@@ -369,7 +468,13 @@ export function FormActions({
         console.log('   imageBase64 length:', imageBase64.length)
       }
 
-      // PASO 4: Actualizar campo AUX1 con URL de ImgBB O base64
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // 📍 PASO 4: ACTUALIZAR CAMPO AUX1 Y VALIDAR
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      console.log('\n📍 PASO 4: Actualizando datos y validando...')
+      toast.info("Paso 4/6: Validación", { description: "Verificando datos del formulario" })
+      
+      // PASO 4A: Actualizar campo AUX1 con URL de ImgBB O base64
       // Prioridad: URL de ImgBB > base64 > null
       const aux1Value = imageUrl || imageBase64
       if (aux1Value) {
@@ -395,7 +500,7 @@ export function FormActions({
         console.warn('⚠️ No se obtuvo imagen para AUX1')
       }
 
-      // PASO 5: Validar formulario antes de enviar
+      // PASO 4B: Validar formulario antes de enviar
       // Nota: formData debe estar actualizado aquí con aux1 nuevo
       console.log('📋 FormData FINAL para validación y envío:', {
         aux1: formData.aux1,
@@ -449,21 +554,37 @@ export function FormActions({
         }
         
         // Si llega aquí, el usuario decidió continuar con campos faltantes
-        toast.warning("Continuando con envío incompleto", { 
-          description: `Enviando formulario con ${missingFieldsCount} campos faltantes.`,
-          duration: 4000
-        }) // Detener aquí el flujo normal
+        console.log('✅ PASO 4 COMPLETADO CON ADVERTENCIAS: Usuario aceptó continuar con campos faltantes')
+        toast.warning("⚠️ Paso 4: Validación parcial", { 
+          description: `Continuando con ${missingFieldsCount} campos faltantes`,
+          duration: 3000
+        })
         
       } else {
-        toast.success("Validación exitosa", {
-          description: "✅ Todos los campos obligatorios están completos"
+        console.log('✅ PASO 4 COMPLETADO: Validación exitosa')
+        toast.success("✅ Paso 4 completado", {
+          description: "Todos los campos obligatorios completos",
+          duration: 2000
         })
       }
 
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // 📍 PASO 5: ENVIAR A GOOGLE FORMS
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      console.log('\n📍 PASO 5: Enviando a Google Forms...')
+      toast.info("Paso 5/6: Google Forms", { description: "Registrando orden en Google" })
+      
       // PASO 6: Enviar a Google Forms (con manejo offline)
       console.log('📤 Preparando envío a Google Forms...')
       
-      if (!isOnline) {
+      // 🔒 GUARD: Verificar que no se haya enviado ya en esta sesión
+      if (submissionTracker.current.googleFormsSent) {
+        console.warn('⚠️ GUARD: Google Forms ya enviado en esta sesión, omitiendo...')
+        toast.info("⏭️ Google Forms ya enviado", { 
+          description: "Ya se envió a Google Forms, continuando...",
+          duration: 2000
+        })
+      } else if (!isOnline) {
         // SIN CONEXIÓN: Guardar en cola offline CON IMAGEN
         console.log('📱 Modo offline - Guardando en cola para envío posterior')
         console.log('   imageBase64:', imageBase64 ? `EXISTS (${imageBase64.length} chars)` : 'NULL')
@@ -482,10 +603,10 @@ export function FormActions({
           
           await addPendingSubmission(formDataWithImage)
           
-          console.log('✅ Orden guardada en cola offline')
-          toast.success("Orden guardada offline", { 
+          console.log('✅ PASO 5 COMPLETADO (MODO OFFLINE): Orden guardada en cola')
+          toast.success("✅ Paso 5 completado (offline)", { 
             description: "Se enviará automáticamente cuando haya conexión",
-            duration: 5000
+            duration: 3000
           })
           
           // NO marcar como enviado completamente, sino como pendiente
@@ -523,36 +644,63 @@ export function FormActions({
           const result = await submitFormToGoogle(formData)
           
           if (result.success) {
-            console.log('✅ Formulario enviado exitosamente a Google Forms')
+            // 📊 MARCAR PASO 5 COMO COMPLETADO
+            submissionTracker.current.googleFormsSent = true
+            
+            console.log('✅ PASO 5 COMPLETADO: Formulario enviado a Google Forms')
             
             // Sincronizar con Odoo FSM (si está configurado)
-            try {
-              const { isOdooConfigured } = await import('@/lib/odoo-client')
-              const { syncServiceOrderToOdoo } = await import('@/lib/odoo-service')
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // 📍 PASO 5B: SINCRONIZAR CON ODOO (OPCIONAL)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // 🔒 GUARD: Verificar que no se haya enviado ya en esta sesión
+            if (submissionTracker.current.odooSent) {
+              console.warn('⚠️ GUARD: Odoo ya sincronizado en esta sesión, omitiendo...')
+            } else {
+              console.log('\n📍 PASO 5B (OPCIONAL): Sincronizando con Odoo...')
               
-              const odooConfigured = isOdooConfigured()
-              console.log(`🔍 Verificando configuración de Odoo: ${odooConfigured}`)
-              
-              if (odooConfigured) {
-                console.log('🔄 Sincronizando con Odoo FSM')
-                const odooResult = await syncServiceOrderToOdoo(formData)
+              try {
+                const { isOdooConfigured } = await import('@/lib/odoo-client')
+                const { syncServiceOrderToOdoo } = await import('@/lib/odoo-service')
                 
-                if (odooResult.success) {
-                  console.log(`✅ Orden sincronizada con Odoo FSM: ID ${odooResult.orderId}`)
+                const odooConfigured = isOdooConfigured()
+                console.log(`🔍 Verificando configuración de Odoo: ${odooConfigured}`)
+                
+                if (odooConfigured) {
+                  console.log('🔄 Sincronizando con Odoo FSM')
+                  const odooResult = await syncServiceOrderToOdoo(formData)
+                  
+                  if (odooResult.success) {
+                    // 📊 MARCAR ODOO COMO COMPLETADO
+                    submissionTracker.current.odooSent = true
+                    
+                    console.log(`✅ PASO 5B COMPLETADO: Orden sincronizada con Odoo FSM: ID ${odooResult.orderId}`)
+                    toast.success("✅ Sincronizado con Odoo", {
+                      description: `Orden registrada en Odoo (ID: ${odooResult.orderId})`,
+                      duration: 3000
+                    })
+                  } else {
+                    console.warn(`⚠️ PASO 5B FALLIDO: Error sincronizando con Odoo:`, odooResult.error)
+                    toast.warning("⚠️ Odoo no disponible", {
+                      description: "La orden se guardó en Google Forms correctamente",
+                      duration: 3000
+                    })
+                  }
                 } else {
-                  console.warn(`⚠️ Error sincronizando con Odoo FSM:`, odooResult.error)
+                  console.log('ℹ️ PASO 5B OMITIDO: Odoo no configurado')
                 }
-              } else {
-                console.log('ℹ️ Odoo no configurado, omitiendo sincronización FSM')
+              } catch (odooError) {
+                console.warn('⚠️ PASO 5B FALLIDO: Error en sincronización con Odoo:', odooError)
+                toast.info("⚠️ Odoo no disponible", {
+                  description: "La orden se guardó en Google Forms correctamente",
+                  duration: 2000
+                })
               }
-            } catch (odooError) {
-              console.warn('⚠️ Error en sincronización con Odoo:', odooError)
-              // No fallar el proceso si Odoo falla
             }
             
-            toast.success("¡Formulario enviado!", { 
-              description: "Los datos se han guardado correctamente",
-              duration: 5000 
+            toast.success("✅ Paso 5 completado", { 
+              description: "Orden registrada en Google Forms",
+              duration: 2000
             })
             
             // Marcar como enviado
@@ -608,9 +756,22 @@ export function FormActions({
         }
       }
       
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // 📍 PASO 6: ENVIAR POR WHATSAPP (OPCIONAL)
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      console.log('\n📍 PASO 6: Enviando por WhatsApp...')
+      
       // PASO 7: Enviar por WhatsApp si hay número de teléfono y imagen URL de ImgBB
       // (No se envía si solo tenemos base64, ya que WhatsApp necesita URL pública)
-      if (formData.telefono && imageUrl && imageUrl.startsWith('http')) {
+      // 🔒 GUARD: Verificar que no se haya enviado ya en esta sesión
+      if (submissionTracker.current.whatsappSent) {
+        console.warn('⚠️ GUARD: WhatsApp ya enviado en esta sesión, omitiendo...')
+        toast.info("⏭️ WhatsApp ya enviado", { 
+          description: "Ya se envió por WhatsApp, omitiendo...",
+          duration: 2000
+        })
+      } else if (formData.telefono && imageUrl && imageUrl.startsWith('http')) {
+        toast.info("Paso 6/6: WhatsApp", { description: "Compartiendo orden por WhatsApp" })
         // Verificar si esta orden ya fue enviada por WhatsApp anteriormente
         // y si tiene CAMBIOS respecto a la versión anterior
         const existingOrders = getOrdersByNumber(formData.numeroOrden || '')
@@ -674,36 +835,59 @@ export function FormActions({
           )
           
           if (whatsappResult.success) {
-            toast.success("¡Enviado por WhatsApp!", { 
-              description: "La orden se compartió exitosamente por WhatsApp",
-              duration: 4000 
+            // 📊 MARCAR PASO 6 COMO COMPLETADO
+            submissionTracker.current.whatsappSent = true
+            
+            console.log('✅ PASO 6 COMPLETADO: Enviado por WhatsApp exitosamente')
+            toast.success("✅ Paso 6 completado", { 
+              description: "Orden compartida por WhatsApp",
+              duration: 2000
             })
           } else {
-            console.warn('⚠️ WhatsApp falló:', whatsappResult.error)
-            toast.warning("WhatsApp no disponible", { 
-              description: "La orden se guardó correctamente, pero no se pudo enviar por WhatsApp",
-              duration: 4000 
+            console.warn('⚠️ PASO 6 FALLIDO: WhatsApp falló:', whatsappResult.error)
+            toast.warning("⚠️ Paso 6 falló", { 
+              description: "WhatsApp no disponible. La orden se guardó correctamente.",
+              duration: 3000
             })
           }
         } catch (whatsappError) {
-          console.error('❌ Error en WhatsApp:', whatsappError)
-          toast.warning("WhatsApp no disponible", { 
-            description: "La orden se guardó correctamente, pero no se pudo enviar por WhatsApp",
-            duration: 4000 
+          console.error('❌ PASO 6 FALLIDO: Error en WhatsApp:', whatsappError)
+          toast.warning("⚠️ Paso 6 falló", { 
+            description: "WhatsApp no disponible. La orden se guardó correctamente.",
+            duration: 3000
           })
         }
       } else {
-        console.log('ℹ️ WhatsApp omitido:', {
+        console.log('ℹ️ PASO 6 OMITIDO: No se cumplen requisitos para WhatsApp:', {
           hasTelefono: !!formData.telefono,
           hasImageUrl: !!imageUrl,
           isValidUrl: imageUrl?.startsWith('http')
         })
+        toast.info("⏭️ Paso 6 omitido", {
+          description: "WhatsApp requiere teléfono e imagen pública",
+          duration: 2000
+        })
       }
       
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // 🎉 PROCESO COMPLETADO
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      console.log('🎉 PROCESO COMPLETADO EXITOSAMENTE')
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      console.log('📊 RESUMEN DE ENVÍOS:')
+      console.log('   ✅ BD Local:', submissionTracker.current.orderId ? 'GUARDADO' : 'FALLÓ')
+      console.log('   ✅ Imagen capturada:', submissionTracker.current.imageCaptured ? 'SÍ' : 'NO')
+      console.log('   ✅ Imagen subida:', submissionTracker.current.imageUploaded ? 'SÍ (ImgBB)' : 'NO (Local)')
+      console.log('   ✅ Google Forms:', submissionTracker.current.googleFormsSent ? 'ENVIADO' : 'PENDIENTE')
+      console.log('   ✅ Odoo FSM:', submissionTracker.current.odooSent ? 'SINCRONIZADO' : 'NO CONFIGURADO/FALLÓ')
+      console.log('   ✅ WhatsApp:', submissionTracker.current.whatsappSent ? 'ENVIADO' : 'OMITIDO/FALLÓ')
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      
       console.log('✅ Proceso completado exitosamente')
-      toast.success("Formulario enviado exitosamente", { 
+      toast.success("🎉 ¡Proceso completado!", { 
         description: "Orden guardada y enviada correctamente",
-        duration: 5000 
+        duration: 4000
       })
       
       // Ocultar la validación prominente después del envío exitoso
@@ -712,11 +896,22 @@ export function FormActions({
       }
       
     } catch (error) {
-      console.error('❌ Error en proceso completo:', error)
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      console.error('❌ ERROR CRÍTICO EN PROCESO DE ENVÍO')
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      console.error('Error:', error)
+      console.error('Tipo:', error instanceof Error ? error.constructor.name : typeof error)
+      console.error('Mensaje:', error instanceof Error ? error.message : String(error))
+      
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
-      toast.error("Error en el proceso", { 
-        description: `${errorMessage}. Los datos locales están guardados.`
+      toast.error("❌ Error en el proceso", { 
+        description: `${errorMessage}. Verifique los datos guardados localmente.`,
+        duration: 6000
       })
+    } finally {
+      // 🔓 LIBERAR LOCK SIEMPRE
+      setIsSubmitting(false)
+      console.log('🔓 Lock liberado - Proceso finalizado')
     }
   }
 
@@ -1123,6 +1318,7 @@ export function FormActions({
   }
 
   const getSubmitButtonText = () => {
+    if (isSubmitting) return "Enviando..." // 🔒 Mostrar estado de envío
     if (isChecking) return "Verificando conexión..."
     if (isFormUnchangedSinceSubmit()) return "Ya enviado (sin cambios)"
     if (!isOnline) return "Guardar localmente"
@@ -1132,6 +1328,7 @@ export function FormActions({
   }
 
   const getSubmitButtonIcon = () => {
+    if (isSubmitting) return <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> // 🔒 Spinner durante envío
     if (isChecking) return <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
     if (isFormUnchangedSinceSubmit()) return <CheckCircle className="w-4 h-4" />
     if (!isOnline) return <Clock className="w-4 h-4" />
@@ -1196,33 +1393,37 @@ export function FormActions({
         <Button 
           onClick={handleSubmit} 
           className={`w-full sm:w-auto h-7 text-xs px-2 ${
-            isFormUnchangedSinceSubmit()
-              ? 'bg-gray-500 hover:bg-gray-600 cursor-not-allowed'
-              : !isOnline 
-                ? 'bg-orange-600 hover:bg-orange-700' 
-                : hasErrors 
-                  ? 'bg-yellow-600 hover:bg-yellow-700'
-                  : hasBeenSubmitted
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-primary hover:bg-primary/90'
+            isSubmitting
+              ? 'bg-gray-400 cursor-wait opacity-80' // 🔒 Estado durante envío
+              : isFormUnchangedSinceSubmit()
+                ? 'bg-gray-500 hover:bg-gray-600 cursor-not-allowed'
+                : !isOnline 
+                  ? 'bg-orange-600 hover:bg-orange-700' 
+                  : hasErrors 
+                    ? 'bg-yellow-600 hover:bg-yellow-700'
+                    : hasBeenSubmitted
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-primary hover:bg-primary/90'
           }`}
-          disabled={isFormUnchangedSinceSubmit()}
+          disabled={isSubmitting || isChecking || isFormUnchangedSinceSubmit()} // 🔒 Deshabilitar durante envío
           title={
-            isFormUnchangedSinceSubmit()
-              ? "Formulario ya enviado sin cambios - Modifique algún campo para reenviar"
-              : !isOnline 
-                ? "Sin conexión - Se guardará localmente y se enviará cuando haya internet"
-                : hasErrors
-                  ? "Hay errores en el formulario - Se pedirá confirmación para enviar incompleto"
-                  : hasBeenSubmitted
-                    ? "Reenviar formulario con los cambios realizados"
-                    : "Enviar formulario a Google Forms"
+            isSubmitting
+              ? "Enviando formulario... Por favor espere"
+              : isFormUnchangedSinceSubmit()
+                ? "Formulario ya enviado sin cambios - Modifique algún campo para reenviar"
+                : !isOnline 
+                  ? "Sin conexión - Se guardará localmente y se enviará cuando haya internet"
+                  : hasErrors
+                    ? "Hay errores en el formulario - Se pedirá confirmación para enviar incompleto"
+                    : hasBeenSubmitted
+                      ? "Reenviar formulario con los cambios realizados"
+                      : "Enviar formulario a Google Forms"
           }
         >
           {getSubmitButtonIcon()}
           <span className="ml-1">
             <span className="hidden sm:inline">{getSubmitButtonText()}</span>
-            <span className="sm:hidden">{isOnline ? "Enviar" : "Guardar"}</span>
+            <span className="sm:hidden">{isSubmitting ? "..." : isOnline ? "Enviar" : "Guardar"}</span>
           </span>
         </Button>
       </div>
