@@ -247,16 +247,6 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
     }
   }
   
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('es-AR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
-  
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-7xl h-[90vh] flex flex-col">
@@ -306,11 +296,6 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
             <div className="text-center p-3 bg-gray-50 rounded-lg">
               <div className="text-2xl font-bold text-gray-600">{stats.archived}</div>
               <div className="text-sm text-gray-600">Archivados</div>
-            </div>
-          </div>
-            <div className="text-center p-3 bg-yellow-50 rounded-lg">
-              <div className="text-2xl font-bold text-yellow-600">{stats.archived}</div>
-              <div className="text-sm text-yellow-600">Archivados</div>
             </div>
           </div>
           
@@ -559,12 +544,6 @@ function OrderDetailModal({ order, onClose }: { order: OrderRecord; onClose: () 
                     <span className="text-green-600 font-medium">✅ Enviado</span>
                   ) : (
                     <span className="text-gray-500 font-medium">➖ No enviado</span>
-                  )}
-                </p>
-              </div>
-                    <Badge className="bg-green-500 text-white">Sí</Badge>
-                  ) : (
-                    <Badge className="bg-gray-500 text-white">No</Badge>
                   )}
                 </p>
               </div>
