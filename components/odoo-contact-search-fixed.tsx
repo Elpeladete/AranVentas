@@ -84,9 +84,10 @@ export function OdooContactSearch({
       
       if (!result.success) {
         console.error('❌ Error de conexión Odoo:', result.error)
+        console.error('📋 Tipo de error:', typeof result.error)
         setSearchError(result.error || 'Error de conexión')
       } else {
-        console.log('✅ Odoo conectado exitosamente')
+        console.log('✅ Odoo conectado exitosamente, UID:', result.uid)
         setSearchError(null)
       }
     } catch (error) {

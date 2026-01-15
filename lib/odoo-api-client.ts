@@ -83,6 +83,8 @@ export async function testOdooConnection(): Promise<OdooConnectionResult> {
 
     const result = await response.json()
     
+    console.log('📊 Respuesta de /api/odoo/authenticate:', JSON.stringify(result, null, 2))
+    
     if (result.result && result.result.uid) {
       console.log('✅ Conexión con Odoo exitosa. UID:', result.result.uid)
       return {
@@ -90,10 +92,14 @@ export async function testOdooConnection(): Promise<OdooConnectionResult> {
         uid: result.result.uid
       }
     } else if (result.error) {
-      console.error('❌ Error de autenticación:', result.error)
+      console.error('❌ Error de autenticación:', JSON.stringify(result.error, null, 2))
+      // Convertir error object a string para evitar React Error #31
+      const errorMessage = typeof result.error === 'string' 
+        ? result.error 
+        : result.error.message || result.error.data?.message || JSON.stringify(result.error)
       return {
         success: false,
-        error: result.error
+        error: errorMessage
       }
     } else {
       return {
