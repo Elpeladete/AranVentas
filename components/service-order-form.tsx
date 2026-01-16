@@ -107,19 +107,11 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
     console.log('🔢 Tipo de teléfono:', typeof tecnico.telefono)
     console.log('📏 Longitud teléfono:', tecnico.telefono?.length || 0)
     console.log('❓ ¿Tiene teléfono?:', !!tecnico.telefono)
+    console.log('ℹ️ Nota: El teléfono se guarda automáticamente en aux3 por TecnicoAutocomplete')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     
     // Autocompletar el nombre del técnico
     setTempValue(tecnico.nombre)
-    
-    // 📱 Guardar teléfono del técnico en aux3 para envío por WhatsApp
-    if (tecnico.telefono) {
-      onUpdateField('aux3', tecnico.telefono)
-      console.log('✅ Teléfono del técnico guardado en aux3:', tecnico.telefono)
-    } else {
-      console.warn('⚠️ Técnico sin teléfono:', tecnico.nombre)
-      console.warn('⚠️ Objeto técnico completo:', JSON.stringify(tecnico, null, 2))
-    }
     
     // Mostrar información adicional en el toast
     const infoDetails = []
@@ -1203,6 +1195,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                 value={tempValue as string}
                 onChange={handleTempValueChange}
                 onSelect={handleTecnicoSelect}
+                onUpdateField={onUpdateField}
                 placeholder="Buscar técnico..."
                 className="text-sm"
               />

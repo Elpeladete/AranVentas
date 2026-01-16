@@ -9,6 +9,7 @@ interface TecnicoAutocompleteProps {
   value: string
   onChange: (value: string) => void
   onSelect?: (tecnico: TecnicoSearchResult) => void
+  onUpdateField?: (field: string, value: any) => void
   placeholder?: string
   className?: string
 }
@@ -17,6 +18,7 @@ export function TecnicoAutocomplete({
   value,
   onChange,
   onSelect,
+  onUpdateField,
   placeholder = "Buscar técnico...",
   className = ""
 }: TecnicoAutocompleteProps) {
@@ -70,6 +72,14 @@ export function TecnicoAutocomplete({
   const handleSelect = (tecnico: TecnicoSearchResult) => {
     onChange(tecnico.nombre)
     setShowResults(false)
+    
+    // Guardar teléfono del técnico en aux3 si onUpdateField está disponible
+    if (onUpdateField && tecnico.telefono) {
+      onUpdateField('aux3', tecnico.telefono)
+      console.log('✅ [TecnicoAutocomplete] Teléfono guardado en aux3:', tecnico.telefono)
+    } else if (!tecnico.telefono) {
+      console.warn('⚠️ [TecnicoAutocomplete] Técnico sin teléfono:', tecnico.nombre)
+    }
     
     if (onSelect) {
       onSelect(tecnico)
