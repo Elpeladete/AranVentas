@@ -96,7 +96,18 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
   
   // Función para manejar selección de técnico
   const handleTecnicoSelect = (tecnico: TecnicoSearchResult) => {
-    console.log('👨‍🔧 Técnico seleccionado:', tecnico)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('👨‍🔧 TÉCNICO SELECCIONADO - DEBUG COMPLETO')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('📋 Objeto completo del técnico:', tecnico)
+    console.log('👤 Nombre:', tecnico.nombre)
+    console.log('📱 Teléfono:', tecnico.telefono)
+    console.log('💼 Cargo:', tecnico.cargo)
+    console.log('📧 Email:', tecnico.email)
+    console.log('🔢 Tipo de teléfono:', typeof tecnico.telefono)
+    console.log('📏 Longitud teléfono:', tecnico.telefono?.length || 0)
+    console.log('❓ ¿Tiene teléfono?:', !!tecnico.telefono)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     
     // Autocompletar el nombre del técnico
     setTempValue(tecnico.nombre)
@@ -104,9 +115,10 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
     // 📱 Guardar teléfono del técnico en aux3 para envío por WhatsApp
     if (tecnico.telefono) {
       onUpdateField('aux3', tecnico.telefono)
-      console.log('📱 Teléfono del técnico guardado en aux3:', tecnico.telefono)
+      console.log('✅ Teléfono del técnico guardado en aux3:', tecnico.telefono)
     } else {
       console.warn('⚠️ Técnico sin teléfono:', tecnico.nombre)
+      console.warn('⚠️ Objeto técnico completo:', JSON.stringify(tecnico, null, 2))
     }
     
     // Mostrar información adicional en el toast
@@ -122,13 +134,23 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
   
   // Función para buscar teléfono cuando se cierra el campo sin seleccionar del autocomplete
   const handleTecnicoBlur = async (nombreTecnico: string) => {
-    if (!nombreTecnico || nombreTecnico.trim().length < 2) return
+    if (!nombreTecnico || nombreTecnico.trim().length < 2) {
+      console.log('⏭️ handleTecnicoBlur: nombre muy corto, saltando búsqueda')
+      return
+    }
     
-    console.log('🔍 Buscando teléfono para técnico escrito manualmente:', nombreTecnico)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('🔍 BUSCANDO TELÉFONO AUTOMÁTICAMENTE')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('👤 Nombre a buscar:', nombreTecnico)
+    console.log('📏 Longitud del nombre:', nombreTecnico.length)
     
     try {
       const { searchTecnicos } = await import('@/lib/tecnicos-search')
       const results = await searchTecnicos(nombreTecnico, 5)
+      
+      console.log('📊 Resultados encontrados:', results.length)
+      console.log('📋 Resultados completos:', results)
       
       if (results.length > 0) {
         // Buscar coincidencia exacta o muy cercana
@@ -138,9 +160,13 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
         
         const bestMatch = exactMatch || results[0]
         
+        console.log('🎯 Mejor coincidencia:', bestMatch)
+        console.log('📱 Teléfono del mejor match:', bestMatch.telefono)
+        console.log('❓ ¿Tiene teléfono?:', !!bestMatch.telefono)
+        
         if (bestMatch.telefono) {
           onUpdateField('aux3', bestMatch.telefono)
-          console.log('✅ Teléfono encontrado automáticamente:', bestMatch.telefono, 'para', bestMatch.nombre)
+          console.log('✅ Teléfono guardado en aux3:', bestMatch.telefono)
           
           toast.info("Teléfono detectado", {
             description: `${bestMatch.nombre}: ${bestMatch.telefono}`,
@@ -148,6 +174,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
           })
         } else {
           console.warn('⚠️ Técnico encontrado pero sin teléfono:', bestMatch.nombre)
+          console.warn('⚠️ Objeto completo:', JSON.stringify(bestMatch, null, 2))
         }
       } else {
         console.warn('⚠️ No se encontró técnico con ese nombre:', nombreTecnico)
@@ -155,6 +182,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
     } catch (error) {
       console.error('❌ Error buscando teléfono del técnico:', error)
     }
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   }
   
   const [activeField, setActiveField] = useState<keyof FormData | null>(null)
