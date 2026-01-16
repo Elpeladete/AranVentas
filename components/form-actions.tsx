@@ -8,6 +8,7 @@ import type { FormData } from "@/hooks/use-form-data"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { toast } from "@/lib/toast"
 import { validateForm, validateRequiredFields } from "@/lib/validations"
+import { CompletionConfirmationDialog } from "@/components/completion-confirmation-dialog"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { sendServiceOrderToWhatsApp } from "@/lib/wazzup-api"
 import { submitFormToGoogle } from "@/lib/google-forms"
@@ -46,6 +47,13 @@ export function FormActions({
   onShowDatabase
 }: FormActionsProps) {
   const { isOnline, isChecking } = useNetworkStatus()
+  
+  // Estados para el modal de confirmación
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false)
+  const [validationData, setValidationData] = useState<{
+    missingFields: string[]
+    errors: Record<string, string>
+  }>({ missingFields: [], errors: {} })
   
   // Estados para rastrear envíos
   const [hasBeenSubmitted, setHasBeenSubmitted] = useState(false)
@@ -154,7 +162,24 @@ export function FormActions({
       return
     }
     
+    // 📋 Validar campos antes de mostrar el modal
+    const validation = validateRequiredFields(formData)
+    setValidationData({
+      missingFields: validation.missingFields,
+      errors: validation.errors
+    })
+    
+    // Mostrar modal de confirmación
+    setShowConfirmationDialog(true)
+    
+  }
+
+  const proceedWithSubmit = async () => {
+    // Cerrar el modal
+    setShowConfirmationDialog(false)
+    
     // 🔒 ACTIVAR LOCK
+    const now = Date.now()
     setIsSubmitting(true)
     submissionTimestamp.current = now
     
@@ -1410,9 +1435,9 @@ export function FormActions({
     if (isChecking) return "Verificando conexión..."
     if (isFormUnchangedSinceSubmit()) return "Ya enviado (sin cambios)"
     if (!isOnline) return "Guardar localmente"
-    if (hasErrors) return "Guardar y Compartir (incompleto)"
+    if (hasErrors) return "Completar (incompleto)"
     if (hasBeenSubmitted) return "Reenviar formulario"
-    return "Guardar y Compartir"
+    return "Completar"
   }
 
   const getSubmitButtonIcon = () => {
@@ -1425,7 +1450,17 @@ export function FormActions({
   }
 
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-2 flex-wrap">
+    <>
+      <CompletionConfirmationDialog
+        open={showConfirmationDialog}
+        onOpenChange={setShowConfirmationDialog}
+        onConfirm={proceedWithSubmit}
+        onEdit={() => setShowConfirmationDialog(false)}
+        missingFields={validationData.missingFields}
+        errors={validationData.errors}
+      />
+      
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-2 flex-wrap">
       {/* Estado del formulario */}
       <div className="flex items-center gap-1.5 text-xs">
         {getStatusIcon()}
@@ -1516,5 +1551,6 @@ export function FormActions({
         </Button>
       </div>
     </div>
+    </>
   )
 }
