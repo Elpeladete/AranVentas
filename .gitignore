@@ -29,3 +29,6 @@ next-env.d.ts
 # build info generado automáticamente
 /lib/build-info.generated.ts
 /lib/build-info.generated.js
+
+# scripts de inspección
+inspect-*.js
