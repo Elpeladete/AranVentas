@@ -484,7 +484,8 @@ export function FormActions({
       // así que usamos una variable local inmediata
       const formDataWithImage: AranFormData = {
         ...formData,
-        aux1: aux1Value || formData.aux1 // Usar nueva imagen o mantener la existente
+        aux1: aux1Value || formData.aux1, // Usar nueva imagen o mantener la existente
+        aux3: formData.aux3 // Asegurar que el teléfono del técnico se incluya
       }
       
       if (aux1Value) {
