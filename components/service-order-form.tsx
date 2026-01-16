@@ -104,7 +104,9 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
     // 📱 Guardar teléfono del técnico en aux3 para envío por WhatsApp
     if (tecnico.telefono) {
       onUpdateField('aux3', tecnico.telefono)
-      console.log('📱 Teléfono del técnico guardado:', tecnico.telefono)
+      console.log('📱 Teléfono del técnico guardado en aux3:', tecnico.telefono)
+    } else {
+      console.warn('⚠️ Técnico sin teléfono:', tecnico.nombre)
     }
     
     // Mostrar información adicional en el toast
@@ -116,6 +118,43 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
       description: `${tecnico.nombre}${infoDetails.length > 0 ? ` - ${infoDetails.join(', ')}` : ''}`,
       duration: 3000
     })
+  }
+  
+  // Función para buscar teléfono cuando se cierra el campo sin seleccionar del autocomplete
+  const handleTecnicoBlur = async (nombreTecnico: string) => {
+    if (!nombreTecnico || nombreTecnico.trim().length < 2) return
+    
+    console.log('🔍 Buscando teléfono para técnico escrito manualmente:', nombreTecnico)
+    
+    try {
+      const { searchTecnicos } = await import('@/lib/tecnicos-search')
+      const results = await searchTecnicos(nombreTecnico, 5)
+      
+      if (results.length > 0) {
+        // Buscar coincidencia exacta o muy cercana
+        const exactMatch = results.find(t => 
+          t.nombre.toLowerCase() === nombreTecnico.toLowerCase()
+        )
+        
+        const bestMatch = exactMatch || results[0]
+        
+        if (bestMatch.telefono) {
+          onUpdateField('aux3', bestMatch.telefono)
+          console.log('✅ Teléfono encontrado automáticamente:', bestMatch.telefono, 'para', bestMatch.nombre)
+          
+          toast.info("Teléfono detectado", {
+            description: `${bestMatch.nombre}: ${bestMatch.telefono}`,
+            duration: 3000
+          })
+        } else {
+          console.warn('⚠️ Técnico encontrado pero sin teléfono:', bestMatch.nombre)
+        }
+      } else {
+        console.warn('⚠️ No se encontró técnico con ese nombre:', nombreTecnico)
+      }
+    } catch (error) {
+      console.error('❌ Error buscando teléfono del técnico:', error)
+    }
   }
   
   const [activeField, setActiveField] = useState<keyof FormData | null>(null)
@@ -409,7 +448,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
     }
   }
 
-  const handleApplyValue = () => {
+  const handleApplyValue = async () => {
     if (activeField) {
       let finalValue = tempValue
       
@@ -419,6 +458,15 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
       }
       
       updateField(activeField, finalValue)
+      
+      // 🔍 Si se guardó el nombre del técnico, buscar automáticamente su teléfono
+      if (activeField === "tecnicoNombre" && typeof finalValue === "string") {
+        // Esperar un poco para que se guarde el nombre primero
+        setTimeout(() => {
+          handleTecnicoBlur(finalValue)
+        }, 100)
+      }
+      
       setActiveField(null)
       toast.success("Campo actualizado", { 
         description: `${clickableAreas.find(a => a.id === activeField)?.label} guardado correctamente`,
