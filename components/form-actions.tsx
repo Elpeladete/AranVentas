@@ -198,44 +198,43 @@ export function FormActions({
           })
           imageUrl = canvas.toDataURL('image/png')
           console.log('✅ Imagen capturada para borrador')
+          
+          // Actualizar formData con la imagen
+          if (onUpdateField) {
+            onUpdateField('imageUrl', imageUrl)
+          }
         } catch (captureError) {
           console.warn('⚠️ No se pudo capturar imagen para borrador:', captureError)
         }
       }
       
-      // Guardar en localStorage como borrador
-      const orderData = {
-        numeroOrden: formData.numeroOrden,
-        timestamp: Date.now(),
-        formData: formData,
-        imageUrl: imageUrl || '',
-        googleFormsSent: false,
-        odooSent: false,
-        whatsappClientSent: false,
-        whatsappTechSent: false,
-        status: 'draft' as const,
-        lastUpdated: Date.now()
-      }
+      // Verificar si la orden ya existe en la base de datos
+      const existingOrders = getOrdersByNumber(formData.numeroOrden)
       
-      const existingOrders = JSON.parse(localStorage.getItem('serviceOrders') || '[]')
-      const existingIndex = existingOrders.findIndex(
-        (o: any) => o.numeroOrden === formData.numeroOrden
-      )
-      
-      if (existingIndex >= 0) {
-        existingOrders[existingIndex] = orderData
-        console.log('📝 Actualizando borrador existente')
+      if (existingOrders.length > 0) {
+        // Actualizar borrador existente
+        const existingOrder = existingOrders[0]
+        updateOrder(existingOrder.id, {
+          formData: formData,
+          imageUrl: imageUrl || existingOrder.imageUrl,
+          status: 'draft'
+        })
+        console.log('📝 Actualizando borrador existente, ID:', existingOrder.id)
+        
+        toast.success("Borrador actualizado", { 
+          description: `Orden ${formData.numeroOrden} actualizada`,
+          duration: 4000 
+        })
       } else {
-        existingOrders.push(orderData)
-        console.log('📝 Creando nuevo borrador')
+        // Crear nuevo borrador
+        const orderId = addNewOrder(formData, 'draft', imageUrl)
+        console.log('📝 Nuevo borrador creado, ID:', orderId)
+        
+        toast.success("Borrador guardado", { 
+          description: `Orden ${formData.numeroOrden} guardada como borrador`,
+          duration: 4000 
+        })
       }
-      
-      localStorage.setItem('serviceOrders', JSON.stringify(existingOrders))
-      
-      toast.success("Borrador guardado", { 
-        description: `Orden ${formData.numeroOrden} guardada como borrador`,
-        duration: 4000 
-      })
       
       console.log('✅ Borrador guardado exitosamente')
     } catch (error) {

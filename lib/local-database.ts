@@ -89,7 +89,11 @@ function generateOrderId(): string {
 /**
  * Agrega una nueva orden a la base de datos
  */
-export function addNewOrder(formData: AranFormData, status: OrderRecord['status'] = 'draft'): string {
+export function addNewOrder(
+  formData: AranFormData, 
+  status: OrderRecord['status'] = 'draft',
+  imageUrl?: string
+): string {
   const orders = getAllOrders()
   
   const newOrder: OrderRecord = {
@@ -99,6 +103,7 @@ export function addNewOrder(formData: AranFormData, status: OrderRecord['status'
     updatedAt: new Date(),
     status,
     formData: { ...formData }, // Crear copia profunda
+    imageUrl: imageUrl,
     
     // Inicializar tracking de envíos
     googleFormsSent: false,
