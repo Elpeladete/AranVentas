@@ -585,6 +585,19 @@ export function FormActions({
         aux3: formData.aux3 // Asegurar que el teléfono del técnico se incluya
       }
       
+      // 🔍 DEBUG CRÍTICO: Verificar teléfono del técnico
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      console.log('🔍 VERIFICACIÓN DE TELÉFONO DEL TÉCNICO')
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      console.log('📋 formData.aux3:', formData.aux3)
+      console.log('📋 formDataWithImage.aux3:', formDataWithImage.aux3)
+      console.log('👨‍🔧 formData.tecnicoNombre:', formData.tecnicoNombre)
+      console.log('📱 formData.telefono (cliente):', formData.telefono)
+      console.log('🔢 Tipo de aux3:', typeof formData.aux3)
+      console.log('📏 Longitud de aux3:', formData.aux3?.length || 0)
+      console.log('❓ ¿aux3 está vacío?:', !formData.aux3)
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      
       if (aux1Value) {
         console.log('📝 Actualizando campo AUX1:', imageUrl ? 'URL de ImgBB' : 'base64')
         console.log('📋 AUX1 valor:', aux1Value.substring(0, 80))
