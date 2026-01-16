@@ -442,17 +442,17 @@ export async function syncServiceOrderToOdoo(
       try {
         const properties: Record<string, string> = {}
         
-        // Responsable (técnico) - property-name: 023fce0d060a72e5
+        // Responsable (técnico) - property-name: 113f4894c9cabd10
         if (formData.tecnicoNombre) {
-          properties['023fce0d060a72e5'] = formData.tecnicoNombre
+          properties['113f4894c9cabd10'] = formData.tecnicoNombre
           console.log('📝 Responsable:', formData.tecnicoNombre)
         }
         
-        // Geoposición - property-name: e73b68a1d2053f16 (HTML con link clickeable a Google Maps)
+        // Geoposición - property-name: 1dcb0b05dac06db2_html (HTML con link clickeable a Google Maps)
         if (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada') {
           const googleMapsLink = `https://www.google.com/maps?q=${formData.aux2}`
           const htmlLink = `<p><a href="${googleMapsLink}" target="_blank" class="o_link_in_selection">📍 Ver ubicación en Google Maps</a></p>`
-          properties['e73b68a1d2053f16_html'] = htmlLink
+          properties['1dcb0b05dac06db2_html'] = htmlLink
           console.log('📍 Geoposición:', googleMapsLink)
         }
         
