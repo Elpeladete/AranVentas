@@ -839,8 +839,16 @@ export function FormActions({
         
         // Intentar enviar por WhatsApp
         try {
+          // � DEBUG: Verificar datos antes de enviar
+          console.log('🔍 DEBUG - Datos para envío de WhatsApp:')
+          console.log('  📱 Teléfono cliente (formData.telefono):', formData.telefono)
+          console.log('  👨‍🔧 Teléfono técnico (formData.aux3):', formData.aux3)
+          console.log('  👨‍🔧 Teléfono técnico (formDataWithImage.aux3):', formDataWithImage.aux3)
+          console.log('  🖼️ Image URL:', imageUrl?.substring(0, 50))
+          
           // 📱 Enviar al CLIENTE
-          console.log('📱 Enviando WhatsApp al cliente:', formData.telefono)
+          console.log('\n📱 === ENVIANDO AL CLIENTE ===')
+          console.log('  Número destino:', formData.telefono)
           const whatsappResult = await sendServiceOrderToWhatsApp(
             formData.telefono,
             formData,
@@ -863,8 +871,16 @@ export function FormActions({
             console.log('✅ Enviado al cliente exitosamente')
             
             // 👨‍🔧 Enviar también al TÉCNICO si tiene teléfono (guardado en aux3)
+            console.log('\n🔍 DEBUG - Verificando teléfono del técnico:')
+            console.log('  formData.aux3:', formData.aux3)
+            console.log('  formDataWithImage.aux3:', formDataWithImage.aux3)
+            console.log('  ¿Tiene teléfono técnico?', !!formDataWithImage.aux3)
+            
             if (formDataWithImage.aux3) {
-              console.log('📱 Enviando WhatsApp al técnico:', formDataWithImage.aux3)
+              console.log('\n👨‍🔧 === ENVIANDO AL TÉCNICO ===')
+              console.log('  Número destino:', formDataWithImage.aux3)
+              console.log('  ¿Es diferente al cliente?', formDataWithImage.aux3 !== formData.telefono)
+              
               try {
                 const tecnicoWhatsappResult = await sendServiceOrderToWhatsApp(
                   formDataWithImage.aux3,
@@ -889,6 +905,7 @@ export function FormActions({
                   })
                 } else {
                   console.warn('⚠️ Falló envío al técnico:', tecnicoWhatsappResult.error)
+                  console.log('  Número que falló:', formDataWithImage.aux3)
                   toast.success("✅ Paso 6 parcial", { 
                     description: "Enviado al cliente. Fallo al enviar al técnico.",
                     duration: 3000
@@ -902,7 +919,13 @@ export function FormActions({
                 })
               }
             } else {
-              console.log('ℹ️ Técnico sin teléfono, no se envía WhatsApp')
+              console.log('\n⚠️ NO SE ENVIÓ AL TÉCNICO')
+              console.log('  Razón: formDataWithImage.aux3 está vacío o undefined')
+              console.log('  formData.aux3:', formData.aux3)
+              console.log('  formDataWithImage.aux3:', formDataWithImage.aux3)
+              console.log('  Tipo de formData.aux3:', typeof formData.aux3)
+              console.log('  Tipo de formDataWithImage.aux3:', typeof formDataWithImage.aux3)
+              
               toast.success("✅ Paso 6 completado", { 
                 description: "Orden compartida con cliente",
                 duration: 2000
