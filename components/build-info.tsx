@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react'
 import { buildInfo } from '@/lib/build-info'
+import { useUpdateChecker } from '@/hooks/use-update-checker'
+import { RefreshCw } from 'lucide-react'
 
 interface BuildInfoDisplayProps {
   position?: 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right'
@@ -15,6 +17,7 @@ export function BuildInfoDisplay({
   className = '' 
 }: BuildInfoDisplayProps) {
   const [expanded, setExpanded] = useState(false)
+  const { updateAvailable, checkForUpdates, reloadApp } = useUpdateChecker()
 
   const positionClasses = {
     'bottom-left': 'bottom-2 left-2',
@@ -33,7 +36,13 @@ export function BuildInfoDisplay({
         className={`fixed ${positionClasses[position]} z-50 ${className}`}
         onClick={() => setExpanded(true)}
       >
-        <div className="bg-gray-800 text-white text-xs px-2 py-1 rounded cursor-pointer hover:bg-gray-700 transition-colors">
+        <div className="bg-gray-800 text-white text-xs px-2 py-1 rounded cursor-pointer hover:bg-gray-700 transition-colors relative">
+          {updateAvailable && (
+            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+            </span>
+          )}
           v{buildInfo.version} • {buildInfo.commitHash}
         </div>
       </div>
@@ -133,6 +142,27 @@ export function BuildInfoDisplay({
               </div>
             </div>
           )}
+          
+          {/* Botón de actualización */}
+          <div className="pt-2 border-t border-gray-700">
+            {updateAvailable ? (
+              <button
+                onClick={reloadApp}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-1.5 px-3 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Actualizar disponible
+              </button>
+            ) : (
+              <button
+                onClick={() => checkForUpdates(true)}
+                className="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 py-1.5 px-3 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Buscar actualizaciones
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
