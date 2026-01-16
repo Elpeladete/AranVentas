@@ -38,6 +38,40 @@ const Icons = {
   Edit: () => <span>✏️</span>
 }
 
+// Funciones auxiliares para estado de órdenes
+const getStatusColor = (status: OrderRecord['status']) => {
+  switch (status) {
+    case 'draft': return 'bg-gray-500'
+    case 'completed': return 'bg-blue-500'
+    case 'local-only': return 'bg-red-500'      // Rojo: Solo local
+    case 'partial': return 'bg-yellow-500'      // Amarillo: Envío parcial
+    case 'sent': return 'bg-green-500'          // Verde: Todo enviado
+    case 'archived': return 'bg-gray-600'
+    default: return 'bg-gray-400'
+  }
+}
+
+const getStatusText = (status: OrderRecord['status']) => {
+  switch (status) {
+    case 'draft': return 'Borrador'
+    case 'completed': return 'Completado'
+    case 'local-only': return 'Solo Local'
+    case 'partial': return 'Envío Parcial'
+    case 'sent': return 'Enviado'
+    case 'archived': return 'Archivado'
+    default: return 'Desconocido'
+  }
+}
+
+const getStatusIcon = (status: OrderRecord['status']) => {
+  switch (status) {
+    case 'local-only': return '💾'  // Rojo
+    case 'partial': return '⚠️'     // Amarillo
+    case 'sent': return '✅'        // Verde
+    default: return '📄'
+  }
+}
+
 interface OrdersDatabaseViewerProps {
   onClose?: () => void
   onEditOrder?: (order: OrderRecord) => void
@@ -211,39 +245,6 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
       toast.success("Orden cargada", { 
         description: `${order.numeroOrden} lista para editar` 
       })
-    }
-  }
-  
-  const getStatusColor = (status: OrderRecord['status']) => {
-    switch (status) {
-      case 'draft': return 'bg-gray-500'
-      case 'completed': return 'bg-blue-500'
-      case 'local-only': return 'bg-red-500'      // Rojo: Solo local
-      case 'partial': return 'bg-yellow-500'      // Amarillo: Envío parcial
-      case 'sent': return 'bg-green-500'          // Verde: Todo enviado
-      case 'archived': return 'bg-gray-600'
-      default: return 'bg-gray-400'
-    }
-  }
-  
-  const getStatusText = (status: OrderRecord['status']) => {
-    switch (status) {
-      case 'draft': return 'Borrador'
-      case 'completed': return 'Completado'
-      case 'local-only': return 'Solo Local'
-      case 'partial': return 'Envío Parcial'
-      case 'sent': return 'Enviado'
-      case 'archived': return 'Archivado'
-      default: return 'Desconocido'
-    }
-  }
-  
-  const getStatusIcon = (status: OrderRecord['status']) => {
-    switch (status) {
-      case 'local-only': return '💾'  // Rojo
-      case 'partial': return '⚠️'     // Amarillo
-      case 'sent': return '✅'        // Verde
-      default: return '📄'
     }
   }
   
@@ -603,28 +604,6 @@ function OrderDetailModal({ order, onClose }: { order: OrderRecord; onClose: () 
       </Card>
     </div>
   )
-}
-
-// Función auxiliar para colores de estado
-function getStatusColor(status: OrderRecord['status']) {
-  switch (status) {
-    case 'draft': return 'bg-gray-500'
-    case 'completed': return 'bg-blue-500'
-    case 'sent': return 'bg-green-500'
-    case 'archived': return 'bg-yellow-600'
-    default: return 'bg-gray-400'
-  }
-}
-
-// Función auxiliar para texto de estado  
-function getStatusText(status: OrderRecord['status']) {
-  switch (status) {
-    case 'draft': return 'Borrador'
-    case 'completed': return 'Completado'
-    case 'sent': return 'Enviado'
-    case 'archived': return 'Archivado'
-    default: return 'Desconocido'
-  }
 }
 
 // Función auxiliar para formato de fecha
