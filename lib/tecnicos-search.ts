@@ -100,6 +100,13 @@ function parseTecnicosCsv(csvText: string): TecnicoData[] {
   const lines = csvText.trim().split('\n')
   const tecnicos: TecnicoData[] = []
   
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  console.log('📊 PARSEANDO CSV DE TÉCNICOS')
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  console.log('📄 Total de líneas:', lines.length)
+  console.log('📋 Primera línea:', lines[0])
+  console.log('📋 Segunda línea:', lines[1])
+  
   // Procesar cada línea (sin header, directamente los datos)
   lines.forEach((line, index) => {
     try {
@@ -112,6 +119,19 @@ function parseTecnicosCsv(csvText: string): TecnicoData[] {
         const email = columns[1]?.trim() || ''
         const telefono = columns[2]?.trim() || '' // Columna 3 = índice 2
         const cargo = columns[3]?.trim() || ''
+        
+        // Log detallado para Martín Aused
+        if (nombre && nombre.toLowerCase().includes('mart')) {
+          console.log('━━━ DEBUG: Técnico "Martín" encontrado ━━━')
+          console.log('Línea completa:', line)
+          console.log('Separador detectado:', separator === '\t' ? 'TAB' : 'COMA')
+          console.log('Columnas totales:', columns.length)
+          console.log('Columna[0] (nombre):', nombre)
+          console.log('Columna[1] (email):', email)
+          console.log('Columna[2] (telefono):', telefono)
+          console.log('Columna[3] (cargo):', cargo)
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+        }
         
         if (nombre) {
           tecnicos.push({
@@ -126,6 +146,9 @@ function parseTecnicosCsv(csvText: string): TecnicoData[] {
       console.warn(`⚠️ Error parseando línea ${index + 1}:`, line, error)
     }
   })
+  
+  console.log('✅ Total de técnicos parseados:', tecnicos.length)
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   
   return tecnicos
 }
