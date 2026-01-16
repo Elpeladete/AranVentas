@@ -198,6 +198,79 @@ export function FormActions({
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log('📋 Orden:', formData.numeroOrden)
     console.log('🌐 Estado de red:', isOnline ? 'ONLINE' : 'OFFLINE')
+
+  const handleSaveDraft = async () => {
+    // Cerrar el modal
+    setShowConfirmationDialog(false)
+    
+    try {
+      console.log('💾 Guardando borrador de orden:', formData.numeroOrden)
+      
+      // Capturar la imagen del formulario si no se ha hecho ya
+      let imageUrl = formData.imageUrl
+      if (!imageUrl && formRef?.current) {
+        toast.info("Generando vista previa...", { 
+          description: "Capturando imagen del formulario",
+          duration: 2000 
+        })
+        
+        try {
+          const canvas = await html2canvas(formRef.current, {
+            scale: 2,
+            logging: false,
+            useCORS: true,
+            allowTaint: true
+          })
+          imageUrl = canvas.toDataURL('image/png')
+          console.log('✅ Imagen capturada para borrador')
+        } catch (captureError) {
+          console.warn('⚠️ No se pudo capturar imagen para borrador:', captureError)
+        }
+      }
+      
+      // Guardar en localStorage como borrador
+      const orderData = {
+        numeroOrden: formData.numeroOrden,
+        timestamp: Date.now(),
+        formData: formData,
+        imageUrl: imageUrl || '',
+        googleFormsSent: false,
+        odooSent: false,
+        whatsappClientSent: false,
+        whatsappTechSent: false,
+        status: 'draft' as const,
+        lastUpdated: Date.now()
+      }
+      
+      const existingOrders = JSON.parse(localStorage.getItem('serviceOrders') || '[]')
+      const existingIndex = existingOrders.findIndex(
+        (o: any) => o.numeroOrden === formData.numeroOrden
+      )
+      
+      if (existingIndex >= 0) {
+        existingOrders[existingIndex] = orderData
+        console.log('📝 Actualizando borrador existente')
+      } else {
+        existingOrders.push(orderData)
+        console.log('📝 Creando nuevo borrador')
+      }
+      
+      localStorage.setItem('serviceOrders', JSON.stringify(existingOrders))
+      
+      toast.success("Borrador guardado", { 
+        description: `Orden ${formData.numeroOrden} guardada como borrador`,
+        duration: 4000 
+      })
+      
+      console.log('✅ Borrador guardado exitosamente')
+    } catch (error) {
+      console.error('❌ Error al guardar borrador:', error)
+      toast.error("Error al guardar", { 
+        description: "No se pudo guardar el borrador. Intente nuevamente.",
+        duration: 4000 
+      })
+    }
+  }
     console.log('⏰ Timestamp:', new Date().toISOString())
     
     try {
@@ -1456,6 +1529,7 @@ export function FormActions({
         onOpenChange={setShowConfirmationDialog}
         onConfirm={proceedWithSubmit}
         onEdit={() => setShowConfirmationDialog(false)}
+        onSaveDraft={handleSaveDraft}
         missingFields={validationData.missingFields}
         errors={validationData.errors}
       />

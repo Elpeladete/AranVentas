@@ -9,13 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { CheckCircle, AlertTriangle, FileEdit } from "lucide-react"
+import { CheckCircle, AlertTriangle, FileEdit, Save } from "lucide-react"
 
 interface CompletionConfirmationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: () => void
   onEdit: () => void
+  onSaveDraft?: () => void
   missingFields: string[]
   errors: Record<string, string>
 }
@@ -25,6 +26,7 @@ export function CompletionConfirmationDialog({
   onOpenChange,
   onConfirm,
   onEdit,
+  onSaveDraft,
   missingFields,
   errors,
 }: CompletionConfirmationDialogProps) {
@@ -141,15 +143,28 @@ export function CompletionConfirmationDialog({
             type="button"
             variant="outline"
             onClick={onEdit}
-            className="w-full sm:w-auto order-2 sm:order-1"
+            className="w-full sm:w-auto order-3 sm:order-1"
           >
             <FileEdit className="h-4 w-4 mr-2" />
             Seguir Editando
           </Button>
+          
+          {onSaveDraft && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onSaveDraft}
+              className="w-full sm:w-auto order-2 border-blue-300 text-blue-600 hover:bg-blue-50"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Guardar Borrador
+            </Button>
+          )}
+          
           <Button
             type="button"
             onClick={onConfirm}
-            className={`w-full sm:w-auto order-1 sm:order-2 ${
+            className={`w-full sm:w-auto order-1 sm:order-3 ${
               hasIssues 
                 ? "bg-yellow-600 hover:bg-yellow-700" 
                 : "bg-green-600 hover:bg-green-700"

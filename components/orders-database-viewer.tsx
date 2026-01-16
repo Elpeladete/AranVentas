@@ -31,6 +31,7 @@ const Icons = {
   Clock: () => <span>🕐</span>,
   Archive: () => <span>📦</span>,
   Eye: () => <span>👁️</span>,
+  Image: () => <span>🖼️</span>,
   RefreshCw: () => <span>🔄</span>,
   Calendar: () => <span>📅</span>,
   WhatsApp: () => <span>📱</span>,
@@ -393,6 +394,7 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
+                        {/* Ver detalles - Siempre visible */}
                         <Button
                           size="sm"
                           variant="outline"
@@ -402,6 +404,34 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
                         >
                           <Icons.Eye />
                         </Button>
+                        
+                        {/* Ver Orden (imagen) - Solo si existe imagen */}
+                        {order.imageUrl && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 w-8 p-0 text-purple-600"
+                            onClick={() => window.open(order.imageUrl, '_blank')}
+                            title="Ver Orden (imagen)"
+                          >
+                            <Icons.Image />
+                          </Button>
+                        )}
+                        
+                        {/* Reenviar WhatsApp - Solo si tiene teléfono e imagen válida */}
+                        {order.formData.telefono && order.imageUrl && order.imageUrl.startsWith('http') && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 w-8 p-0 text-green-600"
+                            onClick={() => handleWhatsAppResend(order)}
+                            title="Reenviar por WhatsApp"
+                          >
+                            <Icons.WhatsApp />
+                          </Button>
+                        )}
+                        
+                        {/* Editar - Solo para borradores */}
                         {order.status === 'draft' && onEditOrder && (
                           <Button
                             size="sm"
@@ -413,37 +443,17 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
                             <Icons.Edit />
                           </Button>
                         )}
+                        
+                        {/* Archivar - Para todo excepto archivados */}
                         {order.status !== 'archived' && (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 w-8 p-0 text-yellow-600"
+                            className="h-8 w-8 p-0 text-gray-600"
                             onClick={() => handleArchive(order)}
                             title="Archivar"
                           >
                             <Icons.Archive />
-                          </Button>
-                        )}
-                        {order.imageUrl && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 w-8 p-0 text-blue-600"
-                            onClick={() => window.open(order.imageUrl, '_blank')}
-                            title="Ver imagen"
-                          >
-                            <Icons.FileText />
-                          </Button>
-                        )}
-                        {order.formData.telefono && order.imageUrl && order.imageUrl.startsWith('http') && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 w-8 p-0 text-green-600"
-                            onClick={() => handleWhatsAppResend(order)}
-                            title="Reenviar por WhatsApp"
-                          >
-                            <Icons.WhatsApp />
                           </Button>
                         )}
                       </div>
