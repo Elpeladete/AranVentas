@@ -157,7 +157,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
         console.log('❓ ¿Tiene teléfono?:', !!bestMatch.telefono)
         
         if (bestMatch.telefono) {
-          onUpdateField('aux3', bestMatch.telefono)
+          updateField('aux3', bestMatch.telefono)
           console.log('✅ Teléfono guardado en aux3:', bestMatch.telefono)
           
           toast.info("Teléfono detectado", {
@@ -1195,7 +1195,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                 value={tempValue as string}
                 onChange={handleTempValueChange}
                 onSelect={handleTecnicoSelect}
-                onUpdateField={onUpdateField}
+                onUpdateField={updateField}
                 placeholder="Buscar técnico..."
                 className="text-sm"
               />
