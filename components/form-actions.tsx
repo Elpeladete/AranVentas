@@ -174,31 +174,6 @@ export function FormActions({
     
   }
 
-  const proceedWithSubmit = async () => {
-    // Cerrar el modal
-    setShowConfirmationDialog(false)
-    
-    // 🔒 ACTIVAR LOCK
-    const now = Date.now()
-    setIsSubmitting(true)
-    submissionTimestamp.current = now
-    
-    // 📊 RESET TRACKER
-    submissionTracker.current = {
-      orderId: null,
-      googleFormsSent: false,
-      odooSent: false,
-      whatsappSent: false,
-      imageCaptured: false,
-      imageUploaded: false
-    }
-    
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log('🚀 INICIANDO PROCESO DE ENVÍO DE ORDEN')
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log('📋 Orden:', formData.numeroOrden)
-    console.log('🌐 Estado de red:', isOnline ? 'ONLINE' : 'OFFLINE')
-
   const handleSaveDraft = async () => {
     // Cerrar el modal
     setShowConfirmationDialog(false)
@@ -271,6 +246,31 @@ export function FormActions({
       })
     }
   }
+
+  const proceedWithSubmit = async () => {
+    // Cerrar el modal
+    setShowConfirmationDialog(false)
+    
+    // 🔒 ACTIVAR LOCK
+    const now = Date.now()
+    setIsSubmitting(true)
+    submissionTimestamp.current = now
+    
+    // 📊 RESET TRACKER
+    submissionTracker.current = {
+      orderId: null,
+      googleFormsSent: false,
+      odooSent: false,
+      whatsappSent: false,
+      imageCaptured: false,
+      imageUploaded: false
+    }
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('🚀 INICIANDO PROCESO DE ENVÍO DE ORDEN')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('📋 Orden:', formData.numeroOrden)
+    console.log('🌐 Estado de red:', isOnline ? 'ONLINE' : 'OFFLINE')
     console.log('⏰ Timestamp:', new Date().toISOString())
     
     try {
