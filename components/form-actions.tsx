@@ -987,46 +987,59 @@ export function FormActions({
             console.log('  ¿Tiene teléfono técnico?', !!formDataWithImage.aux3)
             
             if (formDataWithImage.aux3) {
-              console.log('\n👨‍🔧 === ENVIANDO AL TÉCNICO ===')
-              console.log('  Número destino:', formDataWithImage.aux3)
+              console.log('\n👨‍🔧 === VERIFICANDO ENVÍO AL TÉCNICO ===')
+              console.log('  Número destino técnico:', formDataWithImage.aux3)
+              console.log('  Número destino cliente:', formData.telefono)
               console.log('  ¿Es diferente al cliente?', formDataWithImage.aux3 !== formData.telefono)
               
-              try {
-                const tecnicoWhatsappResult = await sendServiceOrderToWhatsApp(
-                  formDataWithImage.aux3,
-                  formData,
-                  imageUrl
-                )
+              // ✅ Solo enviar al técnico si su número es diferente al del cliente
+              if (formDataWithImage.aux3 === formData.telefono) {
+                console.log('⏭️ OMITIENDO envío al técnico: mismo número que el cliente')
+                console.log('  Evitando duplicado para:', formData.telefono)
+                toast.success("✅ Paso 6 completado", { 
+                  description: "WhatsApp enviado (cliente y técnico comparten número)",
+                  duration: 2000
+                })
+              } else {
+                console.log('✅ Número diferente - Enviando al técnico')
                 
-                if (tecnicoWhatsappResult.success) {
-                  // 📊 Actualizar BD local - Técnico
-                  try {
-                    updateOrder(orderId, { whatsappTechSent: true })
-                    updateOrderStatus(orderId)
-                    console.log('🗃️ WhatsApp técnico marcado como enviado en BD local')
-                  } catch (dbError) {
-                    console.error('❌ Error actualizando BD local:', dbError)
-                  }
+                try {
+                  const tecnicoWhatsappResult = await sendServiceOrderToWhatsApp(
+                    formDataWithImage.aux3,
+                    formData,
+                    imageUrl
+                  )
                   
-                  console.log('✅ Enviado al técnico exitosamente')
-                  toast.success("✅ Paso 6 completado", { 
-                    description: "Orden compartida con cliente y técnico",
-                    duration: 2000
-                  })
-                } else {
-                  console.warn('⚠️ Falló envío al técnico:', tecnicoWhatsappResult.error)
-                  console.log('  Número que falló:', formDataWithImage.aux3)
+                  if (tecnicoWhatsappResult.success) {
+                    // 📊 Actualizar BD local - Técnico
+                    try {
+                      updateOrder(orderId, { whatsappTechSent: true })
+                      updateOrderStatus(orderId)
+                      console.log('🗃️ WhatsApp técnico marcado como enviado en BD local')
+                    } catch (dbError) {
+                      console.error('❌ Error actualizando BD local:', dbError)
+                    }
+                    
+                    console.log('✅ Enviado al técnico exitosamente')
+                    toast.success("✅ Paso 6 completado", { 
+                      description: "Orden compartida con cliente y técnico",
+                      duration: 2000
+                    })
+                  } else {
+                    console.warn('⚠️ Falló envío al técnico:', tecnicoWhatsappResult.error)
+                    console.log('  Número que falló:', formDataWithImage.aux3)
+                    toast.success("✅ Paso 6 parcial", { 
+                      description: "Enviado al cliente. Fallo al enviar al técnico.",
+                      duration: 3000
+                    })
+                  }
+                } catch (tecnicoError) {
+                  console.warn('⚠️ Error enviando al técnico:', tecnicoError)
                   toast.success("✅ Paso 6 parcial", { 
                     description: "Enviado al cliente. Fallo al enviar al técnico.",
                     duration: 3000
                   })
                 }
-              } catch (tecnicoError) {
-                console.warn('⚠️ Error enviando al técnico:', tecnicoError)
-                toast.success("✅ Paso 6 parcial", { 
-                  description: "Enviado al cliente. Fallo al enviar al técnico.",
-                  duration: 3000
-                })
               }
             } else {
               console.log('\n⚠️ NO SE ENVIÓ AL TÉCNICO')
