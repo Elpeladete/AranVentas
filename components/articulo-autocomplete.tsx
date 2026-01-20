@@ -22,6 +22,8 @@ export function ArticuloAutocomplete({
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
+  const [, forceUpdate] = useState(0) // Para forzar actualización de posición
+  const [justSelected, setJustSelected] = useState(false) // Flag para evitar reabrir
   
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
@@ -32,7 +34,14 @@ export function ArticuloAutocomplete({
       if (value.length < 3) {
         setSuggestions([])
         setShowSuggestions(false)
+        // Resetear flag cuando el usuario borra el texto
+        setJustSelected(false)
         return
+      }
+      
+      // No mostrar sugerencias si acabamos de seleccionar
+      if (justSelected) {
+        return // No resetear el flag, se mantiene hasta que el usuario escriba
       }
       
       setLoading(true)
@@ -53,7 +62,7 @@ export function ArticuloAutocomplete({
     // Debounce la búsqueda
     const timeoutId = setTimeout(performSearch, 300)
     return () => clearTimeout(timeoutId)
-  }, [value])
+  }, [value, justSelected])
   
   // Manejar selección con teclado
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -85,9 +94,11 @@ export function ArticuloAutocomplete({
   
   // Manejar selección de sugerencia
   const handleSelectSuggestion = (insumo: InsumoData) => {
+    setJustSelected(true) // Marcar que acabamos de seleccionar
     onSelect(insumo)
     setShowSuggestions(false)
     setSelectedIndex(-1)
+    setSuggestions([])
   }
   
   // Cerrar sugerencias al hacer clic fuera
@@ -106,6 +117,23 @@ export function ArticuloAutocomplete({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+  
+  // Actualizar posición de sugerencias al hacer scroll o resize
+  useEffect(() => {
+    if (!showSuggestions) return
+    
+    const updatePosition = () => {
+      forceUpdate(prev => prev + 1)
+    }
+    
+    window.addEventListener('scroll', updatePosition, true)
+    window.addEventListener('resize', updatePosition)
+    
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [showSuggestions])
   
   return (
     <div className="relative">
@@ -136,37 +164,72 @@ export function ArticuloAutocomplete({
       {showSuggestions && suggestions.length > 0 && (
         <div
           ref={suggestionsRef}
-          className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto"
+          className="fixed z-[9999] bg-white border-2 border-purple-400 rounded-lg shadow-2xl overflow-y-auto"
+          style={{
+            left: '2rem',
+            right: '2rem',
+            top: textareaRef.current ? `${textareaRef.current.getBoundingClientRect().bottom + 4}px` : '0',
+            maxHeight: '50vh',
+            minWidth: '300px'
+          }}
         >
-          {suggestions.map((insumo, index) => (
-            <button
-              key={`${insumo.codigoOriginal}-${index}`}
-              onClick={() => handleSelectSuggestion(insumo)}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none ${
-                index === selectedIndex ? 'bg-blue-100' : ''
-              }`}
-            >
-              <div className="font-medium text-gray-900">
-                {insumo.codigoOriginal}
-              </div>
-              <div className="text-gray-600 truncate">
-                {insumo.descripcion}
-              </div>
-              <div className="text-green-600 text-xs">
-                Precio estimado: ${new Intl.NumberFormat('es-CL', {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0
-                }).format(insumo.precioEstimado)}
-              </div>
-            </button>
-          ))}
+          <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-purple-500 text-white px-4 py-2 text-sm font-semibold shadow-md z-10">
+            📝 {suggestions.length} resultado{suggestions.length !== 1 ? 's' : ''} encontrado{suggestions.length !== 1 ? 's' : ''}
+          </div>
+          <div className="divide-y divide-gray-100">
+            {suggestions.map((insumo, index) => (
+              <button
+                key={`${insumo.codigoOriginal}-${index}`}
+                onClick={() => handleSelectSuggestion(insumo)}
+                className={`w-full text-left px-4 py-3 hover:bg-purple-50 focus:bg-purple-50 focus:outline-none transition-colors ${
+                  index === selectedIndex ? 'bg-purple-100 border-l-4 border-purple-600' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                      <span className="bg-gray-100 px-2 py-0.5 rounded text-sm font-mono">
+                        {insumo.codigoOriginal}
+                      </span>
+                    </div>
+                    <div className="text-gray-700 text-sm">
+                      {insumo.descripcion}
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <div className="text-green-600 font-semibold text-base">
+                      ${new Intl.NumberFormat('es-CL', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
+                      }).format(insumo.precioEstimado)}
+                    </div>
+                    <div className="text-xs text-gray-500">Precio est.</div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="sticky bottom-0 bg-gray-50 px-4 py-2 text-xs text-gray-600 border-t">
+            💡 Usa ↑↓ para navegar • Enter para seleccionar • Esc para cerrar
+          </div>
         </div>
       )}
       
       {showSuggestions && suggestions.length === 0 && value.length >= 3 && !loading && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3">
-          <div className="text-sm text-gray-500 text-center">
-            No se encontraron artículos para "{value}"
+        <div 
+          className="fixed z-[9999] bg-white border-2 border-gray-300 rounded-lg shadow-xl p-4"
+          style={{
+            left: '2rem',
+            right: '2rem',
+            top: textareaRef.current ? `${textareaRef.current.getBoundingClientRect().bottom + 4}px` : '0',
+            minWidth: '300px'
+          }}
+        >
+          <div className="text-center">
+            <div className="text-4xl mb-2">🔍</div>
+            <div className="text-sm text-gray-600 font-medium">
+              No se encontraron artículos para <span className="font-bold text-gray-900">"{value}"</span>
+            </div>
           </div>
         </div>
       )}
