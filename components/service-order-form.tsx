@@ -784,13 +784,13 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
       const viewportWidth = window.innerWidth
       const viewportHeight = window.innerHeight
       
-      // Tamaño especial para la tabla de insumos - 90% ancho, 60% alto del contenedor
+      // Tamaño especial para la tabla de insumos - 90% ancho, 85% alto del contenedor
       const isInsumosTable = activeField === "insumos"
       const overlayWidth = isInsumosTable 
         ? containerRect.width * 0.90  // 90% del ancho del contenedor del formulario
         : (isMobile ? 320 : isTablet ? 350 : 400)
       const overlayHeight = isInsumosTable 
-        ? containerRect.height * 0.60  // 60% del alto del contenedor del formulario
+        ? containerRect.height * 0.85  // 85% del alto del contenedor del formulario
         : (isMobile ? 350 : isTablet ? 450 : 500)  // Aumentado para contenido completo
       
       // Calcular posición inicial basada en el campo

@@ -101,6 +101,11 @@ self.addEventListener('fetch', (event) => {
             return response
           }
           
+          // Saltear site.webmanifest en desarrollo para evitar errores
+          if (url.pathname === '/site.webmanifest') {
+            return response
+          }
+          
           // Clonar la respuesta para cachearla
           const responseToCache = response.clone()
           
