@@ -325,7 +325,7 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
         </div>
 
         {/* Data Rows */}
-        <div className="max-h-56 overflow-y-auto">
+        <div className="max-h-[600px] overflow-y-auto">
           {rows.map((row, rowIndex) => (
             <div key={rowIndex} className="grid border-b border-gray-200 hover:bg-gray-50 items-start" style={{ gridTemplateColumns: '1fr 2.6fr 2.6fr 4fr 2fr', minHeight: '1.75rem' }}>
               <div className="border-r border-gray-200 flex items-start">

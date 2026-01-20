@@ -788,10 +788,10 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
       const isInsumosTable = activeField === "insumos"
       const overlayWidth = isInsumosTable 
         ? containerRect.width * 0.90  // 90% del ancho del contenedor del formulario
-        : (isMobile ? 320 : isTablet ? 350 : 400)
+        : (isMobile ? 360 : isTablet ? 500 : 600)  // Ancho reducido para mejor visualización
       const overlayHeight = isInsumosTable 
         ? containerRect.height * 0.85  // 85% del alto del contenedor del formulario
-        : (isMobile ? 350 : isTablet ? 450 : 500)  // Aumentado para contenido completo
+        : (isMobile ? viewportHeight * 0.60 : isTablet ? viewportHeight * 0.65 : viewportHeight * 0.65)  // 60-65% del viewport
       
       // Calcular posición inicial basada en el campo
       let percentageX = isInsumosTable 
@@ -810,7 +810,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
       const halfOverlayWidth = overlayWidth / 2
       if (leftPos - halfOverlayWidth < 0) {
         // Reposicionar para que no se salga por la izquierda
-        leftPos = halfOverlayWidth + 20 // 20px de margen
+        leftPos = halfOverlayWidth + 55 // 55px de margen
         percentageX = (leftPos / containerRect.width) * 100
       }
       
@@ -822,8 +822,8 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
       }
       
       // ========== AJUSTES VERTICALES ==========
-      // Posicionar el overlay arriba del campo (5% menos)
-      topPos = topPos - (containerRect.height * 0.05)
+      // Posicionar el overlay arriba del campo (35% menos)
+      topPos = topPos - (containerRect.height * 0.30)
       
       // Verificar si se sale por arriba
       if (topPos < 0) {
@@ -848,9 +848,10 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
           return {
             position: 'fixed' as const,
             left: '50%',
-            top: '50%',
+            top: '35%',
             transform: 'translate(-50%, -50%)',
             width: `${Math.min(overlayWidth, viewportWidth - 40)}px`,
+            height: `${Math.min(overlayHeight, viewportHeight - 100)}px`,
             maxHeight: `${Math.min(overlayHeight, viewportHeight - 100)}px`,
             overflow: 'auto',
             zIndex: 60
@@ -866,9 +867,10 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
         return {
           position: 'fixed' as const,
           left: '50%',
-          top: '20%',
+          top: '10%',
           transform: 'translateX(-50%)',
           width: `${Math.min(overlayWidth, viewportWidth - 40)}px`,
+          height: `${Math.min(overlayHeight, viewportHeight - 100)}px`,
           maxHeight: `${Math.min(overlayHeight, viewportHeight - 100)}px`,
           overflow: 'auto',
           zIndex: 60
@@ -880,6 +882,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
         left: `${percentageX}%`,
         top: `${Math.max(0, percentageY)}%`,
         width: `${overlayWidth}px`,
+        height: `${overlayHeight}px`,
         maxHeight: `${overlayHeight}px`,
         overflow: 'auto',
         zIndex: 60,
@@ -903,12 +906,9 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
           className={`bg-white border-2 border-blue-500 rounded-lg shadow-xl z-50 relative flex flex-col ${
             activeField === 'insumos' 
               ? 'min-w-[90%]'  // Tabla de insumos ocupa 90% del ancho
-              : 'min-w-[280px] max-w-[400px]'  // Overlays normales
+              : ''  // Sin restricciones de ancho para overlays normales
           }`}
-          style={{
-            ...positionStyle,
-            maxHeight: positionStyle.maxHeight || 'calc(100vh - 100px)' // Asegurar altura máxima
-          }}
+          style={positionStyle}
         >
           {/* Indicador visual que apunta al área */}
           <div className="absolute -top-2 left-4 w-4 h-4 bg-blue-500 transform rotate-45 border-l-2 border-t-2 border-white"></div>
@@ -992,9 +992,9 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                       ref={textareaRef}
                       value={tempValue as string}
                       onChange={(e) => handleTempValueChange(e.target.value)}
-                      rows={isMobile ? 3 : 4}
+                      rows={isMobile ? 20 : 40}
                       placeholder={`Ingrese ${field.label.toLowerCase()}`}
-                      className="text-sm pr-10"
+                      className="text-sm pr-10 min-h-[500px]"
                       autoFocus
                     />
                     {activeField === "descripcion" && (
