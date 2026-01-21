@@ -16,7 +16,8 @@ import {
   AlertCircle, 
   RefreshCw,
   Trash2,
-  Download
+  Download,
+  Send
 } from "lucide-react"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { useSyncManager } from "@/lib/offline-sync"
@@ -25,9 +26,15 @@ import {
   getPendingStats, 
   clearAllPendingSubmissions,
   exportPendingSubmissions,
+  updateSubmissionStatus,
   type PendingFormSubmission 
 } from "@/lib/offline-storage"
 import { toast } from "@/lib/toast"
+import { submitFormToGoogle } from "@/lib/google-forms"
+import { syncServiceOrderToOdoo } from "@/lib/odoo-service"
+import { isOdooConfigured } from "@/lib/odoo-client"
+import { sendServiceOrderToWhatsApp } from "@/lib/wazzup-api"
+import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 
 interface PendingFormsListProps {
   onClose?: () => void
@@ -39,6 +46,7 @@ export function PendingFormsList({ onClose }: PendingFormsListProps) {
   const [pendingForms, setPendingForms] = useState<PendingFormSubmission[]>([])
   const [stats, setStats] = useState(getPendingStats())
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [resendingId, setResendingId] = useState<string | null>(null)
 
   // Función para actualizar la lista
   const refreshPendingForms = () => {
@@ -142,6 +150,177 @@ export function PendingFormsList({ onClose }: PendingFormsListProps) {
     toast.success("Formularios exportados", {
       description: "Archivo JSON descargado exitosamente"
     })
+  }
+
+  // Función para reenviar una orden completada
+  const handleResend = async (form: PendingFormSubmission) => {
+    if (!isOnline) {
+      toast.error("Sin conexión", {
+        description: "No es posible reenviar sin conexión a internet"
+      })
+      return
+    }
+
+    if (!confirm(`¿Desea reenviar la orden #${form.formData.numeroOrden} a Google Forms, WhatsApp y Odoo?`)) {
+      return
+    }
+
+    setResendingId(form.id)
+    
+    try {
+      console.log('🔄 Reenviando orden completada:', form.formData.numeroOrden)
+      
+      // Marcar como uploading temporalmente
+      updateSubmissionStatus(form.id, 'uploading')
+      refreshPendingForms()
+      
+      // Preparar datos procesados (si hay base64, convertir a URL)
+      let processedFormData = { ...form.formData }
+      
+      // Procesar imagen del formulario (aux1) si está en base64
+      if (form.formData.aux1?.startsWith('data:image')) {
+        console.log('🖼️ Subiendo imagen del formulario...')
+        try {
+          const base64Data = form.formData.aux1.split(',')[1]
+          const result = await uploadImageToImgBB(
+            base64Data,
+            `orden-${form.formData.numeroOrden}-reenvio-${Date.now()}`
+          )
+          processedFormData.aux1 = result.data.url
+          console.log('✅ Imagen subida:', result.data.url)
+        } catch (error) {
+          console.warn('⚠️ Error subiendo imagen:', error)
+        }
+      }
+
+      // Procesar firmas si están en base64
+      if (form.formData.tecnicoFirma?.startsWith('data:image')) {
+        try {
+          const base64Data = form.formData.tecnicoFirma.split(',')[1]
+          const result = await uploadImageToImgBB(
+            base64Data,
+            `firma-tecnico-${form.formData.numeroOrden}-reenvio-${Date.now()}`
+          )
+          processedFormData.tecnicoFirma = result.data.url
+        } catch (error) {
+          console.warn('⚠️ Error subiendo firma técnico:', error)
+        }
+      }
+
+      if (form.formData.clienteFirma?.startsWith('data:image')) {
+        try {
+          const base64Data = form.formData.clienteFirma.split(',')[1]
+          const result = await uploadImageToImgBB(
+            base64Data,
+            `firma-cliente-${form.formData.numeroOrden}-reenvio-${Date.now()}`
+          )
+          processedFormData.clienteFirma = result.data.url
+        } catch (error) {
+          console.warn('⚠️ Error subiendo firma cliente:', error)
+        }
+      }
+
+      let successCount = 0
+      let errorMessages: string[] = []
+
+      // 1. Enviar a Google Forms
+      toast.info("Enviando a Google Forms...")
+      try {
+        const googleResult = await submitFormToGoogle(processedFormData)
+        if (googleResult.success) {
+          successCount++
+          console.log('✅ Google Forms enviado')
+        } else {
+          errorMessages.push('Google Forms: ' + (googleResult.error || 'Error desconocido'))
+        }
+      } catch (error) {
+        console.error('❌ Error enviando a Google Forms:', error)
+        errorMessages.push('Google Forms: ' + (error instanceof Error ? error.message : 'Error'))
+      }
+
+      // 2. Enviar a Odoo (si está configurado)
+      if (isOdooConfigured()) {
+        toast.info("Enviando a Odoo...")
+        try {
+          const odooResult = await syncServiceOrderToOdoo(processedFormData)
+          if (odooResult.success) {
+            successCount++
+            console.log('✅ Odoo enviado:', odooResult.orderId)
+          } else {
+            errorMessages.push('Odoo: ' + (odooResult.error || 'Error desconocido'))
+          }
+        } catch (error) {
+          console.error('❌ Error enviando a Odoo:', error)
+          errorMessages.push('Odoo: ' + (error instanceof Error ? error.message : 'Error'))
+        }
+      }
+
+      // 3. Enviar por WhatsApp (si hay teléfono y imagen URL)
+      const imageUrl = processedFormData.aux1
+      if (form.formData.telefono && imageUrl && imageUrl.startsWith('http')) {
+        toast.info("Enviando por WhatsApp...")
+        try {
+          const whatsappResult = await sendServiceOrderToWhatsApp(
+            form.formData.telefono,
+            processedFormData,
+            imageUrl
+          )
+          if (whatsappResult.success) {
+            successCount++
+            console.log('✅ WhatsApp enviado al cliente')
+
+            // Enviar también al técnico si tiene teléfono diferente
+            if (processedFormData.aux3 && processedFormData.aux3 !== form.formData.telefono) {
+              try {
+                const techResult = await sendServiceOrderToWhatsApp(
+                  processedFormData.aux3,
+                  processedFormData,
+                  imageUrl
+                )
+                if (techResult.success) {
+                  console.log('✅ WhatsApp enviado al técnico')
+                }
+              } catch (error) {
+                console.warn('⚠️ Error enviando WhatsApp al técnico:', error)
+              }
+            }
+          } else {
+            errorMessages.push('WhatsApp: ' + (whatsappResult.error || 'Error desconocido'))
+          }
+        } catch (error) {
+          console.error('❌ Error enviando por WhatsApp:', error)
+          errorMessages.push('WhatsApp: ' + (error instanceof Error ? error.message : 'Error'))
+        }
+      }
+
+      // Marcar como completado nuevamente
+      updateSubmissionStatus(form.id, 'completed')
+      refreshPendingForms()
+
+      // Mostrar resultado
+      if (successCount > 0) {
+        toast.success("Reenvío completado", {
+          description: `${successCount} servicio(s) enviado(s) exitosamente${errorMessages.length > 0 ? `. Algunos fallos: ${errorMessages.join(', ')}` : ''}`,
+          duration: 5000
+        })
+      } else {
+        toast.error("Reenvío fallido", {
+          description: errorMessages.join(', '),
+          duration: 5000
+        })
+      }
+
+    } catch (error) {
+      console.error('❌ Error en reenvío:', error)
+      toast.error("Error en reenvío", {
+        description: error instanceof Error ? error.message : "Error desconocido"
+      })
+      // Volver a marcar como completado
+      updateSubmissionStatus(form.id, 'completed')
+      refreshPendingForms()
+    } finally {
+      setResendingId(null)
+    }
   }
 
   // Función para obtener el color del estado
@@ -298,7 +477,18 @@ export function PendingFormsList({ onClose }: PendingFormsListProps) {
                   )}
                 </div>
                 
-                <div className="ml-4">
+                <div className="ml-4 flex items-center gap-2">
+                  {form.status === 'completed' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleResend(form)}
+                      disabled={!isOnline || resendingId === form.id}
+                      title="Reenviar a Google Forms, WhatsApp y Odoo"
+                    >
+                      <Send className={`w-4 h-4 ${resendingId === form.id ? 'animate-pulse' : ''}`} />
+                    </Button>
+                  )}
                   {form.status === 'pending' && <Clock className="w-6 h-6 text-yellow-500" />}
                   {form.status === 'uploading' && <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />}
                   {form.status === 'failed' && <AlertCircle className="w-6 h-6 text-red-500" />}
