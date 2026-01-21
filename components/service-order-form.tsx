@@ -37,6 +37,7 @@ import type { LocalidadSearchResult } from "@/lib/localidades-search"
 import { TecnicoAutocomplete } from "@/components/tecnico-autocomplete"
 import type { TecnicoSearchResult } from "@/lib/tecnicos-search"
 import { GeolocationPermissionIndicator } from "@/components/geolocation-permission-indicator"
+import { useGeolocationPermission } from "@/hooks/use-geolocation-permission"
 
 
 interface ClickableArea {
@@ -72,6 +73,9 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
   
   // Hook para detectar conectividad
   const { isOnline, isChecking } = useNetworkStatus()
+  
+  // Hook para permisos de geolocalización
+  const { hasPermission: hasGeoPermission } = useGeolocationPermission()
   
   // Hook para búsqueda de contactos en Odoo
   const { selectedContact, handleContactSelect, resetSelection } = useOdooContactSearch()
@@ -1326,14 +1330,16 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
         </div>
       </div>
 
-      {/* Indicador de Permisos de Geolocalización */}
-      <div className="max-w-[1240px] mx-auto p-2 sm:p-4 pt-4">
-        <GeolocationPermissionIndicator 
-          className="mb-4"
-          showDetails={true}
-          autoRequest={false}
-        />
-      </div>
+      {/* Indicador de Permisos de Geolocalización - Solo si no están concedidos */}
+      {!hasGeoPermission && (
+        <div className="max-w-[1240px] mx-auto p-2 sm:p-4 pt-4">
+          <GeolocationPermissionIndicator 
+            className="mb-4"
+            showDetails={true}
+            autoRequest={false}
+          />
+        </div>
+      )}
 
       {/* Interactive Form - Always show image overlay design */}
       <div className="max-w-[1240px] mx-auto p-2 sm:p-4">
