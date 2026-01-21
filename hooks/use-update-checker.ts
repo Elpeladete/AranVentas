@@ -120,21 +120,64 @@ export function useUpdateChecker() {
     }
   }
 
-  const reloadApp = () => {
-    console.log('🔄 Recargando aplicación...')
-    // Limpiar caché y recargar
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(registrations => {
-        registrations.forEach(registration => {
-          registration.unregister()
-        })
-      })
-    }
+  const reloadApp = async () => {
+    console.log('🔄 Recargando aplicación para actualizar...')
+    console.log('📦 IMPORTANTE: Los datos de órdenes se conservarán (están en IndexedDB)')
     
     // Limpiar el flag de actualización
     localStorage.removeItem(UPDATE_AVAILABLE_KEY)
     
-    // Recargar forzando limpieza de caché
+    // Si hay service worker, actualizarlo pero NO desregistrarlo
+    // (desregistrarlo borra el caché y puede causar problemas)
+    if ('serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations()
+        for (const registration of registrations) {
+          // Activar el nuevo service worker si hay uno esperando
+          if (registration.waiting) {
+            console.log('⏭️ Activando nuevo service worker...')
+            registration.waiting.postMessage({ type: 'SKIP_WAITING' })
+            
+            // Esperar a que el nuevo SW tome control
+            await new Promise<void>((resolve) => {
+              navigator.serviceWorker.addEventListener('controllerchange', () => {
+                console.log('✅ Nuevo service worker activado')
+                resolve()
+              }, { once: true })
+            })
+          } else {
+            // Si no hay SW esperando, actualizar el registro
+            console.log('🔄 Actualizando service worker...')
+            await registration.update()
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Error actualizando service worker:', error)
+        // Continuar con la recarga de todas formas
+      }
+    }
+    
+    // Limpiar SOLO el caché del navegador (no IndexedDB)
+    // Esto mantiene las órdenes guardadas pero actualiza los archivos de la app
+    if ('caches' in window) {
+      try {
+        const cacheNames = await caches.keys()
+        console.log('🗑️ Limpiando caché de archivos estáticos...')
+        await Promise.all(
+          cacheNames.map(cacheName => {
+            console.log(`  - Eliminando caché: ${cacheName}`)
+            return caches.delete(cacheName)
+          })
+        )
+        console.log('✅ Caché limpiado (IndexedDB preservado)')
+      } catch (error) {
+        console.warn('⚠️ Error limpiando caché:', error)
+      }
+    }
+    
+    // Recargar con estrategia que preserve datos locales
+    // hard reload para forzar descarga de nuevos archivos
+    console.log('🔄 Recargando página con nuevos archivos...')
     window.location.reload()
   }
 

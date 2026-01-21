@@ -1,5 +1,5 @@
 // Service Worker para PWA de ARAN Tecnologías - VERSIÓN MEJORADA OFFLINE
-const CACHE_NAME = 'aran-services-v1.2.0'
+const CACHE_NAME = 'aran-services-v1.2.1'
 const OFFLINE_URL = '/'
 
 // Archivos críticos a cachear en la instalación
@@ -15,7 +15,8 @@ const STATIC_CACHE = [
 
 // Instalación del Service Worker
 self.addEventListener('install', (event) => {
-  console.log('📦 Service Worker: Instalando v1.2.0...')
+  console.log('📦 Service Worker: Instalando v1.2.1...')
+  console.log('ℹ️ NOTA: IndexedDB (órdenes guardadas) NO se afectará')
   
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -28,13 +29,16 @@ self.addEventListener('install', (event) => {
     })
   )
   
-  // Activar inmediatamente
-  self.skipWaiting()
+  // NO activar inmediatamente si hay una actualización
+  // Esperar a que el usuario cierre todas las pestañas o haga clic en "Actualizar"
+  // Comentado: self.skipWaiting()
+  console.log('⏸️ Service Worker instalado, esperando activación manual')
 })
 
 // Activación del Service Worker
 self.addEventListener('activate', (event) => {
-  console.log('✅ Service Worker: Activado v1.2.0')
+  console.log('✅ Service Worker: Activado v1.2.1')
+  console.log('📦 Limpiando cachés antiguos (manteniendo IndexedDB intacto)')
   
   event.waitUntil(
     caches.keys().then((cacheNames) => {

@@ -32,8 +32,11 @@ export function UpdateNotification() {
             <h3 className="font-semibold text-sm mb-1">
               ✨ Nueva versión disponible
             </h3>
-            <p className="text-xs text-blue-100 mb-3">
+            <p className="text-xs text-blue-100 mb-2">
               Hay una actualización de AranServices. Recarga la aplicación para obtener las mejoras más recientes.
+            </p>
+            <p className="text-xs text-blue-200 mb-3 flex items-center gap-1">
+              <span className="font-semibold">✅ Tus órdenes guardadas están seguras</span>
             </p>
             
             {latestVersion && (
