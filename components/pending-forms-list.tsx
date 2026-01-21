@@ -167,6 +167,9 @@ export function PendingFormsList({ onClose }: PendingFormsListProps) {
 
     setResendingId(form.id)
     
+    // Guardar el estado original para restaurarlo en caso de error
+    const originalStatus = form.status
+    
     try {
       console.log('🔄 Reenviando orden completada:', form.formData.numeroOrden)
       
@@ -293,8 +296,9 @@ export function PendingFormsList({ onClose }: PendingFormsListProps) {
         }
       }
 
-      // Marcar como completado nuevamente
-      updateSubmissionStatus(form.id, 'completed')
+      // Marcar como completado si todo fue exitoso, sino restaurar estado original
+      const finalStatus = successCount > 0 ? 'completed' : originalStatus
+      updateSubmissionStatus(form.id, finalStatus)
       refreshPendingForms()
 
       // Mostrar resultado
@@ -315,8 +319,8 @@ export function PendingFormsList({ onClose }: PendingFormsListProps) {
       toast.error("Error en reenvío", {
         description: error instanceof Error ? error.message : "Error desconocido"
       })
-      // Volver a marcar como completado
-      updateSubmissionStatus(form.id, 'completed')
+      // Restaurar el estado original
+      updateSubmissionStatus(form.id, originalStatus)
       refreshPendingForms()
     } finally {
       setResendingId(null)
@@ -478,17 +482,19 @@ export function PendingFormsList({ onClose }: PendingFormsListProps) {
                 </div>
                 
                 <div className="ml-4 flex items-center gap-2">
-                  {form.status === 'completed' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleResend(form)}
-                      disabled={!isOnline || resendingId === form.id}
-                      title="Reenviar a Google Forms, WhatsApp y Odoo"
-                    >
-                      <Send className={`w-4 h-4 ${resendingId === form.id ? 'animate-pulse' : ''}`} />
-                    </Button>
-                  )}
+                  {/* Botón de reenvío - Disponible para TODOS los estados */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleResend(form)}
+                    disabled={!isOnline || resendingId === form.id}
+                    title="Reenviar a Google Forms, WhatsApp y Odoo"
+                    className={form.status === 'completed' ? 'border-green-500' : ''}
+                  >
+                    <Send className={`w-4 h-4 ${resendingId === form.id ? 'animate-pulse' : ''}`} />
+                  </Button>
+                  
+                  {/* Iconos de estado */}
                   {form.status === 'pending' && <Clock className="w-6 h-6 text-yellow-500" />}
                   {form.status === 'uploading' && <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />}
                   {form.status === 'failed' && <AlertCircle className="w-6 h-6 text-red-500" />}

@@ -20,6 +20,11 @@ import {
 } from "@/lib/local-database"
 import { toast } from "@/lib/toast"
 import { sendServiceOrderToWhatsApp } from "@/lib/wazzup-api"
+import { submitFormToGoogle } from "@/lib/google-forms"
+import { syncServiceOrderToOdoo } from "@/lib/odoo-service"
+import { isOdooConfigured } from "@/lib/odoo-client"
+import { uploadImageToImgBB } from "@/lib/imgbb-upload"
+import { useNetworkStatus } from "@/hooks/use-network-status"
 
 // Iconos simples usando Unicode
 const Icons = {
@@ -79,12 +84,14 @@ interface OrdersDatabaseViewerProps {
 }
 
 export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseViewerProps) {
+  const { isOnline } = useNetworkStatus()
   const [orders, setOrders] = useState<OrderRecord[]>([])
   const [filteredOrders, setFilteredOrders] = useState<OrderRecord[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<OrderRecord['status'] | 'all'>('all')
   const [stats, setStats] = useState(getDatabaseStats())
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null)
+  const [resendingId, setResendingId] = useState<string | null>(null)
   
   // Cargar datos
   useEffect(() => {
@@ -124,7 +131,7 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
   
   const handleArchive = (order: OrderRecord) => {
     const shouldArchive = confirm(
-      `¿Archivar la orden ${order.numeroOrden}?\\n\\nEsta acción marcará la orden como archivada.`
+      `¿Archivar la orden ${order.numeroOrden}?\n\nEsta acción marcará la orden como archivada.`
     )
     
     if (shouldArchive) {
@@ -137,6 +144,175 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
       } catch (error) {
         toast.error("Error", { description: "No se pudo archivar la orden" })
       }
+    }
+  }
+
+  // Función para reenviar COMPLETO (Google Forms + Odoo + WhatsApp)
+  const handleFullResend = async (order: OrderRecord) => {
+    if (!isOnline) {
+      toast.error("Sin conexión", {
+        description: "No es posible reenviar sin conexión a internet"
+      })
+      return
+    }
+
+    const shouldResend = confirm(
+      `¿Reenviar orden ${order.numeroOrden} COMPLETO?\n\n` +
+      `Se enviará a:\n` +
+      `📋 Google Forms\n` +
+      `🔄 Odoo FSM (si está configurado)\n` +
+      `📱 WhatsApp (cliente${order.formData.aux3 ? ' y técnico' : ''})\n\n` +
+      `Razón Social: ${order.formData.razonSocial || 'Sin especificar'}\n` +
+      `Estado actual: ${getStatusText(order.status)}`
+    )
+
+    if (!shouldResend) return
+
+    setResendingId(order.id)
+
+    try {
+      console.log('🔄 Reenvío completo de orden:', order.numeroOrden)
+
+      // Preparar datos procesados (convertir base64 a URLs si es necesario)
+      let processedFormData = { ...order.formData }
+
+      // Procesar imagen del formulario (aux1) si está en base64
+      if (order.formData.aux1?.startsWith('data:image')) {
+        console.log('🖼️ Subiendo imagen del formulario...')
+        try {
+          const base64Data = order.formData.aux1.split(',')[1]
+          const result = await uploadImageToImgBB(
+            base64Data,
+            `orden-${order.numeroOrden}-reenvio-${Date.now()}`
+          )
+          processedFormData.aux1 = result.data.url
+          console.log('✅ Imagen subida:', result.data.url)
+        } catch (error) {
+          console.warn('⚠️ Error subiendo imagen:', error)
+        }
+      }
+
+      // Procesar firmas si están en base64
+      if (order.formData.tecnicoFirma?.startsWith('data:image')) {
+        try {
+          const base64Data = order.formData.tecnicoFirma.split(',')[1]
+          const result = await uploadImageToImgBB(
+            base64Data,
+            `firma-tecnico-${order.numeroOrden}-reenvio-${Date.now()}`
+          )
+          processedFormData.tecnicoFirma = result.data.url
+        } catch (error) {
+          console.warn('⚠️ Error subiendo firma técnico:', error)
+        }
+      }
+
+      if (order.formData.clienteFirma?.startsWith('data:image')) {
+        try {
+          const base64Data = order.formData.clienteFirma.split(',')[1]
+          const result = await uploadImageToImgBB(
+            base64Data,
+            `firma-cliente-${order.numeroOrden}-reenvio-${Date.now()}`
+          )
+          processedFormData.clienteFirma = result.data.url
+        } catch (error) {
+          console.warn('⚠️ Error subiendo firma cliente:', error)
+        }
+      }
+
+      let successCount = 0
+      let errorMessages: string[] = []
+
+      // 1. Enviar a Google Forms
+      toast.info("Enviando a Google Forms...")
+      try {
+        const googleResult = await submitFormToGoogle(processedFormData)
+        if (googleResult.success) {
+          successCount++
+          console.log('✅ Google Forms enviado')
+        } else {
+          errorMessages.push('Google Forms: ' + (googleResult.error || 'Error desconocido'))
+        }
+      } catch (error) {
+        console.error('❌ Error enviando a Google Forms:', error)
+        errorMessages.push('Google Forms: ' + (error instanceof Error ? error.message : 'Error'))
+      }
+
+      // 2. Enviar a Odoo (si está configurado)
+      if (isOdooConfigured()) {
+        toast.info("Enviando a Odoo...")
+        try {
+          const odooResult = await syncServiceOrderToOdoo(processedFormData)
+          if (odooResult.success) {
+            successCount++
+            console.log('✅ Odoo enviado:', odooResult.orderId)
+          } else {
+            errorMessages.push('Odoo: ' + (odooResult.error || 'Error desconocido'))
+          }
+        } catch (error) {
+          console.error('❌ Error enviando a Odoo:', error)
+          errorMessages.push('Odoo: ' + (error instanceof Error ? error.message : 'Error'))
+        }
+      }
+
+      // 3. Enviar por WhatsApp (si hay teléfono y imagen URL)
+      const imageUrl = processedFormData.aux1
+      if (order.formData.telefono && imageUrl && imageUrl.startsWith('http')) {
+        toast.info("Enviando por WhatsApp...")
+        try {
+          const whatsappResult = await sendServiceOrderToWhatsApp(
+            order.formData.telefono,
+            processedFormData,
+            imageUrl
+          )
+          if (whatsappResult.success) {
+            successCount++
+            console.log('✅ WhatsApp enviado al cliente')
+
+            // Enviar también al técnico si tiene teléfono diferente
+            if (processedFormData.aux3 && processedFormData.aux3 !== order.formData.telefono) {
+              try {
+                const techResult = await sendServiceOrderToWhatsApp(
+                  processedFormData.aux3,
+                  processedFormData,
+                  imageUrl
+                )
+                if (techResult.success) {
+                  console.log('✅ WhatsApp enviado al técnico')
+                }
+              } catch (error) {
+                console.warn('⚠️ Error enviando WhatsApp al técnico:', error)
+              }
+            }
+          } else {
+            errorMessages.push('WhatsApp: ' + (whatsappResult.error || 'Error desconocido'))
+          }
+        } catch (error) {
+          console.error('❌ Error enviando por WhatsApp:', error)
+          errorMessages.push('WhatsApp: ' + (error instanceof Error ? error.message : 'Error'))
+        }
+      }
+
+      // Mostrar resultado
+      if (successCount > 0) {
+        toast.success("Reenvío completado", {
+          description: `${successCount} servicio(s) enviado(s) exitosamente${errorMessages.length > 0 ? `. Algunos fallos: ${errorMessages.join(', ')}` : ''}`,
+          duration: 5000
+        })
+        loadData() // Recargar para actualizar estados
+      } else {
+        toast.error("Reenvío fallido", {
+          description: errorMessages.join(', '),
+          duration: 5000
+        })
+      }
+
+    } catch (error) {
+      console.error('❌ Error en reenvío:', error)
+      toast.error("Error en reenvío", {
+        description: error instanceof Error ? error.message : "Error desconocido"
+      })
+    } finally {
+      setResendingId(null)
     }
   }
   
@@ -404,6 +580,18 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
                         >
                           <Icons.Eye />
                         </Button>
+
+                        {/* REENVÍO COMPLETO - Disponible para TODAS las órdenes */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 p-0 text-blue-600"
+                          onClick={() => handleFullResend(order)}
+                          disabled={!isOnline || resendingId === order.id}
+                          title="Reenviar completo (Google Forms + Odoo + WhatsApp)"
+                        >
+                          <Icons.Send />
+                        </Button>
                         
                         {/* Ver Orden (imagen) - Solo si existe imagen */}
                         {order.imageUrl && (
@@ -425,7 +613,7 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
                             variant="outline"
                             className="h-8 w-8 p-0 text-green-600"
                             onClick={() => handleWhatsAppResend(order)}
-                            title="Reenviar por WhatsApp"
+                            title="Reenviar solo por WhatsApp"
                           >
                             <Icons.WhatsApp />
                           </Button>
