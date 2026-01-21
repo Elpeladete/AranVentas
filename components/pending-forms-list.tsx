@@ -17,7 +17,8 @@ import {
   RefreshCw,
   Trash2,
   Download,
-  Send
+  Send,
+  Loader2
 } from "lucide-react"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { useSyncManager } from "@/lib/offline-sync"
@@ -491,7 +492,11 @@ export function PendingFormsList({ onClose }: PendingFormsListProps) {
                     title="Reenviar a Google Forms, WhatsApp y Odoo"
                     className={form.status === 'completed' ? 'border-green-500' : ''}
                   >
-                    <Send className={`w-4 h-4 ${resendingId === form.id ? 'animate-pulse' : ''}`} />
+                    {resendingId === form.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
                   </Button>
                   
                   {/* Iconos de estado */}

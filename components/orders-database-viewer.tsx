@@ -41,7 +41,8 @@ const Icons = {
   Calendar: () => <span>📅</span>,
   WhatsApp: () => <span>📱</span>,
   Send: () => <span>📤</span>,
-  Edit: () => <span>✏️</span>
+  Edit: () => <span>✏️</span>,
+  Loader: () => <span className="inline-block animate-spin">⏳</span>
 }
 
 // Funciones auxiliares para estado de órdenes
@@ -590,7 +591,7 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
                           disabled={!isOnline || resendingId === order.id}
                           title="Reenviar completo (Google Forms + Odoo + WhatsApp)"
                         >
-                          <Icons.Send />
+                          {resendingId === order.id ? <Icons.Loader /> : <Icons.Send />}
                         </Button>
                         
                         {/* Ver Orden (imagen) - Solo si existe imagen */}
