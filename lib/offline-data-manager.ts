@@ -35,6 +35,11 @@ export const OFFLINE_DATASETS: OfflineDataConfig[] = [
     key: 'tecnicos',
     url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGlidz9LeA--m7jkkwI-MBP3n_rfBlX7vG8HgynCrMGMN1sbNF2XAjlDdfY4PGH9-fXG4o9mozx1np/pub?gid=113521193&single=true&output=csv',
     description: 'Listado de técnicos'
+  },
+  {
+    key: 'odoo-contacts',
+    url: '/api/odoo/contacts/csv',
+    description: 'Contactos de Odoo (empresas y personas)'
   }
 ]
 

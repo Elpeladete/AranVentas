@@ -1,6 +1,6 @@
 /**
  * Componente de búsqueda inteligente de contactos Odoo
- * Versión simplificada que usa el API interno
+ * Con soporte para búsqueda offline
  */
 
 "use client"
@@ -14,6 +14,8 @@ import {
   testOdooConnection,
   type OdooContact 
 } from "@/lib/odoo-api-client"
+import { searchOdooContactsOffline, type OdooContactSearchResult } from "@/lib/odoo-contacts-search"
+import { checkConnectivity } from "@/lib/offline-data-manager"
 
 interface OdooContactSearchProps {
   value: string
@@ -53,7 +55,8 @@ export function OdooContactSearch({
       clearTimeout(debounceRef.current)
     }
 
-    if (value && value.length >= 4 && odooConnected) {
+    // Permitir búsqueda incluso sin Odoo configurado (usará offline)
+    if (value && value.length >= 4) {
       debounceRef.current = setTimeout(() => {
         performSearch(value)
       }, 500)
@@ -109,25 +112,78 @@ export function OdooContactSearch({
       
       console.log(`🔍 Buscando "${searchTerm}"...`)
       
-      const result = await searchOdooContacts(searchTerm)
+      // Verificar conectividad
+      const isOnline = await checkConnectivity()
       
-      if (result.success) {
-        console.log(`✅ ${result.contacts.length} contactos encontrados`)
-        setSuggestions(result.contacts)
-        setShowSuggestions(result.contacts.length > 0)
+      if (isOnline && odooConnected) {
+        // Búsqueda online
+        console.log('🌐 Búsqueda ONLINE en Odoo')
+        const result = await searchOdooContacts(searchTerm)
+        
+        if (result.success) {
+          console.log(`✅ ${result.contacts.length} contactos encontrados (online)`)
+          setSuggestions(result.contacts)
+          setShowSuggestions(result.contacts.length > 0)
+        } else {
+          console.error('❌ Error en búsqueda online:', result.error)
+          // Intentar búsqueda offline como fallback
+          console.log('🔄 Intentando búsqueda offline como fallback...')
+          await performOfflineSearch(searchTerm)
+        }
       } else {
-        console.error('❌ Error en búsqueda:', result.error)
-        setSearchError(result.error || 'Error en búsqueda')
+        // Búsqueda offline
+        console.log('📱 Búsqueda OFFLINE en datos locales')
+        await performOfflineSearch(searchTerm)
+      }
+    } catch (error) {
+      console.error('❌ Error en búsqueda:', error)
+      // Intentar búsqueda offline como último recurso
+      try {
+        await performOfflineSearch(searchTerm)
+      } catch (offlineError) {
+        console.error('❌ Error en búsqueda offline:', offlineError)
+        setSearchError('Error al buscar contactos')
+        setSuggestions([])
+        setShowSuggestions(false)
+      }
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const performOfflineSearch = async (searchTerm: string) => {
+    try {
+      const offlineResults = await searchOdooContactsOffline(searchTerm, 20)
+      
+      if (offlineResults.length > 0) {
+        console.log(`✅ ${offlineResults.length} contactos encontrados (offline)`)
+        
+        // Convertir resultados offline a formato OdooContact
+        const contacts: OdooContact[] = offlineResults.map(r => ({
+          id: r.id,
+          name: r.nombre,
+          vat: r.cuit,
+          phone: r.telefono,
+          street: '',
+          city: r.ciudad,
+          state: r.provincia,
+          is_company: r.es_empresa,
+          parent_id: undefined,
+          parent_name: r.empresa_nombre
+        }))
+        
+        setSuggestions(contacts)
+        setShowSuggestions(true)
+        setSearchError('🔌 Modo offline')
+      } else {
+        console.warn('⚠️ No se encontraron contactos offline')
+        setSearchError('Sin resultados offline')
         setSuggestions([])
         setShowSuggestions(false)
       }
     } catch (error) {
-      console.error('❌ Error en búsqueda:', error)
-      setSearchError('Error al buscar contactos')
-      setSuggestions([])
-      setShowSuggestions(false)
-    } finally {
-      setIsSearching(false)
+      console.error('❌ Error en búsqueda offline:', error)
+      throw error
     }
   }
 
