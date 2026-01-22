@@ -302,12 +302,29 @@ export function calculateOrderStatus(order: OrderRecord): OrderRecord['status'] 
     return 'local-only'
   }
   
-  // Si se enviaron los 3 requeridos (Google, Odoo, WhatsApp cliente)
-  if (googleSent && odooSent && whatsappClientSent) {
+  // ✅ LÓGICA MEJORADA: Considerar Odoo como opcional
+  // Una orden está completamente enviada si:
+  // - Google Forms: ✅ ENVIADO (obligatorio)
+  // - WhatsApp: ✅ ENVIADO (obligatorio si hay teléfono e imagen)
+  // - Odoo: puede ser true o false (opcional, depende de configuración)
+  
+  // Caso ideal: Todo enviado (Google + WhatsApp + Odoo)
+  if (googleSent && whatsappClientSent && odooSent) {
     return 'sent'
   }
   
-  // Si se envió algo pero no todo, es partial
+  // Caso común: Google + WhatsApp enviados (Odoo no configurado o falló)
+  // Esto también se considera "sent" porque Odoo es opcional
+  if (googleSent && whatsappClientSent) {
+    return 'sent'
+  }
+  
+  // Si solo se envió Google Forms (WhatsApp no enviado), es partial
+  if (googleSent && !whatsappClientSent) {
+    return 'partial'
+  }
+  
+  // Cualquier otro caso con envío incompleto
   return 'partial'
 }
 

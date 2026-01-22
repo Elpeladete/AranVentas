@@ -1105,6 +1105,15 @@ export function FormActions({
       if (onHideValidationProminent) {
         onHideValidationProminent()
       }
+
+      // 🔄 Limpiar formulario automáticamente para nueva orden
+      setTimeout(() => {
+        onReset()
+        toast.info("✨ Formulario limpio", { 
+          description: "Listo para nueva orden de servicio",
+          duration: 3000
+        })
+      }, 2000)
       
     } catch (error) {
       console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
