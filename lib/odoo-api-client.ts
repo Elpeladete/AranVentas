@@ -250,5 +250,268 @@ export function formatOdooContact(contact: OdooContact): {
   }
 }
 
+/**
+ * Buscar contactos (personas) asociados a una empresa específica
+ */
+export async function searchContactsByCompany(companyId: number, searchTerm: string = ''): Promise<OdooSearchResult> {
+  try {
+    console.log(`🔍 Buscando contactos de la empresa ID: ${companyId} con término: "${searchTerm}"`)
+
+    if (!isOdooConfigured()) {
+      return {
+        success: false,
+        contacts: [],
+        error: 'Odoo no está configurado'
+      }
+    }
+
+    // Construir el dominio de búsqueda
+    const domain: any[] = [
+      ['parent_id', '=', companyId],  // Solo contactos de esta empresa
+      ['is_company', '=', false]      // Solo personas, no empresas
+    ]
+
+    // Si hay término de búsqueda, agregarlo
+    if (searchTerm && searchTerm.trim().length >= 2) {
+      domain.push(['name', 'ilike', searchTerm.trim()])
+    }
+
+    const response = await fetch('/api/odoo/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'res.partner',
+        method: 'search_read',
+        args: [domain],
+        kwargs: {
+          fields: ['id', 'name', 'vat', 'phone', 'street', 'city', 'state_id', 'is_company', 'parent_id'],
+          limit: 50,
+          order: 'name asc'
+        }
+      }),
+    })
+
+    if (!response.ok) {
+      console.error('❌ Error HTTP en búsqueda por empresa:', response.status)
+      return {
+        success: false,
+        contacts: [],
+        error: `Error de búsqueda: ${response.status}`
+      }
+    }
+
+    const result = await response.json()
+    
+    if (result.result && Array.isArray(result.result)) {
+      const contacts: OdooContact[] = result.result.map((partner: any) => {
+        const contact: OdooContact = {
+          id: partner.id,
+          name: partner.name || '',
+          vat: partner.vat || '',
+          phone: partner.phone || '',
+          street: partner.street || '',
+          city: partner.city || '',
+          state: partner.state_id ? (Array.isArray(partner.state_id) ? partner.state_id[1] : partner.state_id) : '',
+          is_company: false,
+          parent_id: partner.parent_id || undefined
+        }
+        
+        if (contact.parent_id && Array.isArray(contact.parent_id)) {
+          contact.parent_name = contact.parent_id[1]
+        }
+        
+        return contact
+      })
+      
+      console.log(`✅ Encontrados ${contacts.length} contactos de la empresa`)
+      return {
+        success: true,
+        contacts
+      }
+    } else if (result.error) {
+      console.error('❌ Error en búsqueda por empresa:', result.error)
+      return {
+        success: false,
+        contacts: [],
+        error: result.error
+      }
+    }
+
+    return {
+      success: false,
+      contacts: [],
+      error: 'Respuesta inválida del servidor'
+    }
+
+  } catch (error) {
+    console.error('❌ Error en búsqueda de contactos por empresa:', error)
+    return {
+      success: false,
+      contacts: [],
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    }
+  }
+}
+
+/**
+ * Crear un nuevo contacto asociado a una empresa en Odoo
+ */
+export interface CreateContactParams {
+  name: string           // Nombre del contacto
+  phone?: string         // Teléfono del contacto
+  parent_id: number      // ID de la empresa padre
+}
+
+export interface CreateContactResult {
+  success: boolean
+  contact?: OdooContact
+  error?: string
+}
+
+export async function createOdooContact(params: CreateContactParams): Promise<CreateContactResult> {
+  try {
+    console.log('📝 Creando nuevo contacto en Odoo:', params)
+
+    if (!isOdooConfigured()) {
+      return {
+        success: false,
+        error: 'Odoo no está configurado'
+      }
+    }
+
+    // Validar datos requeridos
+    if (!params.name || params.name.trim().length < 2) {
+      return {
+        success: false,
+        error: 'El nombre es requerido (mínimo 2 caracteres)'
+      }
+    }
+
+    if (!params.parent_id) {
+      return {
+        success: false,
+        error: 'El ID de la empresa padre es requerido'
+      }
+    }
+
+    // Crear el contacto en Odoo
+    const response = await fetch('/api/odoo/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'res.partner',
+        method: 'create',
+        args: [{
+          name: params.name.trim(),
+          phone: params.phone?.trim() || false,
+          parent_id: params.parent_id,
+          is_company: false,
+          type: 'contact'
+        }]
+      }),
+    })
+
+    if (!response.ok) {
+      console.error('❌ Error HTTP al crear contacto:', response.status)
+      return {
+        success: false,
+        error: `Error al crear contacto: ${response.status}`
+      }
+    }
+
+    const result = await response.json()
+    
+    if (result.result && typeof result.result === 'number') {
+      const newId = result.result
+      console.log(`✅ Contacto creado con ID: ${newId}`)
+      
+      // Obtener los datos completos del contacto recién creado
+      const contactData = await fetch('/api/odoo/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'res.partner',
+          method: 'read',
+          args: [[newId]],
+          kwargs: {
+            fields: ['id', 'name', 'vat', 'phone', 'street', 'city', 'state_id', 'is_company', 'parent_id']
+          }
+        }),
+      })
+
+      if (contactData.ok) {
+        const dataResult = await contactData.json()
+        if (dataResult.result && Array.isArray(dataResult.result) && dataResult.result[0]) {
+          const partner = dataResult.result[0]
+          const contact: OdooContact = {
+            id: partner.id,
+            name: partner.name || '',
+            vat: partner.vat || '',
+            phone: partner.phone || '',
+            street: partner.street || '',
+            city: partner.city || '',
+            state: partner.state_id ? (Array.isArray(partner.state_id) ? partner.state_id[1] : partner.state_id) : '',
+            is_company: false,
+            parent_id: partner.parent_id || undefined
+          }
+          
+          if (contact.parent_id && Array.isArray(contact.parent_id)) {
+            contact.parent_name = contact.parent_id[1]
+          }
+          
+          return {
+            success: true,
+            contact
+          }
+        }
+      }
+      
+      // Si no se puede leer, retornar un contacto mínimo
+      return {
+        success: true,
+        contact: {
+          id: newId,
+          name: params.name,
+          vat: '',
+          phone: params.phone || '',
+          street: '',
+          city: '',
+          state: '',
+          is_company: false,
+          parent_id: params.parent_id
+        }
+      }
+      
+    } else if (result.error) {
+      console.error('❌ Error al crear contacto:', result.error)
+      const errorMessage = typeof result.error === 'string' 
+        ? result.error 
+        : result.error.message || result.error.data?.message || JSON.stringify(result.error)
+      return {
+        success: false,
+        error: errorMessage
+      }
+    }
+
+    return {
+      success: false,
+      error: 'Respuesta inválida del servidor'
+    }
+
+  } catch (error) {
+    console.error('❌ Error creando contacto:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    }
+  }
+}
+
 // Mantener compatibilidad con la API anterior
 export const authenticateOdoo = testOdooConnection

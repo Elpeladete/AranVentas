@@ -29,6 +29,7 @@ import { BarcodeScanner } from "@/components/barcode-scanner"
 
 import { ValidationStatus } from "@/components/validation-status"
 import { OdooContactSearch, useOdooContactSearch } from "@/components/odoo-contact-search-fixed"
+import { CompanyContactSearch } from "@/components/company-contact-search"
 import type { OdooContact } from "@/lib/odoo-api-client"
 import { InsumosTable } from "@/components/insumos-table"
 import { InsumosCompactView } from "@/components/insumos-compact-view"
@@ -79,6 +80,9 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
   
   // Hook para búsqueda de contactos en Odoo
   const { selectedContact, handleContactSelect, resetSelection } = useOdooContactSearch()
+  
+  // Estado para empresa seleccionada (para búsqueda de contactos)
+  const [selectedCompany, setSelectedCompany] = useState<{ id: number; name: string } | null>(null)
   
   // Función para manejar selección de localidad
   const handleLocalidadSelect = (localidad: LocalidadSearchResult) => {
@@ -238,12 +242,19 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         console.log('🏢 Seleccionada EMPRESA:', selectedContact.name)
         
+        // Guardar datos de la empresa seleccionada
+        setSelectedCompany({
+          id: selectedContact.id,
+          name: selectedContact.name
+        })
+        
         // Razón social = nombre de la empresa
         updateField('razonSocial', selectedContact.name)
         
         // Contacto vacío (para que el usuario lo complete)
         updateField('contacto', '')
         
+        // Solo completar CUIT y Teléfono (NO localidad ni provincia)
         if (selectedContact.vat) {
           updateField('cuit', selectedContact.vat)
         }
@@ -252,16 +263,8 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
           updateField('telefono', selectedContact.phone)
         }
         
-        if (selectedContact.city) {
-          updateField('localidad', selectedContact.city)
-        }
-        
-        if (selectedContact.state) {
-          updateField('provincia', selectedContact.state)
-        }
-        
-        toast.success("Empresa autocompletada", {
-          description: `${selectedContact.name}${selectedContact.state ? ` - ${selectedContact.state}` : ''} • Completa el campo Contacto`,
+        toast.success("Empresa seleccionada", {
+          description: `${selectedContact.name} • Completa el campo Contacto para buscar personas de esta empresa`,
           duration: 4000
         })
         
@@ -1257,12 +1260,55 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                 value={tempValue as string}
                 onChange={handleTempValueChange}
                 onSelect={handleTecnicoSelect}
-                onUpdateField={updateField}
+                onUpdateField={(field, value) => updateField(field as keyof FormData, value)}
                 placeholder="Buscar técnico..."
                 className="text-sm"
               />
               <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
                 👨‍🔧 <strong>Búsqueda de técnicos:</strong> Selecciona un técnico de la lista o escribe manualmente
+              </div>
+              {getFieldHint(activeField) && (
+                <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
+              )}
+              {getFieldError(activeField) && (
+                <p className="text-xs text-red-600">⚠️ {getFieldError(activeField)}</p>
+              )}
+            </div>
+          ) : activeField === "contacto" ? (
+            <div className="space-y-2">
+              {/* Componente de búsqueda de contactos asociados a empresa */}
+              <CompanyContactSearch
+                companyId={selectedCompany?.id || null}
+                companyName={selectedCompany?.name || ''}
+                value={tempValue as string}
+                onValueChange={handleTempValueChange}
+                onContactSelect={(contact) => {
+                  console.log('✅ Contacto de empresa seleccionado:', contact)
+                  handleTempValueChange(contact.name)
+                  
+                  // Si el contacto tiene teléfono, actualizar el campo
+                  if (contact.phone) {
+                    updateField('telefono', contact.phone)
+                  }
+                  
+                  toast.success('Contacto seleccionado', {
+                    description: `${contact.name}${contact.phone ? ` - ${contact.phone}` : ''}`,
+                    duration: 3000
+                  })
+                }}
+                placeholder={selectedCompany ? "Buscar contacto de la empresa..." : "Primero selecciona una empresa"}
+                className="text-sm"
+              />
+              <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                {selectedCompany ? (
+                  <>
+                    👤 <strong>Contactos de {selectedCompany.name}:</strong> Busca o crea contactos asociados a esta empresa
+                  </>
+                ) : (
+                  <>
+                    ⚠️ <strong>Primero selecciona una empresa:</strong> En el campo &quot;Razón Social&quot;, busca y selecciona una empresa
+                  </>
+                )}
               </div>
               {getFieldHint(activeField) && (
                 <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
