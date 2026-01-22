@@ -12,6 +12,9 @@ export interface OdooContact {
   street: string
   city: string
   state: string
+  is_company: boolean           // Para identificar si es empresa o persona
+  parent_id?: number | [number, string]  // ID de la empresa padre si es un contacto
+  parent_name?: string          // Nombre de la empresa padre
 }
 
 export interface OdooSearchResult {
@@ -140,6 +143,7 @@ export async function searchOdooContacts(searchTerm: string): Promise<OdooSearch
     }
 
     // Buscar partners (contactos/clientes) en Odoo usando searchRead
+    // Buscamos por nombre del contacto O por nombre de la empresa padre
     const response = await fetch('/api/odoo/execute', {
       method: 'POST',
       headers: {
@@ -148,10 +152,15 @@ export async function searchOdooContacts(searchTerm: string): Promise<OdooSearch
       body: JSON.stringify({
         model: 'res.partner',
         method: 'search_read',
-        args: [[['name', 'ilike', searchTerm.trim()]]],
+        args: [[
+          '|', 
+          ['name', 'ilike', searchTerm.trim()],
+          ['parent_id', 'ilike', searchTerm.trim()]
+        ]],
         kwargs: {
-          fields: ['id', 'name', 'vat', 'phone', 'street', 'city', 'state_id'],
-          limit: 10
+          fields: ['id', 'name', 'vat', 'phone', 'street', 'city', 'state_id', 'is_company', 'parent_id'],
+          limit: 20,
+          order: 'is_company desc, name asc'  // Primero empresas, luego personas alfabéticamente
         }
       }),
     })
@@ -169,15 +178,28 @@ export async function searchOdooContacts(searchTerm: string): Promise<OdooSearch
     
     if (result.result && Array.isArray(result.result)) {
       // Mapear resultados al formato OdooContact
-      const contacts: OdooContact[] = result.result.map((partner: any) => ({
-        id: partner.id,
-        name: partner.name || '',
-        vat: partner.vat || '',
-        phone: partner.phone || '',
-        street: partner.street || '',
-        city: partner.city || '',
-        state: partner.state_id ? (Array.isArray(partner.state_id) ? partner.state_id[1] : partner.state_id) : ''
-      }))
+      const contacts: OdooContact[] = result.result.map((partner: any) => {
+        const contact: OdooContact = {
+          id: partner.id,
+          name: partner.name || '',
+          vat: partner.vat || '',
+          phone: partner.phone || '',
+          street: partner.street || '',
+          city: partner.city || '',
+          state: partner.state_id ? (Array.isArray(partner.state_id) ? partner.state_id[1] : partner.state_id) : '',
+          is_company: partner.is_company || false,
+          parent_id: partner.parent_id || undefined
+        }
+        
+        // Si tiene parent_id y es un array [id, nombre], extraer el nombre
+        if (contact.parent_id && Array.isArray(contact.parent_id)) {
+          contact.parent_name = contact.parent_id[1]
+        }
+        
+        console.log(`📋 Contacto procesado: ${contact.name} - ${contact.is_company ? '🏢 Empresa' : '👤 Persona'}${contact.parent_name ? ` (de ${contact.parent_name})` : ''}`)
+        
+        return contact
+      })
       
       console.log(`✅ Encontrados ${contacts.length} contactos`)
       return {

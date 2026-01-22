@@ -230,33 +230,90 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
   useEffect(() => {
     if (selectedContact) {
       console.log('🎯 Autocompletando datos de contacto Odoo:', selectedContact)
+      console.log(`📋 Tipo: ${selectedContact.is_company ? 'Empresa' : 'Persona'}${selectedContact.parent_name ? ` (de ${selectedContact.parent_name})` : ''}`)
       
-      // Autocompletar campos con los datos del contacto
-      updateField('razonSocial', selectedContact.name)
-      
-      if (selectedContact.vat) {
-        updateField('cuit', selectedContact.vat)
+      if (selectedContact.is_company) {
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 🏢 ES UNA EMPRESA
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        console.log('🏢 Seleccionada EMPRESA:', selectedContact.name)
+        
+        // Razón social = nombre de la empresa
+        updateField('razonSocial', selectedContact.name)
+        
+        // Contacto vacío (para que el usuario lo complete)
+        updateField('contacto', '')
+        
+        if (selectedContact.vat) {
+          updateField('cuit', selectedContact.vat)
+        }
+        
+        if (selectedContact.phone) {
+          updateField('telefono', selectedContact.phone)
+        }
+        
+        if (selectedContact.city) {
+          updateField('localidad', selectedContact.city)
+        }
+        
+        if (selectedContact.state) {
+          updateField('provincia', selectedContact.state)
+        }
+        
+        toast.success("Empresa autocompletada", {
+          description: `${selectedContact.name}${selectedContact.state ? ` - ${selectedContact.state}` : ''} • Completa el campo Contacto`,
+          duration: 4000
+        })
+        
+      } else {
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 👤 ES UNA PERSONA (puede tener empresa padre)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        console.log('👤 Seleccionada PERSONA:', selectedContact.name)
+        
+        if (selectedContact.parent_name) {
+          console.log('🏢 Con empresa padre:', selectedContact.parent_name)
+          
+          // Razón social = empresa padre
+          updateField('razonSocial', selectedContact.parent_name)
+          
+          // Contacto = nombre de la persona
+          updateField('contacto', selectedContact.name)
+          
+          toast.success("Contacto y empresa autocompletados", {
+            description: `${selectedContact.name} de ${selectedContact.parent_name}`,
+            duration: 4000
+          })
+        } else {
+          console.log('⚠️ Persona sin empresa asociada')
+          
+          // Si no tiene empresa, usar el nombre en ambos campos
+          updateField('razonSocial', selectedContact.name)
+          updateField('contacto', selectedContact.name)
+          
+          toast.info("Contacto sin empresa asociada", {
+            description: `${selectedContact.name} (sin empresa en Odoo)`,
+            duration: 4000
+          })
+        }
+        
+        // Datos comunes
+        if (selectedContact.vat) {
+          updateField('cuit', selectedContact.vat)
+        }
+        
+        if (selectedContact.phone) {
+          updateField('telefono', selectedContact.phone)
+        }
+        
+        if (selectedContact.city) {
+          updateField('localidad', selectedContact.city)
+        }
+        
+        if (selectedContact.state) {
+          updateField('provincia', selectedContact.state)
+        }
       }
-      
-      if (selectedContact.phone) {
-        updateField('telefono', selectedContact.phone)
-      }
-      
-      // Usar el nombre como contacto por defecto
-      updateField('contacto', selectedContact.name)
-      
-      if (selectedContact.city) {
-        updateField('localidad', selectedContact.city)
-      }
-      
-      if (selectedContact.state) {
-        updateField('provincia', selectedContact.state)
-      }
-      
-      toast.success("Datos autocompletados", {
-        description: `Información cargada desde Odoo: ${selectedContact.name}${selectedContact.state ? ` - ${selectedContact.state}` : ''}`,
-        duration: 4000
-      })
       
       // Limpiar selección después del autocompletado
       resetSelection()

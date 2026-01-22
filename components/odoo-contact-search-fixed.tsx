@@ -137,9 +137,23 @@ export function OdooContactSearch({
       console.log('🔍 Tipo de contacto:', typeof contact)
       console.log('🔍 Claves del contacto:', Object.keys(contact))
       console.log('🔍 Valor de state:', contact.state)
+      console.log('🔍 is_company:', contact.is_company)
+      console.log('🔍 parent_name:', contact.parent_name)
       console.log('🔍 Contacto stringificado:', JSON.stringify(contact))
       onContactSelect(contact)
-      onValueChange(contact.name)
+      
+      // Establecer el valor apropiado en el campo
+      if (contact.is_company) {
+        // Si es empresa, mostrar el nombre de la empresa
+        onValueChange(contact.name)
+      } else if (contact.parent_name) {
+        // Si es persona con empresa, mostrar el nombre de la empresa en el campo
+        onValueChange(contact.parent_name)
+      } else {
+        // Si es persona sin empresa, mostrar el nombre de la persona
+        onValueChange(contact.name)
+      }
+      
       setShowSuggestions(false)
       setSuggestions([])
     } catch (error) {
@@ -239,10 +253,22 @@ export function OdooContactSearch({
                       <span className="font-medium text-gray-900 truncate">
                         {contact.name}
                       </span>
-                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-                        🏢 Contacto
+                      {/* Indicador de tipo de contacto */}
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        contact.is_company 
+                          ? 'bg-blue-100 text-blue-700' 
+                          : 'bg-green-100 text-green-700'
+                      }`}>
+                        {contact.is_company ? '🏢 Empresa' : '👤 Persona'}
                       </span>
                     </div>
+                    
+                    {/* Mostrar empresa padre si existe */}
+                    {!contact.is_company && contact.parent_name && (
+                      <div className="text-xs text-purple-600 font-medium mb-1">
+                        🏢 Empresa: {contact.parent_name}
+                      </div>
+                    )}
                     
                     {/* Información adicional */}
                     <div className="space-y-1">
@@ -273,17 +299,33 @@ export function OdooContactSearch({
                   </div>
                   
                   {/* Botón de selección */}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="ml-2 text-xs"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleContactClick(contact)
-                    }}
-                  >
-                    Seleccionar
-                  </Button>
+                  <div className="ml-2 flex flex-col gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs whitespace-nowrap"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleContactClick(contact)
+                      }}
+                    >
+                      Seleccionar
+                    </Button>
+                    
+                    {/* Indicador de lo que se autocompletará */}
+                    {!contact.is_company && contact.parent_name && (
+                      <div className="text-[10px] text-gray-500 text-center">
+                        RS: {contact.parent_name.substring(0, 12)}...
+                        <br />
+                        Cont: {contact.name.substring(0, 12)}...
+                      </div>
+                    )}
+                    {contact.is_company && (
+                      <div className="text-[10px] text-gray-500 text-center">
+                        Solo RS
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
