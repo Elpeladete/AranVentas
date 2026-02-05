@@ -513,5 +513,183 @@ export async function createOdooContact(params: CreateContactParams): Promise<Cr
   }
 }
 
+/**
+ * Crear una nueva empresa en Odoo
+ */
+export interface CreateCompanyParams {
+  name: string           // Razón Social
+  vat?: string           // CUIT
+  phone?: string         // Teléfono
+  contactName?: string   // Nombre del contacto principal (opcional)
+}
+
+export interface CreateCompanyResult {
+  success: boolean
+  company?: OdooContact
+  contact?: OdooContact  // Contacto principal si se creó
+  error?: string
+}
+
+export async function createOdooCompany(params: CreateCompanyParams): Promise<CreateCompanyResult> {
+  try {
+    console.log('🏢 Creando nueva empresa en Odoo:', params)
+
+    if (!isOdooConfigured()) {
+      return {
+        success: false,
+        error: 'Odoo no está configurado'
+      }
+    }
+
+    // Validar datos requeridos
+    if (!params.name || params.name.trim().length < 2) {
+      return {
+        success: false,
+        error: 'La Razón Social es requerida (mínimo 2 caracteres)'
+      }
+    }
+
+    // Validar CUIT si se proporciona (formato argentino: XX-XXXXXXXX-X)
+    if (params.vat) {
+      const cleanVat = params.vat.replace(/[-\s]/g, '')
+      if (cleanVat.length !== 11 || !/^\d{11}$/.test(cleanVat)) {
+        return {
+          success: false,
+          error: 'El CUIT debe tener 11 dígitos (formato: XX-XXXXXXXX-X)'
+        }
+      }
+    }
+
+    // Crear la empresa en Odoo
+    const response = await fetch('/api/odoo/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'res.partner',
+        method: 'create',
+        args: [{
+          name: params.name.trim(),
+          vat: params.vat?.trim() || false,
+          phone: params.phone?.trim() || false,
+          is_company: true,
+          type: 'contact'
+        }]
+      }),
+    })
+
+    if (!response.ok) {
+      console.error('❌ Error HTTP al crear empresa:', response.status)
+      return {
+        success: false,
+        error: `Error al crear empresa: ${response.status}`
+      }
+    }
+
+    const result = await response.json()
+    
+    if (result.result && typeof result.result === 'number') {
+      const companyId = result.result
+      console.log(`✅ Empresa creada con ID: ${companyId}`)
+      
+      // Obtener los datos completos de la empresa recién creada
+      const companyData = await fetch('/api/odoo/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'res.partner',
+          method: 'read',
+          args: [[companyId]],
+          kwargs: {
+            fields: ['id', 'name', 'vat', 'phone', 'street', 'city', 'state_id', 'is_company', 'parent_id']
+          }
+        }),
+      })
+
+      let company: OdooContact | undefined
+
+      if (companyData.ok) {
+        const dataResult = await companyData.json()
+        if (dataResult.result && Array.isArray(dataResult.result) && dataResult.result[0]) {
+          const partner = dataResult.result[0]
+          company = {
+            id: partner.id,
+            name: partner.name || '',
+            vat: partner.vat || '',
+            phone: partner.phone || '',
+            street: partner.street || '',
+            city: partner.city || '',
+            state: partner.state_id ? (Array.isArray(partner.state_id) ? partner.state_id[1] : partner.state_id) : '',
+            is_company: true
+          }
+        }
+      }
+
+      // Si no se pudo leer, crear objeto mínimo
+      if (!company) {
+        company = {
+          id: companyId,
+          name: params.name,
+          vat: params.vat || '',
+          phone: params.phone || '',
+          street: '',
+          city: '',
+          state: '',
+          is_company: true
+        }
+      }
+
+      // Si se proporcionó un nombre de contacto, crear el contacto asociado
+      let contact: OdooContact | undefined
+      if (params.contactName && params.contactName.trim().length >= 2) {
+        console.log(`👤 Creando contacto "${params.contactName}" para la empresa...`)
+        const contactResult = await createOdooContact({
+          name: params.contactName.trim(),
+          phone: params.phone?.trim(),
+          parent_id: companyId
+        })
+        
+        if (contactResult.success && contactResult.contact) {
+          contact = contactResult.contact
+          console.log(`✅ Contacto creado con ID: ${contact.id}`)
+        } else {
+          console.warn('⚠️ No se pudo crear el contacto:', contactResult.error)
+        }
+      }
+
+      return {
+        success: true,
+        company,
+        contact
+      }
+      
+    } else if (result.error) {
+      console.error('❌ Error al crear empresa:', result.error)
+      const errorMessage = typeof result.error === 'string' 
+        ? result.error 
+        : result.error.message || result.error.data?.message || JSON.stringify(result.error)
+      return {
+        success: false,
+        error: errorMessage
+      }
+    }
+
+    return {
+      success: false,
+      error: 'Respuesta inválida del servidor'
+    }
+
+  } catch (error) {
+    console.error('❌ Error creando empresa:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    }
+  }
+}
+
 // Mantener compatibilidad con la API anterior
 export const authenticateOdoo = testOdooConnection

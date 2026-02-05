@@ -8,19 +8,25 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Building2, Plus, Search } from 'lucide-react'
 import { 
   searchOdooContacts, 
   isOdooConfigured,
   testOdooConnection,
+  createOdooCompany,
   type OdooContact 
 } from "@/lib/odoo-api-client"
 import { searchOdooContactsOffline, type OdooContactSearchResult } from "@/lib/odoo-contacts-search"
 import { checkConnectivity } from "@/lib/offline-data-manager"
+import { toast } from "@/lib/toast"
 
 interface OdooContactSearchProps {
   value: string
   onValueChange: (value: string) => void
   onContactSelect: (contact: OdooContact) => void
+  onCompanyCreated?: (company: OdooContact, contact?: OdooContact) => void
   placeholder?: string
   disabled?: boolean
   className?: string
@@ -30,6 +36,7 @@ export function OdooContactSearch({
   value,
   onValueChange,
   onContactSelect,
+  onCompanyCreated,
   placeholder = "Escribe al menos 4 caracteres de la razón social...",
   disabled = false,
   className = ""
@@ -39,6 +46,15 @@ export function OdooContactSearch({
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [odooConnected, setOdooConnected] = useState<boolean | null>(null)
   const [searchError, setSearchError] = useState<string | null>(null)
+  
+  // Estados para crear empresa
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [newCompanyName, setNewCompanyName] = useState('')
+  const [newCompanyCuit, setNewCompanyCuit] = useState('')
+  const [newCompanyPhone, setNewCompanyPhone] = useState('')
+  const [newContactName, setNewContactName] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
+  const [cuitError, setCuitError] = useState<string | null>(null)
   
   const inputRef = useRef<HTMLInputElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
@@ -97,6 +113,125 @@ export function OdooContactSearch({
       console.error('❌ Error verificando Odoo:', error)
       setOdooConnected(false)
       setSearchError('Error de verificación')
+    }
+  }
+
+  // Validar CUIT argentino
+  const validateCuit = (cuit: string): boolean => {
+    const cleanCuit = cuit.replace(/[-\s]/g, '')
+    if (cleanCuit.length !== 11 || !/^\d{11}$/.test(cleanCuit)) {
+      return false
+    }
+    // Validación de dígito verificador
+    const mult = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
+    let sum = 0
+    for (let i = 0; i < 10; i++) {
+      sum += parseInt(cleanCuit[i]) * mult[i]
+    }
+    const remainder = sum % 11
+    const verifier = remainder === 0 ? 0 : remainder === 1 ? 9 : 11 - remainder
+    return parseInt(cleanCuit[10]) === verifier
+  }
+
+  const handleCuitChange = (value: string) => {
+    // Formatear CUIT: XX-XXXXXXXX-X
+    const cleanValue = value.replace(/\D/g, '').slice(0, 11)
+    let formatted = cleanValue
+    if (cleanValue.length > 2) {
+      formatted = `${cleanValue.slice(0, 2)}-${cleanValue.slice(2)}`
+    }
+    if (cleanValue.length > 10) {
+      formatted = `${cleanValue.slice(0, 2)}-${cleanValue.slice(2, 10)}-${cleanValue.slice(10)}`
+    }
+    setNewCompanyCuit(formatted)
+    
+    // Validar solo si tiene 11 dígitos
+    if (cleanValue.length === 11) {
+      if (!validateCuit(cleanValue)) {
+        setCuitError('CUIT inválido - verificar dígito verificador')
+      } else {
+        setCuitError(null)
+      }
+    } else if (cleanValue.length > 0) {
+      setCuitError(`Faltan ${11 - cleanValue.length} dígitos`)
+    } else {
+      setCuitError(null)
+    }
+  }
+
+  const openCreateDialog = () => {
+    setNewCompanyName(value)
+    setNewCompanyCuit('')
+    setNewCompanyPhone('')
+    setNewContactName('')
+    setCuitError(null)
+    setShowCreateDialog(true)
+    setShowSuggestions(false)
+  }
+
+  const handleCreateCompany = async () => {
+    if (!newCompanyName || newCompanyName.trim().length < 2) {
+      toast.error('La Razón Social debe tener al menos 2 caracteres')
+      return
+    }
+
+    const cleanCuit = newCompanyCuit.replace(/[-\s]/g, '')
+    if (cleanCuit.length > 0 && cleanCuit.length !== 11) {
+      toast.error('El CUIT debe tener 11 dígitos')
+      return
+    }
+
+    if (cleanCuit.length === 11 && !validateCuit(cleanCuit)) {
+      toast.error('El CUIT es inválido')
+      return
+    }
+
+    try {
+      setIsCreating(true)
+      console.log('🏢 Creando nueva empresa...')
+
+      const result = await createOdooCompany({
+        name: newCompanyName.trim(),
+        vat: cleanCuit || undefined,
+        phone: newCompanyPhone.trim() || undefined,
+        contactName: newContactName.trim() || undefined
+      })
+
+      if (result.success && result.company) {
+        console.log('✅ Empresa creada:', result.company)
+        toast.success('Empresa creada en Odoo', {
+          description: `${result.company.name}${result.contact ? ` con contacto ${result.contact.name}` : ''}`,
+          duration: 5000
+        })
+
+        // Notificar al padre
+        if (onCompanyCreated) {
+          onCompanyCreated(result.company, result.contact)
+        }
+
+        // Actualizar el valor del input
+        onValueChange(result.company.name)
+        
+        // Seleccionar la empresa como contacto
+        onContactSelect(result.company)
+
+        // Cerrar y limpiar
+        setShowCreateDialog(false)
+        setNewCompanyName('')
+        setNewCompanyCuit('')
+        setNewCompanyPhone('')
+        setNewContactName('')
+      } else {
+        console.error('❌ Error al crear empresa:', result.error)
+        toast.error('Error al crear empresa', {
+          description: result.error || 'Error desconocido'
+        })
+      }
+    } catch (error) {
+      console.error('❌ Error creando empresa:', error)
+      toast.error('Error al crear empresa')
+    } finally {
+      setIsCreating(false)
     }
   }
 
@@ -280,9 +415,25 @@ export function OdooContactSearch({
           {getOdooStatusIndicator()}
         </div>
         
-        {searchError && (
-          <span className="text-xs text-red-600">⚠️ {searchError}</span>
-        )}
+        <div className="flex items-center gap-2">
+          {searchError && (
+            <span className="text-xs text-red-600">⚠️ {searchError}</span>
+          )}
+          
+          {/* Botón para crear empresa - visible cuando hay texto y Odoo está conectado */}
+          {value && value.length >= 2 && odooConnected && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={openCreateDialog}
+              className="text-xs h-6 px-2"
+            >
+              <Building2 className="h-3 w-3 mr-1" />
+              Crear empresa
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Sugerencias */}
@@ -388,6 +539,109 @@ export function OdooContactSearch({
           </div>
         </div>
       )}
+
+      {/* Diálogo para crear nueva empresa */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Crear nueva empresa en Odoo
+            </DialogTitle>
+            <DialogDescription>
+              Completa los datos para crear una nueva empresa. Los campos marcados con * son obligatorios.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-company-name">
+                Razón Social <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="new-company-name"
+                value={newCompanyName}
+                onChange={(e) => setNewCompanyName(e.target.value)}
+                placeholder="Ej: Mi Empresa S.A."
+                autoFocus
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="new-company-cuit">
+                CUIT
+              </Label>
+              <Input
+                id="new-company-cuit"
+                value={newCompanyCuit}
+                onChange={(e) => handleCuitChange(e.target.value)}
+                placeholder="XX-XXXXXXXX-X"
+                maxLength={13}
+                className={cuitError && newCompanyCuit.length > 0 ? 'border-red-300' : ''}
+              />
+              {cuitError && newCompanyCuit.length > 0 && (
+                <p className="text-xs text-red-600">{cuitError}</p>
+              )}
+              {!cuitError && newCompanyCuit.replace(/\D/g, '').length === 11 && (
+                <p className="text-xs text-green-600">✓ CUIT válido</p>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="new-company-phone">Teléfono</Label>
+              <Input
+                id="new-company-phone"
+                value={newCompanyPhone}
+                onChange={(e) => setNewCompanyPhone(e.target.value)}
+                placeholder="Ej: 2615551234"
+              />
+            </div>
+            
+            <div className="space-y-2 pt-2 border-t">
+              <Label htmlFor="new-contact-name">
+                Nombre del contacto (opcional)
+              </Label>
+              <Input
+                id="new-contact-name"
+                value={newContactName}
+                onChange={(e) => setNewContactName(e.target.value)}
+                placeholder="Ej: Juan Pérez"
+              />
+              <p className="text-xs text-muted-foreground">
+                Si lo completas, se creará un contacto asociado a esta empresa
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCreateDialog(false)}
+              disabled={isCreating}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateCompany}
+              disabled={isCreating || !newCompanyName.trim() || (cuitError !== null && newCompanyCuit.length > 0)}
+            >
+              {isCreating ? (
+                <>
+                  <Search className="h-4 w-4 mr-2 animate-spin" />
+                  Creando...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Crear empresa
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

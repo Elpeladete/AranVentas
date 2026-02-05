@@ -1220,11 +1220,31 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                 value={tempValue as string}
                 onValueChange={handleTempValueChange}
                 onContactSelect={handleContactSelect}
+                onCompanyCreated={(company, contact) => {
+                  console.log('🏢 Empresa creada desde formulario:', company)
+                  // Guardar la empresa seleccionada
+                  setSelectedCompany({
+                    id: company.id,
+                    name: company.name
+                  })
+                  // Autocompletar campos
+                  updateField('razonSocial', company.name)
+                  if (company.vat) {
+                    updateField('cuit', company.vat)
+                  }
+                  if (company.phone) {
+                    updateField('telefono', company.phone)
+                  }
+                  // Si también se creó un contacto, autocompletarlo
+                  if (contact) {
+                    updateField('contacto', contact.name)
+                  }
+                }}
                 placeholder="Buscar en Odoo o escribir manualmente..."
                 className="text-sm"
               />
               <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                🔍 <strong>Búsqueda inteligente:</strong> Escribe para buscar contactos en Odoo y autocompletar datos (CUIT, teléfono, etc.)
+                🔍 <strong>Búsqueda inteligente:</strong> Escribe para buscar contactos en Odoo. Si no existe, puedes crear una empresa nueva con el botón "Crear empresa".
               </div>
               {getFieldHint(activeField) && (
                 <p className="text-xs text-blue-600">💡 {getFieldHint(activeField)}</p>
@@ -1276,29 +1296,40 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
             </div>
           ) : activeField === "contacto" ? (
             <div className="space-y-2">
-              {/* Componente de búsqueda de contactos asociados a empresa */}
-              <CompanyContactSearch
-                companyId={selectedCompany?.id || null}
-                companyName={selectedCompany?.name || ''}
-                value={tempValue as string}
-                onValueChange={handleTempValueChange}
-                onContactSelect={(contact) => {
-                  console.log('✅ Contacto de empresa seleccionado:', contact)
-                  handleTempValueChange(contact.name)
-                  
-                  // Si el contacto tiene teléfono, actualizar el campo
-                  if (contact.phone) {
-                    updateField('telefono', contact.phone)
-                  }
-                  
-                  toast.success('Contacto seleccionado', {
-                    description: `${contact.name}${contact.phone ? ` - ${contact.phone}` : ''}`,
-                    duration: 3000
-                  })
-                }}
-                placeholder={selectedCompany ? "Buscar contacto de la empresa..." : "Primero selecciona una empresa"}
-                className="text-sm"
-              />
+              {selectedCompany ? (
+                // Si hay empresa seleccionada, usar búsqueda de contactos
+                <CompanyContactSearch
+                  companyId={selectedCompany.id}
+                  companyName={selectedCompany.name}
+                  value={tempValue as string}
+                  onValueChange={handleTempValueChange}
+                  onContactSelect={(contact) => {
+                    console.log('✅ Contacto de empresa seleccionado:', contact)
+                    handleTempValueChange(contact.name)
+                    
+                    // Si el contacto tiene teléfono, actualizar el campo
+                    if (contact.phone) {
+                      updateField('telefono', contact.phone)
+                    }
+                    
+                    toast.success('Contacto seleccionado', {
+                      description: `${contact.name}${contact.phone ? ` - ${contact.phone}` : ''}`,
+                      duration: 3000
+                    })
+                  }}
+                  placeholder="Buscar contacto de la empresa..."
+                  className="text-sm"
+                />
+              ) : (
+                // Si NO hay empresa seleccionada, permitir entrada libre
+                <Input
+                  value={tempValue as string}
+                  onChange={(e) => handleTempValueChange(e.target.value)}
+                  placeholder="Escribe el nombre del contacto..."
+                  className="text-sm"
+                  autoFocus
+                />
+              )}
               <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
                 {selectedCompany ? (
                   <>
@@ -1306,7 +1337,7 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                   </>
                 ) : (
                   <>
-                    ⚠️ <strong>Primero selecciona una empresa:</strong> En el campo &quot;Razón Social&quot;, busca y selecciona una empresa
+                    ✏️ <strong>Modo manual:</strong> Escribe el nombre del contacto libremente
                   </>
                 )}
               </div>

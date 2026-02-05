@@ -202,8 +202,8 @@ export function CompanyContactSearch({
           type="text"
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
-          placeholder={companyId ? placeholder : "Primero selecciona una empresa en Razón Social"}
-          disabled={disabled || !companyId}
+          placeholder={companyId ? placeholder : "Escribe el nombre del contacto..."}
+          disabled={disabled}
           className={className}
         />
         
@@ -252,10 +252,10 @@ export function CompanyContactSearch({
           </Button>
         )}
 
-        {/* Mensaje cuando no hay empresa seleccionada */}
-        {!companyId && value && (
-          <div className="absolute z-50 w-full mt-1 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3 text-sm">
-            ⚠️ Primero selecciona una empresa en el campo &quot;Razón Social&quot;
+        {/* Mensaje cuando no hay empresa seleccionada pero hay texto */}
+        {!companyId && value && value.length >= 2 && (
+          <div className="absolute z-50 w-full mt-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3 text-sm">
+            💡 Si la empresa no existe en Odoo, podrás crearla junto con este contacto
           </div>
         )}
       </div>
