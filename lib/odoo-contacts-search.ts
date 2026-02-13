@@ -96,9 +96,11 @@ function parseContactsCSV(csvText: string): OdooContactOffline[] {
 
 /**
  * Obtiene datos de contactos (online u offline)
+ * ⚡ OPTIMIZADO: Verifica navigator.onLine antes de intentar fetch
  */
 async function fetchOdooContacts(): Promise<OdooContactOffline[]> {
-  const isOnline = await checkConnectivity()
+  // ⚡ Verificación rápida: si estamos offline, ir directo a datos locales
+  const isOnline = typeof navigator !== 'undefined' && navigator.onLine ? await checkConnectivity() : false
   
   if (isOnline) {
     try {

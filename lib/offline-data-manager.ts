@@ -55,31 +55,38 @@ class OfflineDataManager {
 
   /**
    * Inicializa el gestor de datos offline
+   * ⚡ OPTIMIZADO: No bloquea si estamos offline, la descarga ocurre en background
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) return
 
     console.log('🔄 Inicializando gestor de datos offline...')
     
-    try {
-      // Verificar si necesitamos actualizar datos
-      await this.checkAndUpdateData()
-      
-      // Programar verificaciones automáticas cada hora
-      setInterval(() => {
-        this.checkAndUpdateData()
-      }, 60 * 60 * 1000) // Cada hora
-
-      this.isInitialized = true
-      console.log('✅ Gestor de datos offline inicializado')
-      
-    } catch (error) {
-      console.error('❌ Error inicializando gestor offline:', error)
+    this.isInitialized = true
+    
+    // Verificar si estamos offline inmediatamente
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine
+    
+    if (isOffline) {
+      console.log('📱 Modo offline detectado - usando datos en caché local')
+      console.log('✅ Gestor de datos offline inicializado (modo offline)')
+    } else {
+      // Si estamos online, intentar actualizar datos en background (no bloqueante)
+      this.checkAndUpdateData().catch(error => {
+        console.warn('⚠️ Error actualizando datos en background:', error)
+      })
+      console.log('✅ Gestor de datos offline inicializado (actualización en background)')
     }
+    
+    // Programar verificaciones automáticas cada hora
+    setInterval(() => {
+      this.checkAndUpdateData()
+    }, 60 * 60 * 1000) // Cada hora
   }
 
   /**
    * Verifica y actualiza los datos si es necesario
+   * ⚡ OPTIMIZADO: Verifica navigator.onLine antes de intentar descargar
    */
   private async checkAndUpdateData(): Promise<void> {
     // Solo ejecutar en el cliente
@@ -87,23 +94,34 @@ class OfflineDataManager {
     
     if (this.syncInProgress) return
 
+    // ⚡ Verificación rápida: si estamos offline, no intentar descargar nada
+    if (!navigator.onLine) {
+      console.log('📱 Sin conexión - omitiendo actualización de datasets')
+      return
+    }
+
+    this.syncInProgress = true
     const now = Date.now()
     
-    for (const dataset of OFFLINE_DATASETS) {
-      try {
-        const lastUpdate = this.getLastUpdateTime(dataset.key)
-        const needsUpdate = !lastUpdate || (now - lastUpdate) > ONE_DAY_MS
+    try {
+      for (const dataset of OFFLINE_DATASETS) {
+        try {
+          const lastUpdate = this.getLastUpdateTime(dataset.key)
+          const needsUpdate = !lastUpdate || (now - lastUpdate) > ONE_DAY_MS
 
-        if (needsUpdate) {
-          console.log(`📥 Dataset ${dataset.key} necesita actualización`)
-          await this.downloadDataset(dataset)
-        } else {
-          console.log(`✅ Dataset ${dataset.key} está actualizado`)
+          if (needsUpdate) {
+            console.log(`📥 Dataset ${dataset.key} necesita actualización`)
+            await this.downloadDataset(dataset)
+          } else {
+            console.log(`✅ Dataset ${dataset.key} está actualizado`)
+          }
+        } catch (error) {
+          console.error(`❌ Error verificando dataset ${dataset.key}:`, error)
+          this.scheduleRetry(dataset)
         }
-      } catch (error) {
-        console.error(`❌ Error verificando dataset ${dataset.key}:`, error)
-        this.scheduleRetry(dataset)
       }
+    } finally {
+      this.syncInProgress = false
     }
   }
 
@@ -362,17 +380,19 @@ export function useOfflineDataManager() {
 }
 
 // Función de utilidad para verificar conectividad
+// ⚡ OPTIMIZADO: Retorna inmediatamente false si navigator.onLine es false
 export async function checkConnectivity(): Promise<boolean> {
-  if (!navigator.onLine) {
+  // Verificación instantánea sin red - NO hacer fetch
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return false
   }
 
   try {
-    // Intentar un HEAD request rápido a Google
+    // Solo verificar con fetch si el navegador reporta estar online
     const response = await fetch('https://www.google.com/favicon.ico', {
       method: 'HEAD',
       mode: 'no-cors',
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(3000) // Reducido de 5s a 3s
     })
     return true
   } catch {

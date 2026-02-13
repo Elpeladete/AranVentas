@@ -30,8 +30,8 @@ export async function fetchInsumosData(): Promise<InsumoData[]> {
   }
 
   try {
-    // Verificar conectividad
-    const isOnline = await checkConnectivity()
+    // ⚡ Verificación rápida: si estamos offline, ir directo a datos locales
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine ? await checkConnectivity() : false
     
     if (isOnline) {
       // Intentar descargar datos frescos

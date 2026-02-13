@@ -98,36 +98,37 @@ class OfflineSyncManager {
 
   /**
    * Verifica si realmente hay conectividad antes de intentar sincronizar
+   * ⚡ OPTIMIZADO: Retorna false inmediatamente si navigator.onLine es false
    */
   private async checkRealConnectivity(): Promise<boolean> {
+    // ⚡ Verificación instantánea
+    if (!navigator.onLine) {
+      return false
+    }
+
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000)
-      
       const response = await fetch('https://www.google.com/favicon.ico', {
         method: 'HEAD',
         mode: 'no-cors',
         cache: 'no-cache',
-        signal: controller.signal
+        signal: AbortSignal.timeout(3000) // Reducido de 5s a 3s
       })
-      
-      clearTimeout(timeoutId)
       return true
     } catch {
       try {
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 3000)
-        
         const response = await fetch('https://httpbin.org/status/200', {
           method: 'HEAD',
           mode: 'no-cors',
           cache: 'no-cache',
-          signal: controller.signal
+          signal: AbortSignal.timeout(2000) // Reducido de 3s a 2s
         })
-        
-        clearTimeout(timeoutId)
         return true
       } catch {
+        // ⚡ Si ambos fetch fallan pero navigator.onLine dice true, confiar en el navegador
+        if (navigator.onLine) {
+          console.log('🌐 Fetch de verificación falló, pero navigator.onLine es true — confiando en el navegador')
+          return true
+        }
         return false
       }
     }

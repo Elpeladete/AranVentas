@@ -41,8 +41,8 @@ async function fetchTecnicos(): Promise<TecnicoData[]> {
   }
 
   try {
-    // Verificar conectividad
-    const isOnline = await checkConnectivity()
+    // ⚡ Verificación rápida: si estamos offline, ir directo a datos locales
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine ? await checkConnectivity() : false
     
     if (isOnline) {
       // Intentar descargar datos frescos
@@ -91,6 +91,10 @@ async function fetchTecnicos(): Promise<TecnicoData[]> {
     
     throw new Error('No se pudieron cargar los datos de técnicos (sin conexión y sin datos offline)')
   }
+  
+  // Si no hay datos, retornar array vacío en vez de bloquear
+  console.warn('⚠️ No hay datos de técnicos disponibles')
+  return []
 }
 
 /**

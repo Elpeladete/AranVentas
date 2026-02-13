@@ -13,15 +13,21 @@ interface NetworkStatus {
 
 /**
  * Verifica si realmente hay conexión a internet haciendo una petición de prueba
+ * ⚡ OPTIMIZADO: Retorna false inmediatamente si navigator.onLine es false
  */
 async function checkRealConnectivity(): Promise<boolean> {
+  // ⚡ Verificación instantánea: si el navegador dice offline, no hacer fetch
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return false
+  }
+
   try {
     // Usar un endpoint confiable y rápido para verificar conectividad
     const response = await fetch('https://www.google.com/favicon.ico', {
       method: 'HEAD',
       mode: 'no-cors',
       cache: 'no-cache',
-      signal: AbortSignal.timeout(5000) // 5 segundos timeout
+      signal: AbortSignal.timeout(3000)
     })
     return true
   } catch {
@@ -31,10 +37,16 @@ async function checkRealConnectivity(): Promise<boolean> {
         method: 'HEAD',
         mode: 'no-cors',
         cache: 'no-cache',
-        signal: AbortSignal.timeout(3000) // 3 segundos timeout
+        signal: AbortSignal.timeout(2000)
       })
       return true
     } catch {
+      // ⚡ Si ambos fetch fallan pero navigator.onLine dice true,
+      // confiar en el navegador en vez de marcar como offline
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        console.log('🌐 Fetch de verificación falló, pero navigator.onLine es true — confiando en el navegador')
+        return true
+      }
       return false
     }
   }
@@ -77,8 +89,17 @@ export function useNetworkStatus() {
     // Solo ejecutar en el cliente
     if (typeof window === 'undefined') return
 
-    // Verificación inicial
-    checkConnectivity()
+    // ⚡ Estado inicial rápido basado en navigator.onLine (no bloqueante)
+    setNetworkStatus({
+      isOnline: navigator.onLine,
+      isChecking: navigator.onLine, // Solo marcar como "checking" si parece online
+      lastChecked: new Date()
+    })
+
+    // Verificación real en background (no bloquea el render)
+    if (navigator.onLine) {
+      checkConnectivity()
+    }
 
     // Listeners para eventos de red del navegador
     const handleOnline = () => {

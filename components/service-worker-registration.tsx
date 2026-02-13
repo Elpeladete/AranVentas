@@ -17,6 +17,19 @@ export function ServiceWorkerRegistration() {
           console.log('✅ Service Worker registrado:', registration.scope)
           console.log('📦 IndexedDB (órdenes) está protegido y NO se borrará')
           
+          // ⭐ Pre-cachear todos los assets después del primer load exitoso
+          // Esto asegura que la app funcione completamente offline
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'PRECACHE_APP' })
+          } else {
+            // Si es la primera vez, esperar a que el SW tome control
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+              if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'PRECACHE_APP' })
+              }
+            }, { once: true })
+          }
+          
           // Verificar actualizaciones cada hora
           setInterval(() => {
             registration.update()

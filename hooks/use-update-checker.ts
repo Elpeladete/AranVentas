@@ -190,8 +190,13 @@ export function useUpdateChecker() {
     }))
   }
 
-  // Verificar automáticamente al montar
+  // Verificar automáticamente al montar (solo si hay conexión)
   useEffect(() => {
+    // ⚡ No verificar actualizaciones si estamos offline
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      console.log('📱 Modo offline - omitiendo verificación de actualizaciones')
+      return
+    }
     checkForUpdates()
   }, [])
 

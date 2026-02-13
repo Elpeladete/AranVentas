@@ -60,8 +60,14 @@ export function OdooContactSearch({
   const suggestionsRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>()
 
-  // Verificar estado de Odoo al cargar
+  // Verificar estado de Odoo al cargar (solo si estamos online)
   useEffect(() => {
+    // ⚡ OPTIMIZADO: No intentar conectar a Odoo si estamos offline
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      console.log('📱 Modo offline - Odoo no disponible, usando búsqueda local')
+      setOdooConnected(false)
+      return
+    }
     checkOdooConnection()
   }, [])
 

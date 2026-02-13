@@ -1,5 +1,5 @@
 // Service Worker para PWA de ARAN Tecnologías - VERSIÓN MEJORADA OFFLINE
-const CACHE_NAME = 'aran-services-v1.2.1'
+const CACHE_NAME = 'aran-services-v1.2.2'
 const OFFLINE_URL = '/'
 
 // Archivos críticos a cachear en la instalación
@@ -11,11 +11,12 @@ const STATIC_CACHE = [
   '/web-app-manifest-192x192.png',
   '/web-app-manifest-512x512.png',
   '/images/orden-servicio-aran.png', // ⭐ IMPORTANTE: Imagen de fondo para formularios
+  '/site.webmanifest',
 ]
 
 // Instalación del Service Worker
 self.addEventListener('install', (event) => {
-  console.log('📦 Service Worker: Instalando v1.2.1...')
+  console.log('📦 Service Worker: Instalando v1.2.2...')
   console.log('ℹ️ NOTA: IndexedDB (órdenes guardadas) NO se afectará')
   
   event.waitUntil(
@@ -37,7 +38,7 @@ self.addEventListener('install', (event) => {
 
 // Activación del Service Worker
 self.addEventListener('activate', (event) => {
-  console.log('✅ Service Worker: Activado v1.2.1')
+  console.log('✅ Service Worker: Activado v1.2.2')
   console.log('📦 Limpiando cachés antiguos (manteniendo IndexedDB intacto)')
   
   event.waitUntil(
@@ -71,6 +72,7 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('docs.google.com') ||
     url.hostname.includes('vercel-insights') ||
     url.hostname.includes('wazzup24.com') ||
+    url.hostname.includes('va.vercel-scripts.com') ||
     url.pathname.startsWith('/api/odoo')
   ) {
     // Para APIs, intentar fetch directo sin caché
@@ -90,9 +92,16 @@ self.addEventListener('fetch', (event) => {
   
   // ✅ Para el resto de recursos (HTML, JS, CSS, imágenes)
   // Estrategia: Cache First con Network Fallback
+  // ⚡ Para /_next/ assets: SIEMPRE cachear agresivamente (son versionados por hash)
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
+        // Para assets de Next.js (/_next/), servir desde caché directamente
+        // Son inmutables por su hash en el nombre
+        if (url.pathname.startsWith('/_next/')) {
+          return cachedResponse
+        }
+        
         console.log('✅ Sirviendo desde caché:', url.pathname)
         return cachedResponse
       }
@@ -105,27 +114,26 @@ self.addEventListener('fetch', (event) => {
             return response
           }
           
-          // Saltear site.webmanifest en desarrollo para evitar errores
-          if (url.pathname === '/site.webmanifest') {
-            return response
-          }
-          
           // Clonar la respuesta para cachearla
           const responseToCache = response.clone()
           
           caches.open(CACHE_NAME).then((cache) => {
-            // Cachear automáticamente recursos de Next.js
+            // ⭐ Cachear AGRESIVAMENTE todo lo necesario para funcionar offline
             if (
-              url.pathname.startsWith('/_next/') ||
-              url.pathname.startsWith('/images/') ||
+              url.pathname.startsWith('/_next/') ||       // JS, CSS de Next.js (versionados)
+              url.pathname.startsWith('/images/') ||       // Imágenes locales
               url.pathname.endsWith('.js') ||
               url.pathname.endsWith('.css') ||
               url.pathname.endsWith('.png') ||
               url.pathname.endsWith('.svg') ||
               url.pathname.endsWith('.jpg') ||
-              url.pathname.endsWith('.webp')
+              url.pathname.endsWith('.webp') ||
+              url.pathname.endsWith('.woff') ||            // Fuentes
+              url.pathname.endsWith('.woff2') ||           // Fuentes
+              url.pathname.endsWith('.ttf') ||             // Fuentes
+              url.hostname.includes('fonts.googleapis.com') || // Google Fonts CSS
+              url.hostname.includes('fonts.gstatic.com')   // Google Fonts archivos
             ) {
-              console.log('💾 Cacheando recurso:', url.pathname)
               cache.put(request, responseToCache)
             }
           })
@@ -167,7 +175,37 @@ self.addEventListener('message', (event) => {
     // Permitir cachear URLs específicas bajo demanda
     event.waitUntil(
       caches.open(CACHE_NAME).then((cache) => {
-        return cache.addAll(event.data.urls)
+        return cache.addAll(event.data.urls).catch((error) => {
+          console.warn('⚠️ Error cacheando URLs bajo demanda:', error)
+        })
+      })
+    )
+  }
+  
+  if (event.data && event.data.type === 'PRECACHE_APP') {
+    // ⭐ Pre-cachear TODA la app después del primer load exitoso
+    console.log('📦 Pre-cacheando recursos de la app para uso offline...')
+    event.waitUntil(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        try {
+          // Obtener todas las URLs ya cacheadas
+          const cachedRequests = await cache.keys()
+          const cachedUrls = cachedRequests.map(r => new URL(r.url).pathname)
+          
+          // Los assets de /_next/ se cachean automáticamente en el fetch handler
+          // Aquí nos aseguramos de que la página principal esté actualizada
+          if (!cachedUrls.includes('/')) {
+            const response = await fetch('/')
+            if (response.ok) {
+              await cache.put('/', response)
+              console.log('✅ Página principal cacheada para offline')
+            }
+          }
+          
+          console.log(`📦 Total de recursos en caché: ${cachedUrls.length}`)
+        } catch (error) {
+          console.warn('⚠️ Error durante pre-cache:', error)
+        }
       })
     )
   }
