@@ -585,6 +585,25 @@ export function FormActions({
         aux3: formData.aux3 // Asegurar que el teléfono del técnico se incluya
       }
       
+      // ✅ FALLBACK: Si aux3 está vacío pero hay técnico asignado, buscar su teléfono
+      if (!formDataWithImage.aux3 && formData.tecnicoNombre) {
+        console.log('⚠️ aux3 vacío con técnico asignado, buscando teléfono...')
+        console.log('👨‍🔧 Técnico:', formData.tecnicoNombre)
+        try {
+          const { getTecnicoByName } = await import('@/lib/tecnicos-search')
+          const tecnico = await getTecnicoByName(formData.tecnicoNombre)
+          if (tecnico?.telefono) {
+            formDataWithImage.aux3 = tecnico.telefono
+            onUpdateField('aux3', tecnico.telefono)
+            console.log('✅ Teléfono del técnico recuperado:', tecnico.telefono)
+          } else {
+            console.warn('⚠️ Técnico encontrado pero sin teléfono disponible')
+          }
+        } catch (e) {
+          console.warn('⚠️ No se pudo recuperar teléfono del técnico:', e)
+        }
+      }
+      
       // 🔍 DEBUG CRÍTICO: Verificar teléfono del técnico
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
       console.log('🔍 VERIFICACIÓN DE TELÉFONO DEL TÉCNICO')

@@ -255,7 +255,7 @@ export async function getTecnicoByName(nombre: string): Promise<TecnicoSearchRes
       return {
         nombre: match.nombre,
         email: match.email,
-        dni: match.dni,
+        telefono: match.telefono,
         cargo: match.cargo,
         matchScore: 100
       }

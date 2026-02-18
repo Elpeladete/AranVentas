@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { toast } from "@/lib/toast"
 import { validateField, formatPhoneNumber, formatCuit, type FormValidationData, validateRequiredFields } from "@/lib/validations"
-import { generateOrderNumber } from "@/lib/order-number"
+import { generateOrderNumber, shouldRegenerateOrderNumber } from "@/lib/order-number"
 import { toast as sonnerToast } from "sonner"
 
 export interface FormData {
@@ -95,9 +95,10 @@ const defaultFormData: FormData = {
 // Campos críticos que requieren validación en tiempo real
 const criticalFields: (keyof FormData)[] = [
   "razonSocial", "contacto", "cuit", "telefono",
-  "maquina", "equipo", "descripcion", "insumos",
+  "maquina", "equipo", "descripcion",
+  "localidad", "provincia", "distancia", "duracion",
   "tecnicoNombre", "clienteNombre"
-  // Nota: Los grupos de servicios, ubicación, facturación y firmas se validan por separado
+  // Nota: insumos es opcional. Los grupos de servicios, ubicación, facturación y firmas se validan por separado
 ]
 
 export function useFormData() {
@@ -119,7 +120,24 @@ export function useFormData() {
           clienteFirma: parsedData.clienteFirma,
           totalFields: Object.keys(parsedData).length
         })
-        setFormData({ ...defaultFormData, ...parsedData })
+        
+        // Verificar si el número de orden es de un día anterior
+        const loadedData = { ...defaultFormData, ...parsedData }
+        if (shouldRegenerateOrderNumber(loadedData.numeroOrden)) {
+          console.log('📅 Nuevo día detectado - regenerando número de orden y fecha')
+          loadedData.numeroOrden = generateOrderNumber()
+          // Actualizar la fecha al día actual
+          const today = new Date()
+          const dd = String(today.getDate()).padStart(2, '0')
+          const mm = String(today.getMonth() + 1).padStart(2, '0')
+          const yyyy = today.getFullYear()
+          loadedData.fecha = `${dd}-${mm}-${yyyy}`
+          toast.info("Nuevo día detectado", { 
+            description: "Se ha generado un nuevo número de orden y actualizado la fecha" 
+          })
+        }
+        
+        setFormData(loadedData)
         toast.info("Datos recuperados", { description: "Se han cargado los datos guardados anteriormente" })
       } else {
         console.log('📝 No hay datos en localStorage, usando valores por defecto')
@@ -222,7 +240,8 @@ export function useFormData() {
     // Guardar campos del técnico que deben persistir
     const persistentTechnicianData = {
       tecnicoNombre: formData.tecnicoNombre,
-      tecnicoFirma: formData.tecnicoFirma
+      tecnicoFirma: formData.tecnicoFirma,
+      aux3: formData.aux3 // Preservar teléfono del técnico
     }
     
     console.log('💾 Datos del técnico a preservar:', persistentTechnicianData)
@@ -238,12 +257,14 @@ export function useFormData() {
       numeroOrden: generateOrderNumber(), // Generar nuevo número de orden
       fecha: `${dd}-${mm}-${yyyy}`, // Fecha actual en formato DD-MM-YYYY
       tecnicoNombre: persistentTechnicianData.tecnicoNombre, // Mantener nombre del técnico
-      tecnicoFirma: persistentTechnicianData.tecnicoFirma // Mantener firma del técnico
+      tecnicoFirma: persistentTechnicianData.tecnicoFirma, // Mantener firma del técnico
+      aux3: persistentTechnicianData.aux3 // Mantener teléfono del técnico
     }
     
     console.log('✅ Nuevo formulario con datos del técnico:', {
       tecnicoNombre: newFormData.tecnicoNombre,
-      tecnicoFirma: newFormData.tecnicoFirma ? 'Preservada' : 'Vacía'
+      tecnicoFirma: newFormData.tecnicoFirma ? 'Preservada' : 'Vacía',
+      aux3: newFormData.aux3 || '(vacío)'
     })
     
     setFormData(newFormData)
