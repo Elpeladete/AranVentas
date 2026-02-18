@@ -642,52 +642,40 @@ export function FormActions({
       const validation = validateRequiredFields(formDataWithImage)
       
       if (!validation.isValid) {
+        // 🚫 BLOQUEO TOTAL: No se permite enviar con campos obligatorios faltantes
+        // Solo se puede guardar como borrador
+        const missingFieldsCount = validation.missingFields.length
+        
+        console.log('🚫 PASO 4 BLOQUEADO: Campos obligatorios faltantes:', validation.missingFields)
+        
         // Activar modo prominente de validación
         if (onShowValidationProminent) {
           onShowValidationProminent()
         }
         
-        const missingFieldsCount = validation.missingFields.length
-        const errorList = Object.values(validation.errors).slice(0, 3) // Mostrar solo los primeros 3
-        
-        // Mostrar confirmación inmediata para continuar con campos faltantes
-        const shouldProceed = confirm(
-          `⚠️ CAMPOS OBLIGATORIOS FALTANTES\n\nFaltan ${missingFieldsCount} campos obligatorios:\n\n• ${errorList.join('\n• ')}${missingFieldsCount > 3 ? '\n• Y más campos...' : ''}\n\n¿Desea continuar con el envío a pesar de los campos faltantes?\n\n⚠️ RECOMENDACIÓN: Complete los campos para un envío óptimo.`
-        )
-        
-        if (!shouldProceed) {
-          // Usuario canceló - mostrar información y salir
-          toast.warning("Envío cancelado", { 
-            description: "Complete los campos obligatorios y vuelva a intentar.",
-            duration: 4000
-          })
-          
-          // Hacer scroll hacia el panel de validación
-          setTimeout(() => {
-            const validationPanel = document.querySelector('.validation-status')
-            if (validationPanel) {
-              validationPanel.scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'center' 
-              })
-              
-              // Añadir efecto de highlight temporal
-              validationPanel.classList.add('ring-2', 'ring-orange-400', 'ring-opacity-75')
-              setTimeout(() => {
-                validationPanel.classList.remove('ring-2', 'ring-orange-400', 'ring-opacity-75')
-              }, 3000)
-            }
-          }, 500)
-          
-          return // Salir sin continuar el envío
-        }
-        
-        // Si llega aquí, el usuario decidió continuar con campos faltantes
-        console.log('✅ PASO 4 COMPLETADO CON ADVERTENCIAS: Usuario aceptó continuar con campos faltantes')
-        toast.warning("⚠️ Paso 4: Validación parcial", { 
-          description: `Continuando con ${missingFieldsCount} campos faltantes`,
-          duration: 3000
+        toast.error("No se puede enviar la orden", { 
+          description: `Faltan ${missingFieldsCount} campo(s) obligatorio(s). Complete todos los campos para poder enviar. Puede guardar como borrador.`,
+          duration: 6000
         })
+        
+        // Hacer scroll hacia el panel de validación
+        setTimeout(() => {
+          const validationPanel = document.querySelector('.validation-status')
+          if (validationPanel) {
+            validationPanel.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center' 
+            })
+            
+            // Añadir efecto de highlight temporal
+            validationPanel.classList.add('ring-2', 'ring-red-400', 'ring-opacity-75')
+            setTimeout(() => {
+              validationPanel.classList.remove('ring-2', 'ring-red-400', 'ring-opacity-75')
+            }, 3000)
+          }
+        }, 500)
+        
+        return // 🚫 Bloquear envío — solo borrador permitido
         
       } else {
         console.log('✅ PASO 4 COMPLETADO: Validación exitosa')
