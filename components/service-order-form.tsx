@@ -606,20 +606,18 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
   const handleSubmit = () => {
     // Validación por grupos antes del envío
     const groupValidation = validateAllGroups(formData)
-    if (!groupValidation.isValid) {
-      toast.error("Validación de grupos fallida", {
-        description: groupValidation.errors.join(', ')
-      })
-      return
-    }
     
     // Analizar campos críticos del formulario
     const criticalValidation = validateCriticalFields()
     
-    // Si hay campos críticos faltantes, mostrar advertencia
-    if (!criticalValidation.isValid) {
-      toast.error("Campos críticos incompletos", {
-        description: `Faltan campos críticos: ${criticalValidation.missingFields.length} campo(s)`
+    // Si hay cualquier campo faltante, bloquear envío
+    if (!groupValidation.isValid || !criticalValidation.isValid) {
+      const allErrors = [
+        ...groupValidation.errors,
+        ...criticalValidation.missingFields.map(f => `Falta: ${f}`)
+      ]
+      toast.error("No se puede enviar la orden", {
+        description: `Faltan ${criticalValidation.missingFields.length + groupValidation.errors.length} campo(s) obligatorios. Solo puede guardar como borrador.`
       })
       return
     }

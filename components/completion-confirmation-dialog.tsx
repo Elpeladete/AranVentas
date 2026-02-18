@@ -40,13 +40,17 @@ export function CompletionConfirmationDialog({
     cuit: "CUIT",
     contacto: "Contacto",
     telefono: "Teléfono",
+    tiposServicio: "Tipo de Servicio",
     maquina: "Máquina",
     equipo: "Equipo",
     descripcion: "Descripción del Trabajo",
+    ubicacionServicio: "Ubicación del Servicio",
+    tipoCargo: "Tipo de Cargo",
+    tipoGarantia: "Tipo de Garantía",
     localidad: "Localidad",
     provincia: "Provincia",
-    distancia: "Distancia",
-    duracion: "Duración",
+    distancia: "Distancia (km)",
+    duracion: "Duración (horas)",
     tecnicoNombre: "Nombre del Técnico",
     tecnicoFirma: "Firma del Técnico",
     clienteNombre: "Nombre del Cliente",
@@ -76,7 +80,7 @@ export function CompletionConfirmationDialog({
           </DialogTitle>
           <DialogDescription>
             {hasIssues 
-              ? "Los siguientes campos requieren atención antes de registrar la orden:"
+              ? "Los siguientes campos requieren atención. No se puede enviar la orden hasta completarlos. Puede guardarla como borrador."
               : "Todos los campos están completos. ¿Desea confirmar y registrar la orden de servicio?"
             }
           </DialogDescription>
@@ -164,14 +168,15 @@ export function CompletionConfirmationDialog({
           <Button
             type="button"
             onClick={onConfirm}
+            disabled={hasIssues}
             className={`w-full sm:w-auto order-1 sm:order-3 ${
               hasIssues 
-                ? "bg-yellow-600 hover:bg-yellow-700" 
+                ? "bg-gray-400 cursor-not-allowed opacity-50" 
                 : "bg-green-600 hover:bg-green-700"
             }`}
           >
             <CheckCircle className="h-4 w-4 mr-2" />
-            {hasIssues ? "Confirmar y Registrar (Incompleto)" : "Confirmar y Registrar"}
+            {hasIssues ? "Complete los campos para enviar" : "Confirmar y Registrar"}
           </Button>
         </DialogFooter>
       </DialogContent>

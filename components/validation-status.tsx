@@ -70,7 +70,15 @@ export function ValidationStatus({ formData, onFieldFocus, mode = 'discrete' }: 
     insumos: "Insumos",
     ubicacionServicio: "Ubicación del Servicio",
     tipoCargo: "Tipo de Cargo",
-    tipoGarantia: "Tipo de Garantía"
+    tipoGarantia: "Tipo de Garantía",
+    localidad: "Localidad",
+    provincia: "Provincia",
+    distancia: "Distancia (km)",
+    duracion: "Duración (horas)",
+    tecnicoNombre: "Nombre del Técnico",
+    tecnicoFirma: "Firma del Técnico",
+    clienteNombre: "Nombre del Cliente",
+    clienteFirma: "Firma del Cliente"
   }
 
   return (

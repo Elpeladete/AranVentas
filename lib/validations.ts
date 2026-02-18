@@ -89,21 +89,24 @@ export function validateServiceGroup2(data: any): { isValid: boolean; message?: 
   return { isValid: true }
 }
 
-export function validateServiceGroup3(data: any): { isValid: boolean; message?: string } {
-  // Grupo 3: Tipo de facturación
-  const group3Services = [
-    data.conCargo,
-    data.sinCargo,
-    data.servicioEnGarantia,
-    data.aConvenir
-  ]
+export function validateServiceGroup3(data: any): { isValid: boolean; messages?: string[] } {
+  // Grupo 3: Tipo de cargo Y tipo de garantía (ambos pares son obligatorios)
+  const messages: string[] = []
   
-  const hasAnyService = group3Services.some(service => service === true)
+  // Par 1: Con Cargo o Sin Cargo
+  if (!data.conCargo && !data.sinCargo) {
+    messages.push("Debe seleccionar si el servicio es Con Cargo o Sin Cargo")
+  }
   
-  if (!hasAnyService) {
+  // Par 2: En Garantía o A Convenir
+  if (!data.servicioEnGarantia && !data.aConvenir) {
+    messages.push("Debe seleccionar si el servicio está En Garantía o es A Convenir")
+  }
+  
+  if (messages.length > 0) {
     return {
       isValid: false,
-      message: "Debe seleccionar el tipo de facturación (Con Cargo, Sin Cargo, En Garantía o A Convenir)"
+      messages
     }
   }
   
@@ -180,8 +183,9 @@ export const fieldHints = {
   observations: "Observaciones adicionales o notas importantes",
   serviceGroup1: "Seleccione al menos un tipo de servicio (Técnico, Instalación, Puesta en Marcha, etc.)",
   serviceGroup2: "Seleccione la ubicación del servicio (Campo u Oficina)",
-  serviceGroup3: "Seleccione el tipo de facturación (Con Cargo, Sin Cargo, En Garantía o A Convenir)",
-  signatures: "Ambas firmas (cliente y técnico) son obligatorias"
+  serviceGroup3Cargo: "Seleccione si el servicio es Con Cargo o Sin Cargo",
+  serviceGroup3Garantia: "Seleccione si el servicio está En Garantía o es A Convenir",
+  signatures: "Ambas firmas (cliente y técnico) y nombres son obligatorios"
 }
 
 // Validación completa de todos los grupos
@@ -199,8 +203,8 @@ export function validateAllGroups(data: any): { isValid: boolean; errors: string
   }
   
   const group3Validation = validateServiceGroup3(data)
-  if (!group3Validation.isValid && group3Validation.message) {
-    errors.push(group3Validation.message)
+  if (!group3Validation.isValid && group3Validation.messages) {
+    errors.push(...group3Validation.messages)
   }
   
   const signatureValidation = validateSignatureGroup(data)
@@ -439,11 +443,7 @@ export function validateRequiredFields(data: any): {
     missingFields.push("descripcion")
   }
 
-  // 10. Insumos (obligatorio)
-  if (!data.insumos || data.insumos.trim() === '') {
-    errors.insumos = "Los insumos son obligatorios"
-    missingFields.push("insumos")
-  }
+  // 10. Insumos - OPCIONAL, no se valida como obligatorio
 
   // 11. Al menos una ubicación de servicio (obligatorio)
   if (!data.servicioACampo && !data.servicioEnOficina) {
@@ -461,6 +461,60 @@ export function validateRequiredFields(data: any): {
   if (!data.servicioEnGarantia && !data.aConvenir) {
     errors.tipoGarantia = "Debe seleccionar si el servicio está en garantía o es a convenir"
     missingFields.push("tipoGarantia")
+  }
+
+  // 14. Localidad (obligatorio)
+  if (!data.localidad || data.localidad.trim() === '') {
+    errors.localidad = "La localidad es obligatoria"
+    missingFields.push("localidad")
+  }
+
+  // 15. Provincia (obligatorio)
+  if (!data.provincia || data.provincia.trim() === '') {
+    errors.provincia = "La provincia es obligatoria"
+    missingFields.push("provincia")
+  }
+
+  // 16. Distancia (obligatorio)
+  if (!data.distancia || data.distancia.trim() === '') {
+    errors.distancia = "La distancia es obligatoria"
+    missingFields.push("distancia")
+  }
+
+  // 17. Duración (obligatorio)
+  if (!data.duracion || data.duracion.trim() === '') {
+    errors.duracion = "La duración es obligatoria"
+    missingFields.push("duracion")
+  }
+
+  // 18. Nombre del técnico (obligatorio)
+  if (!data.tecnicoNombre || data.tecnicoNombre.trim() === '') {
+    errors.tecnicoNombre = "El nombre del técnico es obligatorio"
+    missingFields.push("tecnicoNombre")
+  }
+
+  // 19. Firma del técnico (obligatorio)
+  const hasTechSignature = data.tecnicoFirma && 
+    data.tecnicoFirma.trim() !== '' && 
+    (data.tecnicoFirma.startsWith('http') || data.tecnicoFirma.startsWith('data:image'))
+  if (!hasTechSignature) {
+    errors.tecnicoFirma = "La firma del técnico es obligatoria"
+    missingFields.push("tecnicoFirma")
+  }
+
+  // 20. Nombre del cliente (obligatorio)
+  if (!data.clienteNombre || data.clienteNombre.trim() === '') {
+    errors.clienteNombre = "El nombre del cliente es obligatorio"
+    missingFields.push("clienteNombre")
+  }
+
+  // 21. Firma del cliente (obligatorio)
+  const hasClientSignature = data.clienteFirma && 
+    data.clienteFirma.trim() !== '' && 
+    (data.clienteFirma.startsWith('http') || data.clienteFirma.startsWith('data:image'))
+  if (!hasClientSignature) {
+    errors.clienteFirma = "La firma del cliente es obligatoria"
+    missingFields.push("clienteFirma")
   }
 
   return {

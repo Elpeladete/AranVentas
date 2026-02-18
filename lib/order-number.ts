@@ -23,6 +23,36 @@ export function generateOrderNumber(): string {
 }
 
 /**
+ * Obtiene la parte de fecha (YYYYMMDD) de un número de orden
+ */
+export function getOrderDatePart(orderNumber: string): string {
+  if (!orderNumber || !isValidOrderNumber(orderNumber)) return ''
+  return orderNumber.split('-')[0]
+}
+
+/**
+ * Obtiene la fecha actual en formato YYYYMMDD
+ */
+export function getTodayDateString(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}${month}${day}`
+}
+
+/**
+ * Verifica si un número de orden corresponde al día de hoy.
+ * Si no corresponde, indica que debe regenerarse.
+ */
+export function shouldRegenerateOrderNumber(currentOrderNumber: string): boolean {
+  if (!currentOrderNumber || !isValidOrderNumber(currentOrderNumber)) return true
+  const orderDate = getOrderDatePart(currentOrderNumber)
+  const today = getTodayDateString()
+  return orderDate !== today
+}
+
+/**
  * Valida si un número de orden tiene el formato correcto
  * Formato esperado: YYYYMMDD-HHMMSS (ej: 20250922-175704)
  */
