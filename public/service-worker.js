@@ -1,5 +1,5 @@
 // Service Worker para PWA de ARAN Tecnologías - VERSIÓN MEJORADA OFFLINE
-const CACHE_NAME = 'aran-services-v1.2.2'
+const CACHE_NAME = 'aran-services-v1.3.0'
 const OFFLINE_URL = '/'
 
 // Archivos críticos a cachear en la instalación
@@ -16,7 +16,7 @@ const STATIC_CACHE = [
 
 // Instalación del Service Worker
 self.addEventListener('install', (event) => {
-  console.log('📦 Service Worker: Instalando v1.2.2...')
+  console.log('📦 Service Worker: Instalando v1.3.0...')
   console.log('ℹ️ NOTA: IndexedDB (órdenes guardadas) NO se afectará')
   
   event.waitUntil(
@@ -24,21 +24,18 @@ self.addEventListener('install', (event) => {
       console.log('📦 Service Worker: Cacheando archivos críticos...')
       return cache.addAll(STATIC_CACHE).catch((error) => {
         console.error('❌ Error cacheando archivos:', error)
-        // No fallar la instalación si algún archivo no se puede cachear
         return Promise.resolve()
       })
     })
   )
   
-  // NO activar inmediatamente si hay una actualización
-  // Esperar a que el usuario cierre todas las pestañas o haga clic en "Actualizar"
-  // Comentado: self.skipWaiting()
-  console.log('⏸️ Service Worker instalado, esperando activación manual')
+  // Activar inmediatamente para evitar servir chunks desactualizados
+  self.skipWaiting()
 })
 
 // Activación del Service Worker
 self.addEventListener('activate', (event) => {
-  console.log('✅ Service Worker: Activado v1.2.2')
+  console.log('✅ Service Worker: Activado v1.3.0')
   console.log('📦 Limpiando cachés antiguos (manteniendo IndexedDB intacto)')
   
   event.waitUntil(
@@ -58,7 +55,7 @@ self.addEventListener('activate', (event) => {
   return self.clients.claim()
 })
 
-// Intercepción de peticiones - ESTRATEGIA MEJORADA
+// Intercepción de peticiones - ESTRATEGIA CORREGIDA
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
@@ -75,7 +72,6 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('va.vercel-scripts.com') ||
     url.pathname.startsWith('/api/odoo')
   ) {
-    // Para APIs, intentar fetch directo sin caché
     event.respondWith(
       fetch(request).catch(() => {
         return new Response(
@@ -90,77 +86,92 @@ self.addEventListener('fetch', (event) => {
     return
   }
   
-  // ✅ Para el resto de recursos (HTML, JS, CSS, imágenes)
-  // Estrategia: Cache First con Network Fallback
-  // ⚡ Para /_next/ assets: SIEMPRE cachear agresivamente (son versionados por hash)
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Para assets de Next.js (/_next/), servir desde caché directamente
-        // Son inmutables por su hash en el nombre
-        if (url.pathname.startsWith('/_next/')) {
-          return cachedResponse
-        }
-        
-        console.log('✅ Sirviendo desde caché:', url.pathname)
-        return cachedResponse
-      }
-      
-      // Si no está en caché, intentar descargar
-      return fetch(request)
+  // ──────────────────────────────────────────────────────────
+  // NAVEGACIÓN (HTML) → Network First con fallback a caché
+  // Esto asegura que siempre se cargue el HTML más reciente
+  // con las referencias correctas a los chunks del último deploy
+  // ──────────────────────────────────────────────────────────
+  if (request.mode === 'navigate' || request.destination === 'document') {
+    event.respondWith(
+      fetch(request)
         .then((response) => {
-          // No cachear respuestas inválidas
-          if (!response || response.status !== 200 || response.type === 'error') {
-            return response
+          if (response && response.status === 200) {
+            const responseToCache = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache))
           }
-          
-          // Clonar la respuesta para cachearla
-          const responseToCache = response.clone()
-          
-          caches.open(CACHE_NAME).then((cache) => {
-            // ⭐ Cachear AGRESIVAMENTE todo lo necesario para funcionar offline
-            if (
-              url.pathname.startsWith('/_next/') ||       // JS, CSS de Next.js (versionados)
-              url.pathname.startsWith('/images/') ||       // Imágenes locales
-              url.pathname.endsWith('.js') ||
-              url.pathname.endsWith('.css') ||
-              url.pathname.endsWith('.png') ||
-              url.pathname.endsWith('.svg') ||
-              url.pathname.endsWith('.jpg') ||
-              url.pathname.endsWith('.webp') ||
-              url.pathname.endsWith('.woff') ||            // Fuentes
-              url.pathname.endsWith('.woff2') ||           // Fuentes
-              url.pathname.endsWith('.ttf') ||             // Fuentes
-              url.hostname.includes('fonts.googleapis.com') || // Google Fonts CSS
-              url.hostname.includes('fonts.gstatic.com')   // Google Fonts archivos
-            ) {
-              cache.put(request, responseToCache)
-            }
-          })
-          
           return response
         })
-        .catch((error) => {
-          console.error('❌ Error en fetch, intentando caché:', error)
-          
-          // Si es navegación (HTML), retornar la página principal desde caché
-          if (request.mode === 'navigate' || request.destination === 'document') {
-            return caches.match(OFFLINE_URL).then((response) => {
-              if (response) {
-                console.log('📱 Modo offline: Sirviendo app desde caché')
-                return response
+        .catch(() => {
+          console.log('📱 Modo offline: Sirviendo HTML desde caché')
+          return caches.match(OFFLINE_URL).then((cached) => {
+            if (cached) return cached
+            return new Response(
+              '<!DOCTYPE html><html><head><title>ARAN - Offline</title></head><body><h1>Aplicación no disponible offline</h1><p>Conecte a internet y recargue la página.</p></body></html>',
+              { headers: { 'Content-Type': 'text/html' } }
+            )
+          })
+        })
+    )
+    return
+  }
+  
+  // ──────────────────────────────────────────────────────────
+  // ASSETS /_next/static/ → Cache First (son inmutables por hash)
+  // Si no están en caché, descargar y cachear
+  // ──────────────────────────────────────────────────────────
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(
+      caches.match(request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse
+        
+        return fetch(request).then((response) => {
+          if (response && response.status === 200) {
+            const responseToCache = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache))
+          }
+          return response
+        })
+      })
+    )
+    return
+  }
+  
+  // ──────────────────────────────────────────────────────────
+  // OTROS RECURSOS (imágenes, fuentes, etc.) → Stale While Revalidate
+  // Servir de caché inmediatamente, pero actualizar en segundo plano
+  // ──────────────────────────────────────────────────────────
+  event.respondWith(
+    caches.match(request).then((cachedResponse) => {
+      const fetchPromise = fetch(request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const responseToCache = response.clone()
+            caches.open(CACHE_NAME).then((cache) => {
+              if (
+                url.pathname.startsWith('/images/') ||
+                url.pathname.endsWith('.js') ||
+                url.pathname.endsWith('.css') ||
+                url.pathname.endsWith('.png') ||
+                url.pathname.endsWith('.svg') ||
+                url.pathname.endsWith('.jpg') ||
+                url.pathname.endsWith('.webp') ||
+                url.pathname.endsWith('.woff') ||
+                url.pathname.endsWith('.woff2') ||
+                url.pathname.endsWith('.ttf') ||
+                url.pathname.endsWith('.ico') ||
+                url.pathname.endsWith('.webmanifest') ||
+                url.hostname.includes('fonts.googleapis.com') ||
+                url.hostname.includes('fonts.gstatic.com')
+              ) {
+                cache.put(request, responseToCache)
               }
-              // Si ni siquiera tenemos la página principal cacheada
-              return new Response(
-                '<!DOCTYPE html><html><head><title>ARAN - Offline</title></head><body><h1>Aplicación no disponible offline</h1><p>Conecte a internet y recargue la página.</p></body></html>',
-                { headers: { 'Content-Type': 'text/html' } }
-              )
             })
           }
-          
-          // Para otros recursos, intentar desde caché como último recurso
-          return caches.match(request)
+          return response
         })
+        .catch(() => cachedResponse || new Response('', { status: 503 }))
+      
+      return cachedResponse || fetchPromise
     })
   )
 })
@@ -172,7 +183,6 @@ self.addEventListener('message', (event) => {
   }
   
   if (event.data && event.data.type === 'CACHE_URLS') {
-    // Permitir cachear URLs específicas bajo demanda
     event.waitUntil(
       caches.open(CACHE_NAME).then((cache) => {
         return cache.addAll(event.data.urls).catch((error) => {
@@ -182,18 +192,33 @@ self.addEventListener('message', (event) => {
     )
   }
   
+  if (event.data && event.data.type === 'CLEAR_NEXT_CACHE') {
+    // Limpiar chunks viejos de /_next/ cuando hay un nuevo deploy
+    console.log('🧹 Limpiando chunks viejos de /_next/...')
+    event.waitUntil(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cachedRequests = await cache.keys()
+        let removed = 0
+        for (const req of cachedRequests) {
+          const pathname = new URL(req.url).pathname
+          if (pathname.startsWith('/_next/')) {
+            await cache.delete(req)
+            removed++
+          }
+        }
+        console.log(`🧹 ${removed} chunks viejos eliminados`)
+      })
+    )
+  }
+  
   if (event.data && event.data.type === 'PRECACHE_APP') {
-    // ⭐ Pre-cachear TODA la app después del primer load exitoso
     console.log('📦 Pre-cacheando recursos de la app para uso offline...')
     event.waitUntil(
       caches.open(CACHE_NAME).then(async (cache) => {
         try {
-          // Obtener todas las URLs ya cacheadas
           const cachedRequests = await cache.keys()
           const cachedUrls = cachedRequests.map(r => new URL(r.url).pathname)
           
-          // Los assets de /_next/ se cachean automáticamente en el fetch handler
-          // Aquí nos aseguramos de que la página principal esté actualizada
           if (!cachedUrls.includes('/')) {
             const response = await fetch('/')
             if (response.ok) {
