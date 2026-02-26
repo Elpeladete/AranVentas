@@ -9,7 +9,7 @@ import { getOdooClient } from './odoo-client'
 export interface OdooServiceOrder {
   id?: number
   name: string // Título de la tarea/orden
-  partner_id: number // ID delCLIENTE
+  partner_id: number // ID del CLIENTE
   partner_phone?: string // Número de contacto (project.task)
   date_order?: string // Fecha de orden (sale.order)
   date_deadline?: string // Fecha límite (project.task) - datetime, fin del rango
@@ -20,7 +20,7 @@ export interface OdooServiceOrder {
   tag_ids?: number[][] // Etiquetas de la tarea (para incluir técnico)
   user_id?: number // ID del usuario asignado (many2one - un solo usuario)
   user_ids?: Array<[number, number, number[]]> // IDs de usuarios asignados (many2many - múltiples usuarios, etiqueta "Personas asignadas")
-  description?: string // Descripción del trabajo
+  description?: string // Descripción del trabajo (HTML)
   order_line?: Array<{
     product_id: number
     product_uom_qty: number
@@ -32,17 +32,54 @@ export interface OdooServiceOrder {
   task_id?: number // Tarea asociada
   fsm_location?: string // Ubicación del servicio
   fsm_done?: boolean // Servicio completado
-  // Campos personalizados ARAN (x_studio_* son campos personalizados en Odoo Studio)
-  tecnico_nombre?: string
-  tecnico_firma?: string
- CLIENTE_nombre?: string
- CLIENTE_firma?: string
-  orden_imagen?: string
-  x_studio_numero_orden?: string
-  x_studio_tecnico?: string
-  x_studio_firma_tecnico?: string
-  x_studio_firma_cliente?: string
-  x_studio_imagen_orden?: string
+  // Campos personalizados ARAN - Odoo Studio (x_studio_*)
+  // Datos del contacto/cliente
+  x_studio_nombre_del_contacto_1?: string     // char - Nombre del contacto
+  x_studio_razon_social_1?: string            // char - Razón Social
+  x_studio_cuit?: string                      // char - CUIT
+  x_studio_telefono_del_contacto_1?: string   // char - Teléfono del contacto
+  // Tipos de servicio (booleanos)
+  x_studio_servicio_tecnico?: boolean
+  x_studio_instalacion?: boolean
+  x_studio_puesta_en_marcha?: boolean
+  x_studio_capacitacion?: boolean
+  x_studio_calibracion?: boolean
+  x_studio_tercero?: boolean
+  // Equipo y máquina
+  x_studio_maquina?: string                   // char - Máquina (tipo)
+  x_studio_marca_maquina?: string             // char - Marca máquina
+  x_studio_modelo_maquina?: string            // char - Modelo máquina
+  x_studio_ano_maquina?: number               // integer - Año máquina
+  x_studio_equipo?: string                    // char - Equipo
+  // Descripción del trabajo
+  x_studio_descripcion_de_lo_acontecido?: string // text - Descripción de lo acontecido
+  x_studio_orden_de_servicio?: string         // char - Número de orden de servicio
+  x_studio_fecha?: string                     // date - Fecha (YYYY-MM-DD)
+  // Ubicación del servicio (booleanos)
+  x_studio_servicio_a_campo?: boolean
+  x_studio_servicio_en_oficina?: boolean
+  // Ubicación geográfica
+  x_studio_localidad?: string                 // char - Localidad
+  x_studio_provincia?: string                 // char - Provincia
+  x_studio_distancia_km?: number              // integer - Distancia (Km)
+  x_studio_duracion_hs?: number               // integer - Duración (Hs)
+  // Modalidad de cobro (booleanos)
+  x_studio_con_cargo?: boolean
+  x_studio_sin_cargo?: boolean
+  x_studio_servicio_en_garantia?: boolean
+  x_studio_a_convenir?: boolean
+  // Valores económicos
+  x_studio_precio_del_dolar_tc?: number       // float - Precio del dólar (TC / tipo cambio)
+  x_studio_iva?: number                       // float - IVA porcentaje
+  x_studio_iva_1?: number                     // monetary - IVA monto
+  x_studio_total?: number                     // float - Total (sin IVA)
+  x_studio_total_1?: number                   // monetary - Total (con IVA)
+  x_studio_precio_del_dolar?: number          // monetary - Precio del dólar
+  // Firmas (base64 binary)
+  x_studio_firma_cliente?: string             // binary - Firma Cliente (base64)
+  x_studio_firma_del_tecnico?: string         // binary - Firma del técnico (base64)
+  // Técnico
+  x_studio_aclaracion_del_tecnico?: string    // char - Aclaración/nombre del técnico
 }
 
 export interface OdooPartner {
@@ -268,19 +305,77 @@ ${formData.aux1 ? `
 </div>
 ` : ''}</div>`.trim()
 
-  // Formato para project.task (solo campos estándar de Odoo)
+  // Formato para project.task: campos estándar + campos personalizados x_studio_*
   // IMPORTANTE: project.task requiere un project_id obligatorio
-  // Todos los campos han sido verificados en la instancia de Odoo
+  // Los campos x_studio_* almacenan los datos estructurados directamente en Odoo
+  // El campo description mantiene el HTML visual como respaldo/vista rápida
   const taskData: Partial<OdooServiceOrder> = {
+    // --- Campos estándar de Odoo ---
     name: `OS ${formData.numeroOrden} - ${formData.razonSocial || 'Cliente'}`,
     partner_id: partnerId,
-    partner_phone: formData.telefono, // Número de contacto
-    project_id: projectId, // ID del proyecto obtenido o creado
-    user_ids: [[6, 0, [63]]], // Asignar a Axel Dadone (UID 63) - formato many2many: [(6, 0, [ids])]
-    planned_date_begin: `${orderDate} 00:00:00`, // Inicio del rango (datetime) - mismo día que la orden
-    date_deadline: `${orderDate} 23:59:59`, // Fin del rango (datetime) - mismo día que la orden
-    allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined, // Tiempo asignado (float) - campo verificado
-    description: descripcionCompleta,
+    partner_phone: formData.telefono,
+    project_id: projectId,
+    user_ids: [[6, 0, [63]]], // Asignar a Axel Dadone (UID 63)
+    planned_date_begin: `${orderDate} 00:00:00`,
+    date_deadline: `${orderDate} 23:59:59`,
+    allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined,
+    description: descripcionCompleta, // HTML visual (se mantiene como respaldo)
+
+    // --- Campos personalizados x_studio_* (datos estructurados) ---
+    // Datos del contacto/cliente
+    x_studio_nombre_del_contacto_1: formData.contacto || undefined,
+    x_studio_razon_social_1: formData.razonSocial || undefined,
+    x_studio_cuit: formData.cuit || undefined,
+    x_studio_telefono_del_contacto_1: formData.telefono || undefined,
+
+    // Número de orden y fecha
+    x_studio_orden_de_servicio: formData.numeroOrden || undefined,
+    x_studio_fecha: orderDate, // YYYY-MM-DD
+
+    // Tipos de servicio
+    x_studio_servicio_tecnico: formData.servicioTecnico || false,
+    x_studio_instalacion: formData.instalacion || false,
+    x_studio_puesta_en_marcha: formData.puestaEnMarcha || false,
+    x_studio_capacitacion: formData.capacitacion || false,
+    x_studio_calibracion: formData.calibracion || false,
+    x_studio_tercero: formData.tercero || false,
+
+    // Equipo y máquina
+    x_studio_maquina: formData.maquina || undefined,
+    x_studio_equipo: formData.equipo || undefined,
+
+    // Descripción del trabajo
+    x_studio_descripcion_de_lo_acontecido: formData.descripcion || undefined,
+
+    // Ubicación del servicio
+    x_studio_servicio_a_campo: formData.servicioACampo || false,
+    x_studio_servicio_en_oficina: formData.servicioEnOficina || false,
+
+    // Ubicación geográfica
+    x_studio_localidad: formData.localidad || undefined,
+    x_studio_provincia: formData.provincia || undefined,
+    x_studio_distancia_km: formData.distancia ? parseInt(formData.distancia) : undefined,
+    x_studio_duracion_hs: formData.duracion ? parseInt(formData.duracion) : undefined,
+
+    // Modalidad de cobro
+    x_studio_con_cargo: formData.conCargo || false,
+    x_studio_sin_cargo: formData.sinCargo || false,
+    x_studio_servicio_en_garantia: formData.servicioEnGarantia || false,
+    x_studio_a_convenir: formData.aConvenir || false,
+
+    // Valores económicos
+    // Cada concepto tiene un campo float y uno monetary en Odoo Studio.
+    // Escribimos a ambos para asegurar que se vean en todas las vistas.
+    // parseFloat puede fallar con formato argentino (puntos de miles), así que limpiamos.
+    x_studio_precio_del_dolar_tc: formData.tipoCambio ? parseFloat(formData.tipoCambio.replace(/\./g, '').replace(',', '.')) : undefined,
+    x_studio_precio_del_dolar: formData.tipoCambio ? parseFloat(formData.tipoCambio.replace(/\./g, '').replace(',', '.')) : undefined,
+    x_studio_iva: formData.iva ? parseFloat(formData.iva.replace(/\./g, '').replace(',', '.')) : undefined,
+    x_studio_iva_1: formData.iva ? parseFloat(formData.iva.replace(/\./g, '').replace(',', '.')) : undefined,
+    x_studio_total: formData.total ? parseFloat(formData.total.replace(/\./g, '').replace(',', '.')) : undefined,
+    x_studio_total_1: formData.total ? parseFloat(formData.total.replace(/\./g, '').replace(',', '.')) : undefined,
+
+    // Técnico
+    x_studio_aclaracion_del_tecnico: formData.tecnicoNombre || undefined,
   }
 
   return taskData
@@ -468,6 +563,9 @@ export async function syncServiceOrderToOdoo(
       }
     }
 
+    // Paso 4.6: Descargar firmas desde ImgBB y guardarlas como base64 en campos x_studio_firma_*
+    await updateSignatureFields(createResult.data, formData)
+
     // Paso 5: Adjuntar imágenes como archivos en Odoo
     await attachImagesToTask(createResult.data, formData)
 
@@ -481,6 +579,69 @@ export async function syncServiceOrderToOdoo(
       success: false,
       error: error instanceof Error ? error.message : 'Error desconocido',
     }
+  }
+}
+
+/**
+ * Descarga imágenes de firma desde ImgBB y las guarda como base64 en los campos x_studio_firma_*
+ */
+async function updateSignatureFields(
+  taskId: number,
+  formData: AranFormData
+): Promise<void> {
+  const client = getOdooClient()
+  const firmaUpdates: Partial<OdooServiceOrder> = {}
+
+  try {
+    // Descargar firma del técnico
+    if (formData.tecnicoFirma) {
+      try {
+        console.log('📥 Descargando firma del técnico para campo x_studio...')
+        const response = await fetch(formData.tecnicoFirma)
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer()
+          const base64 = Buffer.from(arrayBuffer).toString('base64')
+          firmaUpdates.x_studio_firma_del_tecnico = base64
+          console.log(`✅ Firma técnico descargada (${arrayBuffer.byteLength} bytes)`)
+        } else {
+          console.error(`⚠️ Error descargando firma técnico: HTTP ${response.status}`)
+        }
+      } catch (err) {
+        console.error('⚠️ Error descargando firma técnico:', err)
+      }
+    }
+
+    // Descargar firma del cliente
+    if (formData.clienteFirma) {
+      try {
+        console.log('📥 Descargando firma del cliente para campo x_studio...')
+        const response = await fetch(formData.clienteFirma)
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer()
+          const base64 = Buffer.from(arrayBuffer).toString('base64')
+          firmaUpdates.x_studio_firma_cliente = base64
+          console.log(`✅ Firma cliente descargada (${arrayBuffer.byteLength} bytes)`)
+        } else {
+          console.error(`⚠️ Error descargando firma cliente: HTTP ${response.status}`)
+        }
+      } catch (err) {
+        console.error('⚠️ Error descargando firma cliente:', err)
+      }
+    }
+
+    // Actualizar campos de firma en la tarea
+    if (Object.keys(firmaUpdates).length > 0) {
+      console.log('📝 Actualizando campos de firma en Odoo...')
+      const updateResult = await client.update('project.task', taskId, firmaUpdates)
+      if (updateResult.success) {
+        console.log('✅ Campos x_studio_firma_* actualizados correctamente')
+      } else {
+        console.error('⚠️ Error actualizando firmas:', updateResult.error)
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error en updateSignatureFields:', error)
+    // No lanzamos el error para no interrumpir el flujo principal
   }
 }
 
