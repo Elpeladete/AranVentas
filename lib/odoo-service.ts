@@ -315,6 +315,7 @@ ${formData.aux1 ? `
     partner_id: partnerId,
     partner_phone: formData.telefono,
     project_id: projectId,
+    stage_id: 96, // Etapa "Registro" en Field Service
     user_ids: [[6, 0, [63]]], // Asignar a Axel Dadone (UID 63)
     planned_date_begin: `${orderDate} 00:00:00`,
     date_deadline: `${orderDate} 23:59:59`,
@@ -569,8 +570,7 @@ export async function syncServiceOrderToOdoo(
     // Paso 5: Adjuntar imágenes como archivos en Odoo
     await attachImagesToTask(createResult.data, formData)
 
-    // Paso 6: Marcar la tarea como completada
-    await markTaskAsCompleted(createResult.data, projectResult.projectId)
+    // La tarea se crea directamente en stage "Registro" (stage_id: 96)
 
     return { success: true, orderId: createResult.data }
   } catch (error) {
