@@ -1,5 +1,5 @@
 // Service Worker para PWA de ARAN Tecnologías - VERSIÓN MEJORADA OFFLINE
-const CACHE_NAME = 'aran-services-v1.3.0'
+const CACHE_NAME = 'aran-services-v1.4.0'
 const OFFLINE_URL = '/'
 
 // Archivos críticos a cachear en la instalación

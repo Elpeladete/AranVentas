@@ -12,6 +12,7 @@ export interface OdooServiceOrder {
   partner_id: number // ID del CLIENTE
   partner_phone?: string // Número de contacto (project.task)
   date_order?: string // Fecha de orden (sale.order)
+  stage_id?: number // ID de la etapa/estado (project.task.type)
   date_deadline?: string // Fecha límite (project.task) - datetime, fin del rango
   planned_date_begin?: string // Fecha de inicio planeada (project.task) - datetime, inicio del rango
   date_assign?: string // Fecha planeada (project.task)
@@ -34,10 +35,10 @@ export interface OdooServiceOrder {
   fsm_done?: boolean // Servicio completado
   // Campos personalizados ARAN - Odoo Studio (x_studio_*)
   // Datos del contacto/cliente
-  x_studio_nombre_del_contacto_1?: string     // char - Nombre del contacto
-  x_studio_razon_social_1?: string            // char - Razón Social
+  x_studio_nombre_del_contacto?: string       // char - Nombre del contacto
+  x_studio_razon_social?: string              // char - Razón Social
   x_studio_cuit?: string                      // char - CUIT
-  x_studio_telefono_del_contacto_1?: string   // char - Teléfono del contacto
+  x_studio_telefono_del_contacto?: string     // char - Teléfono del contacto
   // Tipos de servicio (booleanos)
   x_studio_servicio_tecnico?: boolean
   x_studio_instalacion?: boolean
@@ -69,17 +70,17 @@ export interface OdooServiceOrder {
   x_studio_servicio_en_garantia?: boolean
   x_studio_a_convenir?: boolean
   // Valores económicos
-  x_studio_precio_del_dolar_tc?: number       // float - Precio del dólar (TC / tipo cambio)
-  x_studio_iva?: number                       // float - IVA porcentaje
-  x_studio_iva_1?: number                     // monetary - IVA monto
-  x_studio_total?: number                     // float - Total (sin IVA)
-  x_studio_total_1?: number                   // monetary - Total (con IVA)
   x_studio_precio_del_dolar?: number          // monetary - Precio del dólar
+  x_studio_iva?: number                       // float - IVA porcentaje
+  x_studio_total?: number                     // float - Total
   // Firmas (base64 binary)
   x_studio_firma_cliente?: string             // binary - Firma Cliente (base64)
-  x_studio_firma_del_tecnico?: string         // binary - Firma del técnico (base64)
+  x_studio_binary_field_2bh_1jjr9hppn?: string // binary - Firma del técnico (base64)
   // Técnico
   x_studio_aclaracion_del_tecnico?: string    // char - Aclaración/nombre del técnico
+  // Geoposición
+  x_studio_geoposicion?: string               // char - URL de Google Maps
+  x_studio_geoposicion_1?: string             // html - Link clicable a Google Maps
 }
 
 export interface OdooPartner {
@@ -315,8 +316,8 @@ ${formData.aux1 ? `
     partner_id: partnerId,
     partner_phone: formData.telefono,
     project_id: projectId,
-    stage_id: 96, // Etapa "Registro" en Field Service
-    user_ids: [[6, 0, [63]]], // Asignar a Axel Dadone (UID 63)
+    stage_id: 107, // "Registro" - etapa inicial del proyecto 3 (Órdenes de Servicio ARAN)
+    user_ids: [[6, 0, [5]]], // Asignar a Axel Dadone (UID 5)
     planned_date_begin: `${orderDate} 00:00:00`,
     date_deadline: `${orderDate} 23:59:59`,
     allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined,
@@ -324,10 +325,10 @@ ${formData.aux1 ? `
 
     // --- Campos personalizados x_studio_* (datos estructurados) ---
     // Datos del contacto/cliente
-    x_studio_nombre_del_contacto_1: formData.contacto || undefined,
-    x_studio_razon_social_1: formData.razonSocial || undefined,
+    x_studio_nombre_del_contacto: formData.contacto || undefined,
+    x_studio_razon_social: formData.razonSocial || undefined,
     x_studio_cuit: formData.cuit || undefined,
-    x_studio_telefono_del_contacto_1: formData.telefono || undefined,
+    x_studio_telefono_del_contacto: formData.telefono || undefined,
 
     // Número de orden y fecha
     x_studio_orden_de_servicio: formData.numeroOrden || undefined,
@@ -365,18 +366,21 @@ ${formData.aux1 ? `
     x_studio_a_convenir: formData.aConvenir || false,
 
     // Valores económicos
-    // Cada concepto tiene un campo float y uno monetary en Odoo Studio.
-    // Escribimos a ambos para asegurar que se vean en todas las vistas.
-    // parseFloat puede fallar con formato argentino (puntos de miles), así que limpiamos.
-    x_studio_precio_del_dolar_tc: formData.tipoCambio ? parseFloat(formData.tipoCambio.replace(/\./g, '').replace(',', '.')) : undefined,
     x_studio_precio_del_dolar: formData.tipoCambio ? parseFloat(formData.tipoCambio.replace(/\./g, '').replace(',', '.')) : undefined,
     x_studio_iva: formData.iva ? parseFloat(formData.iva.replace(/\./g, '').replace(',', '.')) : undefined,
-    x_studio_iva_1: formData.iva ? parseFloat(formData.iva.replace(/\./g, '').replace(',', '.')) : undefined,
     x_studio_total: formData.total ? parseFloat(formData.total.replace(/\./g, '').replace(',', '.')) : undefined,
-    x_studio_total_1: formData.total ? parseFloat(formData.total.replace(/\./g, '').replace(',', '.')) : undefined,
 
     // Técnico
     x_studio_aclaracion_del_tecnico: formData.tecnicoNombre || undefined,
+
+    // Geoposición: URL de Google Maps con las coordenadas (campo char)
+    x_studio_geoposicion: (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada')
+      ? `https://www.google.com/maps?q=${formData.aux2}`
+      : undefined,
+    // Geoposición HTML: link clicable (campo html)
+    x_studio_geoposicion_1: (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada')
+      ? `<a href="https://www.google.com/maps?q=${formData.aux2}" target="_blank">📍 Ver ubicación de la firma en Google Maps</a>`
+      : undefined,
   }
 
   return taskData
@@ -532,45 +536,11 @@ export async function syncServiceOrderToOdoo(
 
     console.log(`✅ Tarea de servicio creada en Odoo: ID ${createResult.data}`)
 
-    // Paso 4.5: Actualizar task_properties con el técnico responsable y geolocalización
-    // Formato para properties en Odoo: objeto plano con property-name como clave
-    if (formData.tecnicoNombre || formData.aux2) {
-      try {
-        const properties: Record<string, string> = {}
-        
-        // Responsable (técnico) - property-name: 113f4894c9cabd10
-        if (formData.tecnicoNombre) {
-          properties['113f4894c9cabd10'] = formData.tecnicoNombre
-          console.log('📝 Responsable:', formData.tecnicoNombre)
-        }
-        
-        // Geoposición - property-name: 1dcb0b05dac06db2_html (HTML con link clickeable a Google Maps)
-        if (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada') {
-          const googleMapsLink = `https://www.google.com/maps?q=${formData.aux2}`
-          const htmlLink = `<p><a href="${googleMapsLink}" target="_blank" class="o_link_in_selection">📍 Ver ubicación en Google Maps</a></p>`
-          properties['1dcb0b05dac06db2_html'] = htmlLink
-          console.log('📍 Geoposición:', googleMapsLink)
-        }
-        
-        console.log('📦 task_properties:', properties)
-        
-        const propertiesUpdate = await client.update('project.task', createResult.data, {
-          task_properties: properties
-        })
-        
-        console.log(propertiesUpdate.success ? '✅ task_properties actualizado' : '⚠️ Fallo en task_properties:', propertiesUpdate.error)
-      } catch (error) {
-        console.error('❌ Error en task_properties:', error)
-      }
-    }
-
     // Paso 4.6: Descargar firmas desde ImgBB y guardarlas como base64 en campos x_studio_firma_*
     await updateSignatureFields(createResult.data, formData)
 
     // Paso 5: Adjuntar imágenes como archivos en Odoo
     await attachImagesToTask(createResult.data, formData)
-
-    // La tarea se crea directamente en stage "Registro" (stage_id: 96)
 
     return { success: true, orderId: createResult.data }
   } catch (error) {
@@ -601,7 +571,7 @@ async function updateSignatureFields(
         if (response.ok) {
           const arrayBuffer = await response.arrayBuffer()
           const base64 = Buffer.from(arrayBuffer).toString('base64')
-          firmaUpdates.x_studio_firma_del_tecnico = base64
+          firmaUpdates.x_studio_binary_field_2bh_1jjr9hppn = base64
           console.log(`✅ Firma técnico descargada (${arrayBuffer.byteLength} bytes)`)
         } else {
           console.error(`⚠️ Error descargando firma técnico: HTTP ${response.status}`)
