@@ -55,6 +55,8 @@ export function OdooContactSearch({
   const [newContactName, setNewContactName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [cuitError, setCuitError] = useState<string | null>(null)
+  const [searchCompleted, setSearchCompleted] = useState(false)
+  const [lastSearchTerm, setLastSearchTerm] = useState('')
   
   const inputRef = useRef<HTMLInputElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
@@ -85,6 +87,7 @@ export function OdooContactSearch({
     } else {
       setSuggestions([])
       setShowSuggestions(false)
+      setSearchCompleted(false)
     }
 
     return () => {
@@ -244,12 +247,14 @@ export function OdooContactSearch({
   const performSearch = async (searchTerm: string) => {
     if (!searchTerm || searchTerm.length < 4) {
       setSuggestions([])
+      setSearchCompleted(false)
       return
     }
 
     try {
       setIsSearching(true)
       setSearchError(null)
+      setSearchCompleted(false)
       
       console.log(`🔍 Buscando "${searchTerm}"...`)
       
@@ -265,6 +270,8 @@ export function OdooContactSearch({
           console.log(`✅ ${result.contacts.length} contactos encontrados (online)`)
           setSuggestions(result.contacts)
           setShowSuggestions(result.contacts.length > 0)
+          setSearchCompleted(true)
+          setLastSearchTerm(searchTerm)
         } else {
           console.error('❌ Error en búsqueda online:', result.error)
           // Intentar búsqueda offline como fallback
@@ -316,11 +323,15 @@ export function OdooContactSearch({
         setSuggestions(contacts)
         setShowSuggestions(true)
         setSearchError('🔌 Modo offline')
+        setSearchCompleted(true)
+        setLastSearchTerm(value)
       } else {
         console.warn('⚠️ No se encontraron contactos offline')
         setSearchError('Sin resultados offline')
         setSuggestions([])
         setShowSuggestions(false)
+        setSearchCompleted(true)
+        setLastSearchTerm(value)
       }
     } catch (error) {
       console.error('❌ Error en búsqueda offline:', error)
@@ -542,6 +553,52 @@ export function OdooContactSearch({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Panel de "no encontrado" con opción de crear */}
+      {searchCompleted && suggestions.length === 0 && value.length >= 4 && !isSearching && (
+        <div className="mt-2 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+          <div className="flex items-start gap-2">
+            <span className="text-amber-600 text-lg mt-0.5">⚠️</span>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-800">
+                No se encontró &quot;{lastSearchTerm}&quot; en Odoo
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Verificá que la <strong>Razón Social</strong> esté escrita correctamente antes de crear una empresa nueva.
+                Revisá mayúsculas, tildes, abreviaciones (S.A., S.R.L., etc.) y posibles errores de tipeo.
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    inputRef.current?.focus()
+                    inputRef.current?.select()
+                    setSearchCompleted(false)
+                  }}
+                  className="text-xs h-7"
+                >
+                  <Search className="h-3 w-3 mr-1" />
+                  Corregir y buscar de nuevo
+                </Button>
+                {odooConnected && (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={openCreateDialog}
+                    className="text-xs h-7 bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Building2 className="h-3 w-3 mr-1" />
+                    Crear empresa nueva
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
