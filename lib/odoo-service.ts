@@ -387,15 +387,16 @@ ${formData.aux1 ? `
 }
 
 /**
- * Busca o crea unCLIENTE (partner) en Odoo
+ * Busca un CLIENTE (partner) existente en Odoo por CUIT o razón social.
+ * NO crea contactos automáticamente - la creación solo se hace desde el UI explícitamente.
  */
-export async function findOrCreatePartner(
+export async function findPartner(
   formData: AranFormData
 ): Promise<{ success: boolean; partnerId?: number; error?: string }> {
   const client = getOdooClient()
 
   try {
-    // BuscarCLIENTE existente por CUIT o nombre
+    // Buscar CLIENTE existente por CUIT o nombre
     const searchDomain = []
     
     if (formData.cuit) {
@@ -403,7 +404,7 @@ export async function findOrCreatePartner(
     } else if (formData.razonSocial) {
       searchDomain.push(['name', 'ilike', formData.razonSocial])
     } else {
-      return { success: false, error: 'Faltan datos delCLIENTE (CUIT o Razón Social)' }
+      return { success: false, error: 'Faltan datos del CLIENTE (CUIT o Razón Social)' }
     }
 
     const searchResult = await client.search('res.partner', searchDomain, { limit: 1 })
@@ -412,34 +413,21 @@ export async function findOrCreatePartner(
       return { success: false, error: searchResult.error }
     }
 
-    // Si encontró elCLIENTE, retornar su ID
+    // Si encontró el CLIENTE, retornar su ID
     if (searchResult.data && searchResult.data.length > 0) {
       const partnerId = searchResult.data[0]
-      console.log(`✅CLIENTE encontrado en Odoo: ID ${partnerId}`)
+      console.log(`✅ CLIENTE encontrado en Odoo: ID ${partnerId}`)
       return { success: true, partnerId }
     }
 
-    // Si no existe, crear nuevoCLIENTE
-    console.log('📝 Creando nuevoCLIENTE en Odoo...')
-    
-    const partnerData: Partial<OdooPartner> = {
-      name: formData.razonSocial || formData.clienteNombre || 'Cliente sin nombre',
-      phone: formData.telefono,
-      vat: formData.cuit,
-      city: formData.localidad,
-      // state_id y country_id requieren búsqueda adicional
+    // Si no existe, NO crear - retornar que no se encontró
+    console.log('⚠️ CLIENTE no encontrado en Odoo. No se creará automáticamente.')
+    return { 
+      success: false, 
+      error: 'Cliente no encontrado en Odoo. Seleccioná un cliente existente o creá uno nuevo desde el campo Razón Social.' 
     }
-
-    const createResult = await client.create('res.partner', partnerData)
-
-    if (!createResult.success) {
-      return { success: false, error: createResult.error }
-    }
-
-    console.log(`✅CLIENTE creado en Odoo: ID ${createResult.data}`)
-    return { success: true, partnerId: createResult.data }
   } catch (error) {
-    console.error('❌ Error buscando/creandoCLIENTE:', error)
+    console.error('❌ Error buscando CLIENTE:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Error desconocido',
@@ -517,14 +505,31 @@ export async function syncServiceOrderToOdoo(
       return { success: false, error: projectResult.error || 'No se pudo obtener ID del proyecto' }
     }
 
-    // Paso 2: Buscar o crear elCLIENTE
-    const partnerResult = await findOrCreatePartner(formData)
-    if (!partnerResult.success || !partnerResult.partnerId) {
-      return { success: false, error: partnerResult.error || 'No se pudo obtener ID delCLIENTE' }
+    // Paso 2: Obtener el ID del CLIENTE
+    // Prioridad: ID seleccionado desde el UI > búsqueda por CUIT/nombre
+    let partnerId: number | undefined
+
+    if (formData.odooPartnerId) {
+      // El usuario seleccionó un contacto desde el UI - usar ese ID directamente
+      partnerId = formData.odooPartnerId
+      console.log(`✅ Usando partner ID seleccionado desde el formulario: ${partnerId}`)
+    } else {
+      // Fallback: buscar por CUIT o razón social (solo búsqueda, sin crear)
+      const partnerResult = await findPartner(formData)
+      if (partnerResult.success && partnerResult.partnerId) {
+        partnerId = partnerResult.partnerId
+      } else {
+        console.warn(`⚠️ Cliente no encontrado en Odoo. Creando tarea sin partner.`)
+      }
     }
 
-    // Paso 3: Convertir datos al formato Odoo
-    const orderData = convertAranToOdooServiceOrder(formData, partnerResult.partnerId, projectResult.projectId)
+    // Paso 3: Convertir datos al formato Odoo (partnerId puede ser undefined si no se encontró)
+    const orderData = convertAranToOdooServiceOrder(formData, partnerId || 0, projectResult.projectId)
+
+    // Si no hay partner, no enviar partner_id=0 (Odoo lo rechazaría)
+    if (!partnerId) {
+      delete orderData.partner_id
+    }
 
     // Paso 4: Crear la tarea/orden de servicio en Odoo usando project.task
     console.log('📝 Creando tarea en Odoo con datos:', JSON.stringify(orderData, null, 2))

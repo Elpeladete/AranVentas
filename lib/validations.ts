@@ -302,6 +302,7 @@ export const formValidationSchema = z.object({
   aux2: z.string().max(100, "Campo auxiliar 2 muy largo"),
   aux3: z.string().max(100, "Campo auxiliar 3 muy largo"),
   aux4: z.string().max(100, "Campo auxiliar 4 muy largo"),
+  odooPartnerId: z.number().nullable().optional(),
 })
 
 // Tipos derivados del schema

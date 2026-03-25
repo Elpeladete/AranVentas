@@ -248,6 +248,9 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
           name: selectedContact.name
         })
         
+        // Guardar ID del partner en el formulario para envío a Odoo
+        updateField('odooPartnerId', selectedContact.id)
+        
         // Razón social = nombre de la empresa
         updateField('razonSocial', selectedContact.name)
         
@@ -277,6 +280,9 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
         if (selectedContact.parent_name) {
           console.log('🏢 Con empresa padre:', selectedContact.parent_name)
           
+          // Guardar ID del partner (persona) para envío a Odoo
+          updateField('odooPartnerId', selectedContact.id)
+          
           // Razón social = empresa padre
           updateField('razonSocial', selectedContact.parent_name)
           
@@ -289,6 +295,9 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
           })
         } else {
           console.log('⚠️ Persona sin empresa asociada')
+          
+          // Guardar ID del partner para envío a Odoo
+          updateField('odooPartnerId', selectedContact.id)
           
           // Si no tiene empresa, usar el nombre en ambos campos
           updateField('razonSocial', selectedContact.name)
@@ -1225,6 +1234,8 @@ export function ServiceOrderForm({ onShowDatabase, onLoadFormData }: ServiceOrde
                     id: company.id,
                     name: company.name
                   })
+                  // Guardar ID del partner en el formulario para envío a Odoo
+                  updateField('odooPartnerId', contact ? contact.id : company.id)
                   // Autocompletar campos
                   updateField('razonSocial', company.name)
                   if (company.vat) {

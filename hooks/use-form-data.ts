@@ -44,6 +44,7 @@ export interface FormData {
   aux2: string
   aux3: string
   aux4: string
+  odooPartnerId: number | null
 }
 
 const defaultFormData: FormData = {
@@ -90,6 +91,7 @@ const defaultFormData: FormData = {
   aux2: "",
   aux3: "",
   aux4: "",
+  odooPartnerId: null,
 }
 
 // Campos críticos que requieren validación en tiempo real
