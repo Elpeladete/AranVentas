@@ -18,7 +18,7 @@ import {
   createOdooCompany,
   type OdooContact 
 } from "@/lib/odoo-api-client"
-import { searchOdooContactsOffline, type OdooContactSearchResult } from "@/lib/odoo-contacts-search"
+import { searchOdooContactsOffline, searchSimilarContacts, type OdooContactSearchResult } from "@/lib/odoo-contacts-search"
 import { checkConnectivity } from "@/lib/offline-data-manager"
 import { toast } from "@/lib/toast"
 
@@ -57,6 +57,7 @@ export function OdooContactSearch({
   const [cuitError, setCuitError] = useState<string | null>(null)
   const [searchCompleted, setSearchCompleted] = useState(false)
   const [lastSearchTerm, setLastSearchTerm] = useState('')
+  const [similarSuggestions, setSimilarSuggestions] = useState<OdooContact[]>([])
   
   const inputRef = useRef<HTMLInputElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
@@ -88,6 +89,7 @@ export function OdooContactSearch({
       setSuggestions([])
       setShowSuggestions(false)
       setSearchCompleted(false)
+      setSimilarSuggestions([])
     }
 
     return () => {
@@ -248,6 +250,7 @@ export function OdooContactSearch({
     if (!searchTerm || searchTerm.length < 4) {
       setSuggestions([])
       setSearchCompleted(false)
+      setSimilarSuggestions([])
       return
     }
 
@@ -255,6 +258,7 @@ export function OdooContactSearch({
       setIsSearching(true)
       setSearchError(null)
       setSearchCompleted(false)
+      setSimilarSuggestions([])
       
       console.log(`🔍 Buscando "${searchTerm}"...`)
       
@@ -272,6 +276,26 @@ export function OdooContactSearch({
           setShowSuggestions(result.contacts.length > 0)
           setSearchCompleted(true)
           setLastSearchTerm(searchTerm)
+          
+          // Si no hay resultados exactos, buscar nombres similares
+          if (result.contacts.length === 0) {
+            const similar = await searchSimilarContacts(searchTerm, 5)
+            if (similar.length > 0) {
+              const similarContacts: OdooContact[] = similar.map(r => ({
+                id: r.id,
+                name: r.nombre,
+                vat: r.cuit,
+                phone: r.telefono,
+                street: '',
+                city: r.ciudad,
+                state: r.provincia,
+                is_company: r.es_empresa,
+                parent_id: undefined,
+                parent_name: r.empresa_nombre
+              }))
+              setSimilarSuggestions(similarContacts)
+            }
+          }
         } else {
           console.error('❌ Error en búsqueda online:', result.error)
           // Intentar búsqueda offline como fallback
@@ -332,6 +356,24 @@ export function OdooContactSearch({
         setShowSuggestions(false)
         setSearchCompleted(true)
         setLastSearchTerm(value)
+        
+        // Buscar nombres similares como sugerencia
+        const similar = await searchSimilarContacts(value, 5)
+        if (similar.length > 0) {
+          const similarContacts: OdooContact[] = similar.map(r => ({
+            id: r.id,
+            name: r.nombre,
+            vat: r.cuit,
+            phone: r.telefono,
+            street: '',
+            city: r.ciudad,
+            state: r.provincia,
+            is_company: r.es_empresa,
+            parent_id: undefined,
+            parent_name: r.empresa_nombre
+          }))
+          setSimilarSuggestions(similarContacts)
+        }
       }
     } catch (error) {
       console.error('❌ Error en búsqueda offline:', error)
@@ -570,6 +612,51 @@ export function OdooContactSearch({
                 Verificá que la <strong>Razón Social</strong> esté escrita correctamente antes de crear una empresa nueva.
                 Revisá mayúsculas, tildes, abreviaciones (S.A., S.R.L., etc.) y posibles errores de tipeo.
               </p>
+              
+              {/* Sugerencias de nombres similares */}
+              {similarSuggestions.length > 0 && (
+                <div className="mt-2 p-2 bg-white border border-amber-200 rounded-md">
+                  <p className="text-xs font-semibold text-amber-800 mb-2">
+                    💡 ¿Quisiste decir?
+                  </p>
+                  <div className="space-y-1">
+                    {similarSuggestions.map((contact, index) => (
+                      <button
+                        key={`similar-${contact.id}-${index}`}
+                        type="button"
+                        onClick={() => {
+                          handleContactClick(contact)
+                          setSearchCompleted(false)
+                          setSimilarSuggestions([])
+                        }}
+                        className="w-full text-left px-2 py-1.5 rounded hover:bg-amber-100 transition-colors text-sm"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs">
+                              {contact.is_company ? '🏢' : '👤'}
+                            </span>
+                            <span className="font-medium text-gray-900 truncate">
+                              {contact.is_company ? contact.name : (contact.parent_name || contact.name)}
+                            </span>
+                            {!contact.is_company && contact.parent_name && (
+                              <span className="text-xs text-gray-500 truncate">
+                                ({contact.name})
+                              </span>
+                            )}
+                          </div>
+                          {contact.vat && (
+                            <span className="text-xs text-gray-500 ml-2 shrink-0">
+                              {contact.vat}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
               <div className="flex items-center gap-2 mt-3">
                 <Button
                   type="button"
