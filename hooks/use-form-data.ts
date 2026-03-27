@@ -175,7 +175,7 @@ export function useFormData() {
     }
   }, [formData, isLoading])
 
-  const validateAndUpdateField = (field: keyof FormData, value: string | boolean) => {
+  const validateAndUpdateField = (field: keyof FormData, value: string | boolean | number | null) => {
     // Solo validar campos críticos en tiempo real
     if (criticalFields.includes(field) && typeof value === "string") {
       const validation = validateField(field as keyof FormValidationData, value)
@@ -193,7 +193,7 @@ export function useFormData() {
     }
   }
 
-  const updateField = (field: keyof FormData, value: string | boolean) => {
+  const updateField = (field: keyof FormData, value: string | boolean | number | null) => {
     // Log específico para firmas para debugging
     if (field === 'tecnicoFirma' || field === 'clienteFirma') {
       console.log(`🎯 FormData: ${field} actualizado con:`, {
