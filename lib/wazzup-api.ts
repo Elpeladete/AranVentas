@@ -491,6 +491,62 @@ async function sendWhatsAppWebFallback(
 }
 
 /**
+ * Crea el mensaje de la encuesta de satisfacción
+ */
+function createSurveyMessage(): string {
+  return `💬 *¡Gracias por elegir ARAN Tecnologías!*
+
+Tu opinión es muy importante para nosotros. Te invitamos a completar una breve encuesta de satisfacción. Solo te tomará unos segundos y nos ayudará a seguir mejorando nuestro servicio.
+
+⭐ https://arantecnologias.odoo.com/es/survey/4ad30173-5320-4c3d-9baf-c84b48154da7
+
+¡Muchas gracias por tu tiempo!
+
+🚜 *ARAN Tecnologías*`
+}
+
+/**
+ * Envía la encuesta de satisfacción por WhatsApp al cliente
+ */
+export async function sendSatisfactionSurvey(
+  phoneNumber: string
+): Promise<WazzupApiResponse> {
+  try {
+    console.log('📝 Enviando encuesta de satisfacción a:', phoneNumber)
+
+    // Verificar si Wazzup está configurado
+    if (!isWazzupConfigured()) {
+      console.warn('⚠️ Wazzup no configurado, no se puede enviar encuesta')
+      return { success: false, error: 'Wazzup no configurado' }
+    }
+
+    // Formatear número
+    let chatId = phoneNumber.replace(/\D/g, '')
+    if (!chatId.startsWith('54')) {
+      chatId = '54' + chatId
+    }
+    chatId = chatId + '@c.us'
+
+    const surveyText = createSurveyMessage()
+    const result = await sendWhatsAppText(chatId, surveyText)
+
+    if (result.success) {
+      console.log('✅ Encuesta de satisfacción enviada exitosamente')
+    } else {
+      console.warn('⚠️ Falló envío de encuesta:', result.error)
+    }
+
+    return result
+  } catch (error) {
+    console.error('❌ Error enviando encuesta de satisfacción:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    }
+  }
+}
+
+/**
  * Crea el mensaje de texto con la información de la orden
  */
 function createOrderMessage(orderData: any): string {

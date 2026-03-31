@@ -10,7 +10,7 @@ import { toast } from "@/lib/toast"
 import { validateForm, validateRequiredFields } from "@/lib/validations"
 import { CompletionConfirmationDialog } from "@/components/completion-confirmation-dialog"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
-import { sendServiceOrderToWhatsApp } from "@/lib/wazzup-api"
+import { sendServiceOrderToWhatsApp, sendSatisfactionSurvey } from "@/lib/wazzup-api"
 import { submitFormToGoogle } from "@/lib/google-forms"
 import { addPendingSubmission } from "@/lib/offline-storage"
 import { syncManager } from "@/lib/offline-sync"
@@ -987,7 +987,20 @@ export function FormActions({
             
             console.log('✅ Enviado al cliente exitosamente')
             
-            // 👨‍🔧 Enviar también al TÉCNICO si tiene teléfono (guardado en aux3)
+            // � Enviar encuesta de satisfacción al cliente
+            try {
+              console.log('📝 Enviando encuesta de satisfacción al cliente...')
+              const surveyResult = await sendSatisfactionSurvey(formData.telefono)
+              if (surveyResult.success) {
+                console.log('✅ Encuesta de satisfacción enviada al cliente')
+              } else {
+                console.warn('⚠️ No se pudo enviar la encuesta:', surveyResult.error)
+              }
+            } catch (surveyError) {
+              console.warn('⚠️ Error enviando encuesta de satisfacción:', surveyError)
+            }
+            
+            // �👨‍🔧 Enviar también al TÉCNICO si tiene teléfono (guardado en aux3)
             console.log('\n🔍 DEBUG - Verificando teléfono del técnico:')
             console.log('  formData.aux3:', formData.aux3)
             console.log('  formDataWithImage.aux3:', formDataWithImage.aux3)
