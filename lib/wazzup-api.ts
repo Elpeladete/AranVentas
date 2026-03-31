@@ -498,7 +498,7 @@ function createSurveyMessage(): string {
 
 Tu opinión es muy importante para nosotros. Te invitamos a completar una breve encuesta de satisfacción. Solo te tomará unos segundos y nos ayudará a seguir mejorando nuestro servicio.
 
-⭐ https://arantecnologias.odoo.com/es/survey/4ad30173-5320-4c3d-9baf-c84b48154da7
+⭐ https://arantecnologias.odoo.com/survey/start/4ad30173-5320-4c3d-9baf-c84b48154da7
 
 ¡Muchas gracias por tu tiempo!
 
