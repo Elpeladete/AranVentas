@@ -427,79 +427,82 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
   }
   
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-7xl h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-0 sm:p-4">
+      <Card className="w-full h-full sm:max-w-7xl sm:h-[90vh] sm:rounded-lg rounded-none flex flex-col">
         {/* Header */}
-        <div className="p-6 border-b">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
+        <div className="p-3 sm:p-6 border-b">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <Icons.Database />
-              <h2 className="text-2xl font-bold">Registros Anteriores - Órdenes de Servicio</h2>
+              <h2 className="text-base sm:text-2xl font-bold truncate">Registros Anteriores</h2>
             </div>
             
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleRefresh}>
+            <div className="flex gap-2 flex-shrink-0">
+              <Button variant="outline" size="sm" onClick={handleRefresh} className="h-8 w-8 sm:w-auto sm:h-auto p-0 sm:px-3 sm:py-2">
                 <Icons.RefreshCw />
-                <span className="ml-2">Actualizar</span>
+                <span className="ml-2 hidden sm:inline">Actualizar</span>
               </Button>
               {onClose && (
-                <Button variant="outline" size="sm" onClick={onClose}>
-                  Cerrar
+                <Button variant="outline" size="sm" onClick={onClose} className="h-8 w-8 sm:w-auto sm:h-auto p-0 sm:px-3 sm:py-2">
+                  <span className="sm:hidden">×</span>
+                  <span className="hidden sm:inline">Cerrar</span>
                 </Button>
               )}
             </div>
           </div>
           
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-4 mb-4">
-            <div className="text-center p-3 bg-gray-50 rounded-lg">
-              <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-              <div className="text-sm text-gray-600">Total</div>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-4 mb-3 sm:mb-4">
+            <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+              <div className="text-lg sm:text-2xl font-bold text-gray-900">{stats.total}</div>
+              <div className="text-xs sm:text-sm text-gray-600">Total</div>
             </div>
-            <div className="text-center p-3 bg-red-50 rounded-lg">
-              <div className="text-2xl font-bold text-red-600">{stats.localOnly}</div>
-              <div className="text-sm text-red-600">💾 Solo Local</div>
+            <div className="text-center p-2 sm:p-3 bg-red-50 rounded-lg">
+              <div className="text-lg sm:text-2xl font-bold text-red-600">{stats.localOnly}</div>
+              <div className="text-xs sm:text-sm text-red-600">💾 Local</div>
             </div>
-            <div className="text-center p-3 bg-yellow-50 rounded-lg">
-              <div className="text-2xl font-bold text-yellow-600">{stats.partial}</div>
-              <div className="text-sm text-yellow-600">⚠️ Parcial</div>
+            <div className="text-center p-2 sm:p-3 bg-yellow-50 rounded-lg">
+              <div className="text-lg sm:text-2xl font-bold text-yellow-600">{stats.partial}</div>
+              <div className="text-xs sm:text-sm text-yellow-600">⚠️ Parcial</div>
             </div>
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{stats.sent}</div>
-              <div className="text-sm text-green-600">✅ Enviados</div>
+            <div className="text-center p-2 sm:p-3 bg-green-50 rounded-lg">
+              <div className="text-lg sm:text-2xl font-bold text-green-600">{stats.sent}</div>
+              <div className="text-xs sm:text-sm text-green-600">✅ Enviados</div>
             </div>
-            <div className="text-center p-3 bg-gray-50 rounded-lg">
-              <div className="text-2xl font-bold text-gray-600">{stats.drafts}</div>
-              <div className="text-sm text-gray-600">Borradores</div>
+            <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+              <div className="text-lg sm:text-2xl font-bold text-gray-600">{stats.drafts}</div>
+              <div className="text-xs sm:text-sm text-gray-600">Borradores</div>
             </div>
-            <div className="text-center p-3 bg-gray-50 rounded-lg">
-              <div className="text-2xl font-bold text-gray-600">{stats.archived}</div>
-              <div className="text-sm text-gray-600">Archivados</div>
+            <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+              <div className="text-lg sm:text-2xl font-bold text-gray-600">{stats.archived}</div>
+              <div className="text-xs sm:text-sm text-gray-600">Archivados</div>
             </div>
           </div>
           
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
             <div className="flex-1 relative">
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
                 <Icons.Search />
               </span>
               <Input
-                placeholder="Buscar por número, cliente, contacto, descripción..."
+                placeholder="Buscar por número, cliente..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 text-sm"
               />
             </div>
             <div className="flex gap-2">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto"
               >
-                <option value="all">Todos los estados</option>
+                <option value="all">Todos</option>
                 <option value="draft">Borradores</option>
                 <option value="completed">Completados</option>
+                <option value="local-only">Solo Local</option>
+                <option value="partial">Parcial</option>
                 <option value="sent">Enviados</option>
                 <option value="archived">Archivados</option>
               </select>
@@ -507,8 +510,8 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
           </div>
         </div>
         
-        {/* Table */}
-        <div className="flex-1 overflow-auto">
+        {/* Desktop Table - hidden on mobile */}
+        <div className="flex-1 overflow-auto hidden sm:block">
           <div className="min-w-full">
             <table className="w-full">
               <thead className="bg-gray-50 border-b sticky top-0">
@@ -669,6 +672,126 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
             )}
           </div>
         </div>
+
+        {/* Mobile Card List - visible only on mobile */}
+        <div className="flex-1 overflow-auto sm:hidden">
+          <div className="p-3 space-y-3">
+            {filteredOrders.map((order) => (
+              <div key={order.id} className="border rounded-lg p-3 bg-white">
+                {/* Row 1: Order number + Status */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Icons.FileText />
+                    <span className="font-semibold text-sm">{order.numeroOrden}</span>
+                  </div>
+                  <Badge className={`${getStatusColor(order.status)} text-white text-xs`}>
+                    {getStatusIcon(order.status)} {getStatusText(order.status)}
+                  </Badge>
+                </div>
+                
+                {/* Row 2: Client + Contact */}
+                <div className="mb-2 text-sm">
+                  <div className="flex items-center gap-1 text-gray-900">
+                    <Icons.User />
+                    <span className="truncate">{order.formData.razonSocial || 'Sin especificar'}</span>
+                  </div>
+                  {order.formData.contacto && (
+                    <div className="text-gray-500 text-xs mt-0.5 ml-5">
+                      {order.formData.contacto}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Row 3: Date */}
+                <div className="text-xs text-gray-500 mb-2">
+                  <Icons.Calendar /> {formatDate(order.createdAt)}
+                </div>
+                
+                {/* Row 4: Actions */}
+                <div className="flex gap-1.5 flex-wrap border-t pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 px-3 text-xs gap-1"
+                    onClick={() => setSelectedOrder(order)}
+                  >
+                    <Icons.Eye /> Ver
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 px-3 text-xs gap-1 text-blue-600"
+                    onClick={() => handleFullResend(order)}
+                    disabled={!isOnline || resendingId === order.id}
+                  >
+                    {resendingId === order.id ? <Icons.Loader /> : <Icons.Send />} Reenviar
+                  </Button>
+                  
+                  {order.imageUrl && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 w-9 p-0 text-purple-600"
+                      onClick={() => window.open(order.imageUrl, '_blank')}
+                    >
+                      <Icons.Image />
+                    </Button>
+                  )}
+                  
+                  {order.formData.telefono && order.imageUrl && order.imageUrl.startsWith('http') && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 w-9 p-0 text-green-600"
+                      onClick={() => handleWhatsAppResend(order)}
+                    >
+                      <Icons.WhatsApp />
+                    </Button>
+                  )}
+                  
+                  {order.status === 'draft' && onEditOrder && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 w-9 p-0 text-blue-600"
+                      onClick={() => handleEdit(order)}
+                    >
+                      <Icons.Edit />
+                    </Button>
+                  )}
+                  
+                  {order.status !== 'archived' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 w-9 p-0 text-gray-600"
+                      onClick={() => handleArchive(order)}
+                    >
+                      <Icons.Archive />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            {filteredOrders.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-4xl mb-4">
+                  <Icons.Database />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No hay órdenes
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  {searchQuery || statusFilter !== 'all'
+                    ? 'No se encontraron órdenes con los filtros aplicados.'
+                    : 'Aún no hay registros anteriores.'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </Card>
       
       {/* Modal de detalles */}
@@ -685,12 +808,12 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
 // Modal para mostrar detalles de una orden
 function OrderDetailModal({ order, onClose }: { order: OrderRecord; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-auto">
-        <div className="p-6">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-0 sm:p-4">
+      <Card className="w-full h-full sm:h-auto sm:max-w-2xl sm:max-h-[90vh] sm:rounded-lg rounded-none overflow-auto">
+        <div className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold">
-              Detalles - Orden {order.numeroOrden}
+            <h3 className="text-base sm:text-xl font-bold">
+              Orden {order.numeroOrden}
             </h3>
             <Button variant="outline" size="sm" onClick={onClose}>
               ×
