@@ -16,13 +16,16 @@ import {
   getOrdersByStatus, 
   getDatabaseStats,
   archiveOrder,
+  deleteOrder,
   type OrderRecord 
 } from "@/lib/local-database"
 import { toast } from "@/lib/toast"
+import type { FormData } from "@/hooks/use-form-data"
+import { generateOrderNumber } from "@/lib/order-number"
 import { sendServiceOrderToWhatsApp, sendServiceOrderToGroup } from "@/lib/wazzup-api"
 import { submitFormToGoogle } from "@/lib/google-forms"
 import { syncServiceOrderToOdoo } from "@/lib/odoo-service"
-import { isOdooConfigured } from "@/lib/odoo-client"
+import { getOdooClient, isOdooConfigured } from "@/lib/odoo-client"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 
@@ -79,12 +82,89 @@ const getStatusIcon = (status: OrderRecord['status']) => {
   }
 }
 
+/**
+ * Convierte una tarea pendiente de Odoo a FormData para cargar en el formulario
+ * Nota: Odoo devuelve `false` para campos vacíos en lugar de null/""
+ */
+function mapOdooTaskToFormData(task: any, tecnicoNombre: string, tecnicoFirma: string, tecnicoPhone: string): FormData {
+  // Helper: Odoo devuelve false para campos char vacíos
+  const str = (val: any): string => (typeof val === 'string' ? val : '')
+
+  // Convertir fecha YYYY-MM-DD a DD-MM-YYYY
+  let fecha = ''
+  const fechaRaw = str(task.x_studio_fecha)
+  if (fechaRaw) {
+    const [year, month, day] = fechaRaw.split('-')
+    fecha = `${day}-${month}-${year}`
+  } else {
+    const today = new Date()
+    const dd = String(today.getDate()).padStart(2, '0')
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const yyyy = today.getFullYear()
+    fecha = `${dd}-${mm}-${yyyy}`
+  }
+
+  // Obtener partner_id (puede venir como [id, name] o como número)
+  let odooPartnerId: number | null = null
+  if (task.partner_id) {
+    if (Array.isArray(task.partner_id)) {
+      odooPartnerId = task.partner_id[0]
+    } else if (typeof task.partner_id === 'number') {
+      odooPartnerId = task.partner_id
+    }
+  }
+
+  return {
+    numeroOrden: generateOrderNumber(),
+    fecha,
+    razonSocial: str(task.x_studio_razon_social),
+    cuit: str(task.x_studio_cuit),
+    contacto: str(task.x_studio_nombre_del_contacto),
+    telefono: str(task.x_studio_telefono_del_contacto),
+    servicioTecnico: !!task.x_studio_servicio_tecnico,
+    instalacion: !!task.x_studio_instalacion,
+    puestaEnMarcha: !!task.x_studio_puesta_en_marcha,
+    capacitacion: !!task.x_studio_capacitacion,
+    calibracion: !!task.x_studio_calibracion,
+    tercero: !!task.x_studio_tercero,
+    maquina: str(task.x_studio_maquina),
+    equipo: str(task.x_studio_equipo),
+    descripcion: str(task.x_studio_descripcion_de_lo_acontecido),
+    insumos: '',
+    servicioACampo: !!task.x_studio_servicio_a_campo,
+    servicioEnOficina: !!task.x_studio_servicio_en_oficina,
+    conCargo: !!task.x_studio_con_cargo,
+    sinCargo: !!task.x_studio_sin_cargo,
+    servicioEnGarantia: !!task.x_studio_servicio_en_garantia,
+    aConvenir: !!task.x_studio_a_convenir,
+    localidad: str(task.x_studio_localidad),
+    provincia: str(task.x_studio_provincia),
+    distancia: task.x_studio_distancia_km ? String(task.x_studio_distancia_km) : '',
+    duracion: task.x_studio_duracion_hs ? String(task.x_studio_duracion_hs) : '',
+    tipoCambio: '',
+    iva: '',
+    total: '',
+    tecnicoNombre,
+    tecnicoFirma,
+    clienteNombre: '',
+    clienteFirma: '',
+    aux1: '',
+    aux2: '',
+    aux3: tecnicoPhone,
+    aux4: '',
+    odooPartnerId,
+    odooTaskId: task.id,
+    odooTaskName: str(task.name),
+  }
+}
+
 interface OrdersDatabaseViewerProps {
   onClose?: () => void
   onEditOrder?: (order: OrderRecord) => void
+  onLoadFormData?: (data: FormData) => void
 }
 
-export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseViewerProps) {
+export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: OrdersDatabaseViewerProps) {
   const { isOnline } = useNetworkStatus()
   const [orders, setOrders] = useState<OrderRecord[]>([])
   const [filteredOrders, setFilteredOrders] = useState<OrderRecord[]>([])
@@ -93,6 +173,12 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
   const [stats, setStats] = useState(getDatabaseStats())
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null)
   const [resendingId, setResendingId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<OrderRecord | null>(null)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [pendingTasks, setPendingTasks] = useState<any[]>([])
+  const [showPending, setShowPending] = useState(false)
+  const [loadingPending, setLoadingPending] = useState(false)
+  const [pendingTaskDetail, setPendingTaskDetail] = useState<any | null>(null)
   
   // Cargar datos
   useEffect(() => {
@@ -437,6 +523,110 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
       })
     }
   }
+
+  const handleDeleteRequest = (order: OrderRecord) => {
+    setDeleteTarget(order)
+    setDeleteConfirmText('')
+  }
+
+  const handleFetchPending = async () => {
+    if (!isOnline) {
+      toast.error("Sin conexión", { description: "Se requiere conexión para consultar Odoo" })
+      return
+    }
+
+    if (!isOdooConfigured()) {
+      toast.error("Odoo no configurado", { description: "Verificá las variables de entorno de Odoo" })
+      return
+    }
+
+    // Obtener nombre del técnico desde localStorage
+    let tecnicoNombre = ''
+    try {
+      const savedData = localStorage.getItem('aran-form-data')
+      if (savedData) {
+        const parsed = JSON.parse(savedData)
+        tecnicoNombre = parsed.tecnicoNombre || ''
+      }
+    } catch (e) {
+      console.warn('No se pudo leer tecnicoNombre de localStorage')
+    }
+
+    if (!tecnicoNombre) {
+      toast.error("Sin técnico", { description: "No hay un técnico asociado al formulario actual" })
+      return
+    }
+
+    setLoadingPending(true)
+    try {
+      console.log('📥 Buscando OS asignadas en Odoo para:', tecnicoNombre)
+      const client = getOdooClient()
+
+      const result = await client.searchRead(
+        'project.task',
+        [
+          ['stage_id', '=', 105],
+          ['x_studio_aclaracion_del_tecnico', 'ilike', tecnicoNombre]
+        ],
+        [
+          'id', 'name', 'partner_id',
+          'x_studio_orden_de_servicio', 'x_studio_fecha',
+          'x_studio_razon_social', 'x_studio_nombre_del_contacto',
+          'x_studio_telefono_del_contacto', 'x_studio_cuit',
+          'x_studio_localidad',
+          'x_studio_provincia', 'x_studio_maquina', 'x_studio_equipo',
+          'x_studio_descripcion_de_lo_acontecido',
+          'x_studio_aclaracion_del_tecnico',
+          'x_studio_servicio_tecnico', 'x_studio_instalacion',
+          'x_studio_puesta_en_marcha', 'x_studio_capacitacion',
+          'x_studio_calibracion', 'x_studio_tercero',
+          'x_studio_servicio_a_campo', 'x_studio_servicio_en_oficina',
+          'x_studio_con_cargo', 'x_studio_sin_cargo',
+          'x_studio_servicio_en_garantia', 'x_studio_a_convenir',
+          'x_studio_distancia_km', 'x_studio_duracion_hs',
+          'stage_id', 'date_deadline', 'planned_date_begin'
+        ],
+        { order: 'x_studio_fecha desc', limit: 50 }
+      )
+
+      if (result.success && result.data) {
+        const tasks = Array.isArray(result.data) ? result.data : []
+        setPendingTasks(tasks)
+        setShowPending(true)
+        console.log(`✅ ${tasks.length} OS asignadas encontradas`)
+        if (tasks.length === 0) {
+          toast.info("Sin pendientes", { description: `No hay OS asignadas para ${tecnicoNombre}` })
+        } else {
+          toast.success(`${tasks.length} OS encontradas`, { description: `Asignadas a ${tecnicoNombre}` })
+        }
+      } else {
+        console.error('❌ Error consultando Odoo:', result.error)
+        toast.error("Error", { description: result.error || "No se pudieron obtener las OS" })
+      }
+    } catch (error) {
+      console.error('❌ Error:', error)
+      toast.error("Error", { description: "Falló la consulta a Odoo" })
+    } finally {
+      setLoadingPending(false)
+    }
+  }
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return
+    if (deleteConfirmText !== 'ELIMINAR') return
+    
+    try {
+      deleteOrder(deleteTarget.id)
+      loadData()
+      setDeleteTarget(null)
+      setDeleteConfirmText('')
+      toast.success("Orden eliminada", { 
+        description: `${deleteTarget.numeroOrden} fue eliminada permanentemente` 
+      })
+    } catch (error) {
+      toast.error("Error", { description: "No se pudo eliminar la orden" })
+    }
+  }
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-0 sm:p-4">
@@ -453,6 +643,16 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
               <Button variant="outline" size="sm" onClick={handleRefresh} className="h-8 w-8 sm:w-auto sm:h-auto p-0 sm:px-3 sm:py-2">
                 <Icons.RefreshCw />
                 <span className="ml-2 hidden sm:inline">Actualizar</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleFetchPending}
+                disabled={loadingPending || !isOnline}
+                className="h-8 w-auto px-2 sm:px-3 sm:py-2 text-orange-600 border-orange-300 hover:bg-orange-50"
+              >
+                {loadingPending ? <Icons.Loader /> : <span>📋</span>}
+                <span className="ml-1 text-xs sm:text-sm">Pendientes</span>
               </Button>
               {onClose && (
                 <Button variant="outline" size="sm" onClick={onClose} className="h-8 w-8 sm:w-auto sm:h-auto p-0 sm:px-3 sm:py-2">
@@ -660,6 +860,17 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
                             <Icons.Archive />
                           </Button>
                         )}
+
+                        {/* Eliminar */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
+                          onClick={() => handleDeleteRequest(order)}
+                          title="Eliminar"
+                        >
+                          🗑️
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -783,6 +994,15 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
                       <Icons.Archive />
                     </Button>
                   )}
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 w-9 p-0 text-red-600 hover:bg-red-50"
+                    onClick={() => handleDeleteRequest(order)}
+                  >
+                    🗑️
+                  </Button>
                 </div>
               </div>
             ))}
@@ -813,6 +1033,361 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
           onClose={() => setSelectedOrder(null)}
         />
       )}
+
+      {/* Modal de confirmación de eliminación */}
+      {/* Modal de tareas pendientes de Odoo */}
+      {showPending && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-0 sm:p-4">
+          <Card className="w-full h-full sm:h-auto sm:max-h-[85vh] sm:max-w-4xl flex flex-col sm:rounded-lg rounded-none">
+            {/* Header */}
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b bg-orange-50 sm:rounded-t-lg">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📋</span>
+                <h3 className="text-base sm:text-lg font-bold text-orange-800">OS Pendientes (Asignadas)</h3>
+                <Badge className="bg-orange-500 text-white text-xs">{pendingTasks.length}</Badge>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setShowPending(false)} className="h-8 w-8 p-0">
+                ×
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+              {pendingTasks.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <span className="text-4xl block mb-2">📭</span>
+                  <p>No hay órdenes de servicio asignadas</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingTasks.map((task: any) => (
+                    <Card key={task.id} className="p-3 sm:p-4 border-l-4 border-l-orange-400 hover:shadow-md transition-shadow">
+                      <div className="flex flex-col gap-2">
+                        {/* Encabezado de la tarea */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-orange-700 text-sm sm:text-base">
+                                OS {task.x_studio_orden_de_servicio || '—'}
+                              </span>
+                              {task.x_studio_fecha && (
+                                <Badge variant="outline" className="text-xs">
+                                  📅 {task.x_studio_fecha}
+                                </Badge>
+                              )}
+                              {task.date_deadline && (
+                                <Badge variant="outline" className="text-xs text-red-600 border-red-300">
+                                  ⏰ Límite: {task.date_deadline}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-gray-800 mt-1 truncate">
+                              {task.x_studio_razon_social || task.name || 'Sin razón social'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Datos del contacto */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs sm:text-sm text-gray-600">
+                          {task.x_studio_nombre_del_contacto && (
+                            <div>👤 {task.x_studio_nombre_del_contacto}</div>
+                          )}
+                          {task.x_studio_telefono_del_contacto && (
+                            <div>📞 {task.x_studio_telefono_del_contacto}</div>
+                          )}
+                          {task.x_studio_localidad && (
+                            <div>📍 {task.x_studio_localidad}{task.x_studio_provincia ? `, ${task.x_studio_provincia}` : ''}</div>
+                          )}
+                        </div>
+
+                        {/* Equipo */}
+                        {(task.x_studio_maquina || task.x_studio_equipo) && (
+                          <div className="text-xs sm:text-sm text-gray-700 bg-gray-50 rounded px-2 py-1">
+                            🔧 {[task.x_studio_maquina, task.x_studio_equipo].filter(Boolean).join(' — ')}
+                          </div>
+                        )}
+
+                        {/* Descripción */}
+                        {task.x_studio_descripcion_de_lo_acontecido && (
+                          <div className="text-xs sm:text-sm text-gray-600 bg-blue-50 rounded px-2 py-1">
+                            📝 {task.x_studio_descripcion_de_lo_acontecido}
+                          </div>
+                        )}
+
+                        {/* Badges de tipo de servicio */}
+                        <div className="flex flex-wrap gap-1">
+                          {task.x_studio_servicio_tecnico && <Badge className="bg-blue-100 text-blue-800 text-[10px]">Servicio Técnico</Badge>}
+                          {task.x_studio_instalacion && <Badge className="bg-green-100 text-green-800 text-[10px]">Instalación</Badge>}
+                          {task.x_studio_puesta_en_marcha && <Badge className="bg-purple-100 text-purple-800 text-[10px]">Puesta en Marcha</Badge>}
+                          {task.x_studio_capacitacion && <Badge className="bg-indigo-100 text-indigo-800 text-[10px]">Capacitación</Badge>}
+                          {task.x_studio_calibracion && <Badge className="bg-cyan-100 text-cyan-800 text-[10px]">Calibración</Badge>}
+                          {task.x_studio_tercero && <Badge className="bg-gray-100 text-gray-800 text-[10px]">Tercero</Badge>}
+                          {task.x_studio_servicio_a_campo && <Badge className="bg-amber-100 text-amber-800 text-[10px]">A Campo</Badge>}
+                          {task.x_studio_servicio_en_oficina && <Badge className="bg-slate-100 text-slate-800 text-[10px]">En Oficina</Badge>}
+                          {task.x_studio_con_cargo && <Badge className="bg-red-100 text-red-800 text-[10px]">Con Cargo</Badge>}
+                          {task.x_studio_sin_cargo && <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Sin Cargo</Badge>}
+                          {task.x_studio_servicio_en_garantia && <Badge className="bg-yellow-100 text-yellow-800 text-[10px]">En Garantía</Badge>}
+                          {task.x_studio_a_convenir && <Badge className="bg-orange-100 text-orange-800 text-[10px]">A Convenir</Badge>}
+                        </div>
+
+                        {/* Botones: Ver detalle + Tomar posesión */}
+                        <div className="flex justify-end gap-2 pt-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPendingTaskDetail(task)}
+                            className="text-xs sm:text-sm px-3 py-1"
+                          >
+                            👁️ Ver detalle
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              // Obtener datos del técnico desde localStorage
+                              let tecnicoNombre = ''
+                              let tecnicoFirma = ''
+                              let tecnicoPhone = ''
+                              try {
+                                const savedData = localStorage.getItem('aran-form-data')
+                                if (savedData) {
+                                  const parsed = JSON.parse(savedData)
+                                  tecnicoNombre = parsed.tecnicoNombre || ''
+                                  tecnicoFirma = parsed.tecnicoFirma || ''
+                                  tecnicoPhone = parsed.aux3 || ''
+                                }
+                              } catch (e) { /* ignore */ }
+
+                              const formData = mapOdooTaskToFormData(task, tecnicoNombre, tecnicoFirma, tecnicoPhone)
+                              
+                              if (onLoadFormData) {
+                                onLoadFormData(formData)
+                                setShowPending(false)
+                                if (onClose) onClose()
+                                toast.success('📋 Tarea cargada', {
+                                  description: `OS de ${task.x_studio_razon_social || task.name || 'Odoo'} lista para completar. Al enviar se actualizará en Odoo.`
+                                })
+                              } else {
+                                toast.error('Error', { description: 'No se puede cargar la tarea en el formulario' })
+                              }
+                            }}
+                            className="bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm px-3 py-1"
+                          >
+                            ✋ Tomar posesión
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Modal de detalle de tarea pendiente */}
+      {pendingTaskDetail && (
+        <PendingTaskDetailModal
+          task={pendingTaskDetail}
+          onClose={() => setPendingTaskDetail(null)}
+        />
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[70] p-4">
+          <Card className="w-full max-w-md p-6">
+            <div className="text-center mb-4">
+              <div className="text-5xl mb-3">⚠️</div>
+              <h3 className="text-lg font-bold text-red-600 mb-2">Eliminar orden permanentemente</h3>
+              <p className="text-sm text-gray-700 mb-1">
+                Orden: <strong>{deleteTarget.numeroOrden}</strong>
+              </p>
+              <p className="text-sm text-gray-700 mb-3">
+                {deleteTarget.formData.razonSocial || 'Sin razón social'}
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-red-700 font-medium">
+                  Esta acción es irreversible. El registro se eliminará de la base de datos local.
+                </p>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">
+                Escribí <strong className="text-red-600">ELIMINAR</strong> para confirmar:
+              </p>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Escribí ELIMINAR"
+                className="text-center font-mono text-lg border-red-300 focus:border-red-500"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setDeleteTarget(null); setDeleteConfirmText('') }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                disabled={deleteConfirmText !== 'ELIMINAR'}
+                onClick={confirmDelete}
+              >
+                🗑️ Eliminar
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Modal para mostrar detalle de una tarea pendiente de Odoo
+function PendingTaskDetailModal({ task, onClose }: { task: any; onClose: () => void }) {
+  // Helper para no mostrar campos con valor false de Odoo
+  const str = (val: any): string => (typeof val === 'string' ? val : '')
+  const formatStage = (stageId: any): string => {
+    if (Array.isArray(stageId)) return stageId[1] || `ID ${stageId[0]}`
+    if (typeof stageId === 'number') return `ID ${stageId}`
+    return str(stageId)
+  }
+  const formatPartner = (partnerId: any): string => {
+    if (Array.isArray(partnerId)) return partnerId[1] || `ID ${partnerId[0]}`
+    if (typeof partnerId === 'number') return `ID ${partnerId}`
+    return str(partnerId)
+  }
+
+  // Recopilar todos los campos con información
+  const sections: { title: string; icon: string; rows: { label: string; value: string }[] }[] = []
+
+  // Identificación
+  const identRows: { label: string; value: string }[] = []
+  if (task.id) identRows.push({ label: 'ID Odoo', value: String(task.id) })
+  if (str(task.name)) identRows.push({ label: 'Nombre tarea', value: str(task.name) })
+  if (str(task.x_studio_orden_de_servicio)) identRows.push({ label: 'N° Orden de Servicio', value: str(task.x_studio_orden_de_servicio) })
+  if (str(task.x_studio_fecha)) identRows.push({ label: 'Fecha', value: str(task.x_studio_fecha) })
+  if (task.stage_id) identRows.push({ label: 'Etapa', value: formatStage(task.stage_id) })
+  if (str(task.date_deadline)) identRows.push({ label: 'Fecha límite', value: str(task.date_deadline) })
+  if (str(task.planned_date_begin)) identRows.push({ label: 'Fecha inicio planificada', value: str(task.planned_date_begin) })
+  if (identRows.length > 0) sections.push({ title: 'Identificación', icon: '🏷️', rows: identRows })
+
+  // Cliente / Contacto
+  const contactRows: { label: string; value: string }[] = []
+  if (task.partner_id) contactRows.push({ label: 'Partner (Odoo)', value: formatPartner(task.partner_id) })
+  if (str(task.x_studio_razon_social)) contactRows.push({ label: 'Razón Social', value: str(task.x_studio_razon_social) })
+  if (str(task.x_studio_cuit)) contactRows.push({ label: 'CUIT', value: str(task.x_studio_cuit) })
+  if (str(task.x_studio_nombre_del_contacto)) contactRows.push({ label: 'Contacto', value: str(task.x_studio_nombre_del_contacto) })
+  if (str(task.x_studio_telefono_del_contacto)) contactRows.push({ label: 'Teléfono', value: str(task.x_studio_telefono_del_contacto) })
+  if (contactRows.length > 0) sections.push({ title: 'Cliente / Contacto', icon: '👤', rows: contactRows })
+
+  // Ubicación
+  const ubicRows: { label: string; value: string }[] = []
+  if (str(task.x_studio_localidad)) ubicRows.push({ label: 'Localidad', value: str(task.x_studio_localidad) })
+  if (str(task.x_studio_provincia)) ubicRows.push({ label: 'Provincia', value: str(task.x_studio_provincia) })
+  if (task.x_studio_distancia_km) ubicRows.push({ label: 'Distancia', value: `${task.x_studio_distancia_km} km` })
+  if (task.x_studio_duracion_hs) ubicRows.push({ label: 'Duración', value: `${task.x_studio_duracion_hs} hs` })
+  if (ubicRows.length > 0) sections.push({ title: 'Ubicación', icon: '📍', rows: ubicRows })
+
+  // Equipo
+  const equipRows: { label: string; value: string }[] = []
+  if (str(task.x_studio_maquina)) equipRows.push({ label: 'Máquina', value: str(task.x_studio_maquina) })
+  if (str(task.x_studio_equipo)) equipRows.push({ label: 'Equipo', value: str(task.x_studio_equipo) })
+  if (equipRows.length > 0) sections.push({ title: 'Equipo', icon: '🔧', rows: equipRows })
+
+  // Descripción
+  if (str(task.x_studio_descripcion_de_lo_acontecido)) {
+    sections.push({ title: 'Descripción', icon: '📝', rows: [
+      { label: '', value: str(task.x_studio_descripcion_de_lo_acontecido) }
+    ]})
+  }
+
+  // Tipos de servicio
+  const tipoRows: { label: string; value: string }[] = []
+  if (task.x_studio_servicio_tecnico) tipoRows.push({ label: 'Servicio Técnico', value: '✅' })
+  if (task.x_studio_instalacion) tipoRows.push({ label: 'Instalación', value: '✅' })
+  if (task.x_studio_puesta_en_marcha) tipoRows.push({ label: 'Puesta en Marcha', value: '✅' })
+  if (task.x_studio_capacitacion) tipoRows.push({ label: 'Capacitación', value: '✅' })
+  if (task.x_studio_calibracion) tipoRows.push({ label: 'Calibración', value: '✅' })
+  if (task.x_studio_tercero) tipoRows.push({ label: 'Tercero', value: '✅' })
+  if (tipoRows.length > 0) sections.push({ title: 'Tipo de servicio', icon: '🛠️', rows: tipoRows })
+
+  // Ubicación del servicio
+  const lugarRows: { label: string; value: string }[] = []
+  if (task.x_studio_servicio_a_campo) lugarRows.push({ label: 'A Campo', value: '✅' })
+  if (task.x_studio_servicio_en_oficina) lugarRows.push({ label: 'En Oficina', value: '✅' })
+  if (lugarRows.length > 0) sections.push({ title: 'Lugar del servicio', icon: '📌', rows: lugarRows })
+
+  // Modalidad de cobro
+  const cobroRows: { label: string; value: string }[] = []
+  if (task.x_studio_con_cargo) cobroRows.push({ label: 'Con Cargo', value: '✅' })
+  if (task.x_studio_sin_cargo) cobroRows.push({ label: 'Sin Cargo', value: '✅' })
+  if (task.x_studio_servicio_en_garantia) cobroRows.push({ label: 'En Garantía', value: '✅' })
+  if (task.x_studio_a_convenir) cobroRows.push({ label: 'A Convenir', value: '✅' })
+  if (cobroRows.length > 0) sections.push({ title: 'Modalidad de cobro', icon: '💰', rows: cobroRows })
+
+  // Técnico
+  if (str(task.x_studio_aclaracion_del_tecnico)) {
+    sections.push({ title: 'Técnico asignado', icon: '👷', rows: [
+      { label: 'Nombre', value: str(task.x_studio_aclaracion_del_tecnico) }
+    ]})
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80] p-0 sm:p-4">
+      <Card className="w-full h-full sm:h-auto sm:max-w-2xl sm:max-h-[90vh] sm:rounded-lg rounded-none flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b bg-orange-50 sm:rounded-t-lg flex-shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xl">📄</span>
+            <div className="min-w-0">
+              <h3 className="text-base sm:text-lg font-bold text-orange-800 truncate">
+                Detalle OS {str(task.x_studio_orden_de_servicio) || '—'}
+              </h3>
+              <p className="text-xs text-orange-600 truncate">
+                {str(task.x_studio_razon_social) || str(task.name) || 'Sin razón social'}
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={onClose} className="h-8 w-8 p-0 flex-shrink-0">
+            ×
+          </Button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4">
+          {sections.map((section, idx) => (
+            <div key={idx}>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                <span>{section.icon}</span> {section.title}
+              </h4>
+              <div className="bg-gray-50 rounded-lg overflow-hidden">
+                {section.rows.map((row, rIdx) => (
+                  <div key={rIdx} className={`px-3 py-2 ${rIdx % 2 === 0 ? 'bg-gray-50' : 'bg-white'} ${row.label ? 'flex justify-between items-start gap-2' : ''}`}>
+                    {row.label ? (
+                      <>
+                        <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">{row.label}</span>
+                        <span className="text-xs sm:text-sm text-gray-900 font-medium text-right">{row.value}</span>
+                      </>
+                    ) : (
+                      <p className="text-xs sm:text-sm text-gray-800 whitespace-pre-wrap">{row.value}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {sections.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <span className="text-3xl block mb-2">📭</span>
+              <p>No hay información adicional disponible</p>
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   )
 }

@@ -45,6 +45,8 @@ export interface FormData {
   aux3: string
   aux4: string
   odooPartnerId: number | null
+  odooTaskId: number | null  // ID de tarea existente en Odoo (para editar en vez de crear)
+  odooTaskName: string       // Nombre original de la tarea en Odoo
 }
 
 const defaultFormData: FormData = {
@@ -92,6 +94,8 @@ const defaultFormData: FormData = {
   aux3: "",
   aux4: "",
   odooPartnerId: null,
+  odooTaskId: null,
+  odooTaskName: "",
 }
 
 // Campos críticos que requieren validación en tiempo real

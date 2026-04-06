@@ -228,7 +228,23 @@ export function archiveOrder(id: string, notes?: string): boolean {
     notes: notes || undefined
   })
 }
-
+/**
+ * Elimina una orden de la base de datos permanentemente
+ */
+export function deleteOrder(id: string): boolean {
+  const orders = getAllOrders()
+  const index = orders.findIndex(order => order.id === id)
+  
+  if (index === -1) {
+    console.warn(`Orden no encontrada para eliminar: ${id}`)
+    return false
+  }
+  
+  const removed = orders.splice(index, 1)[0]
+  saveAllOrders(orders)
+  console.log(`🗑️ Orden eliminada: ${removed.numeroOrden}`)
+  return true
+}
 /**
  * Obtiene estadísticas de la base de datos
  */

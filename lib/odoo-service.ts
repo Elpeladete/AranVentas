@@ -558,6 +558,187 @@ export async function syncServiceOrderToOdoo(
 }
 
 /**
+ * Actualiza una tarea existente en Odoo (para órdenes tomadas desde "Pendientes")
+ * - Actualiza todos los campos x_studio_* con los datos completados del formulario
+ * - Cambia el nombre de la tarea: "OS XXXXX - [nombre original]"
+ * - Cambia la etapa a "Registro" (stage_id = 107)
+ */
+export async function updateServiceOrderInOdoo(
+  formData: AranFormData,
+  taskId: number,
+  originalTaskName: string
+): Promise<{ success: boolean; orderId?: number; error?: string }> {
+  const client = getOdooClient()
+
+  try {
+    console.log(`🔄 Actualizando tarea existente en Odoo: ID ${taskId}...`)
+
+    // Obtener el ID del CLIENTE
+    let partnerId: number | undefined
+
+    if (formData.odooPartnerId) {
+      partnerId = formData.odooPartnerId
+      console.log(`✅ Usando partner ID seleccionado desde el formulario: ${partnerId}`)
+    } else {
+      const partnerResult = await findPartner(formData)
+      if (partnerResult.success && partnerResult.partnerId) {
+        partnerId = partnerResult.partnerId
+      } else {
+        console.warn(`⚠️ Cliente no encontrado en Odoo.`)
+      }
+    }
+
+    // Convertir fecha de DD-MM-YYYY a YYYY-MM-DD
+    let orderDate = new Date().toISOString().split('T')[0]
+    if (formData.fecha) {
+      const [day, month, year] = formData.fecha.split('-')
+      orderDate = `${year}-${month}-${day}`
+    }
+
+    // Construir el nuevo nombre: "OS XXXXX - [nombre original]"
+    const newTaskName = `OS ${formData.numeroOrden} - ${originalTaskName}`
+
+    // Construir datos de actualización
+    const updateData: Record<string, any> = {
+      // Cambiar nombre y etapa
+      name: newTaskName,
+      stage_id: 107, // "Registro"
+
+      // Fechas
+      planned_date_begin: `${orderDate} 00:00:00`,
+      date_deadline: `${orderDate} 23:59:59`,
+      allocated_hours: formData.duracion ? parseFloat(formData.duracion) : undefined,
+
+      // Datos del contacto/cliente
+      x_studio_nombre_del_contacto: formData.contacto || undefined,
+      x_studio_razon_social: formData.razonSocial || undefined,
+      x_studio_cuit: formData.cuit || undefined,
+      x_studio_telefono_del_contacto: formData.telefono || undefined,
+
+      // Número de orden y fecha
+      x_studio_orden_de_servicio: formData.numeroOrden || undefined,
+      x_studio_fecha: orderDate,
+
+      // Tipos de servicio
+      x_studio_servicio_tecnico: formData.servicioTecnico || false,
+      x_studio_instalacion: formData.instalacion || false,
+      x_studio_puesta_en_marcha: formData.puestaEnMarcha || false,
+      x_studio_capacitacion: formData.capacitacion || false,
+      x_studio_calibracion: formData.calibracion || false,
+      x_studio_tercero: formData.tercero || false,
+
+      // Equipo y máquina
+      x_studio_maquina: formData.maquina || undefined,
+      x_studio_equipo: formData.equipo || undefined,
+
+      // Descripción del trabajo
+      x_studio_descripcion_de_lo_acontecido: formData.descripcion || undefined,
+
+      // Ubicación del servicio
+      x_studio_servicio_a_campo: formData.servicioACampo || false,
+      x_studio_servicio_en_oficina: formData.servicioEnOficina || false,
+
+      // Ubicación geográfica
+      x_studio_localidad: formData.localidad || undefined,
+      x_studio_provincia: formData.provincia || undefined,
+      x_studio_distancia_km: formData.distancia ? parseInt(formData.distancia) : undefined,
+      x_studio_duracion_hs: formData.duracion ? parseInt(formData.duracion) : undefined,
+
+      // Modalidad de cobro
+      x_studio_con_cargo: formData.conCargo || false,
+      x_studio_sin_cargo: formData.sinCargo || false,
+      x_studio_servicio_en_garantia: formData.servicioEnGarantia || false,
+      x_studio_a_convenir: formData.aConvenir || false,
+
+      // Valores económicos
+      x_studio_precio_del_dolar: formData.tipoCambio ? parseFloat(formData.tipoCambio.replace(/\./g, '').replace(',', '.')) : undefined,
+      x_studio_iva: formData.iva ? parseFloat(formData.iva.replace(/\./g, '').replace(',', '.')) : undefined,
+      x_studio_total: formData.total ? parseFloat(formData.total.replace(/\./g, '').replace(',', '.')) : undefined,
+
+      // Técnico
+      x_studio_aclaracion_del_tecnico: formData.tecnicoNombre || undefined,
+
+      // Geoposición
+      x_studio_geoposicion: (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada')
+        ? `https://www.google.com/maps?q=${formData.aux2}`
+        : undefined,
+      x_studio_geoposicion_1: (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada')
+        ? `<a href="https://www.google.com/maps?q=${formData.aux2}" target="_blank">📍 Ver ubicación de la firma en Google Maps</a>`
+        : undefined,
+    }
+
+    // Agregar partner_id si existe
+    if (partnerId) {
+      updateData.partner_id = partnerId
+      updateData.partner_phone = formData.telefono
+    }
+
+    // Construir descripción HTML (igual que en create)
+    const tiposServicio = [
+      formData.servicioTecnico && 'Servicio Técnico',
+      formData.instalacion && 'Instalación',
+      formData.puestaEnMarcha && 'Puesta en Marcha',
+      formData.capacitacion && 'Capacitación',
+      formData.calibracion && 'Calibración',
+    ].filter(Boolean).join(', ')
+
+    const modalidadCobro = [
+      formData.conCargo && 'Con Cargo',
+      formData.sinCargo && 'Sin Cargo',
+      formData.servicioEnGarantia && 'En Garantía',
+      formData.aConvenir && 'A Convenir',
+    ].filter(Boolean).join(', ')
+
+    const ubicacionServicio = [
+      formData.servicioACampo && 'A Campo',
+      formData.servicioEnOficina && 'En Oficina',
+    ].filter(Boolean).join(', ')
+
+    updateData.description = `<div style="font-family: Arial, sans-serif;">
+<h2 style="background-color: #2c3e50; color: white; padding: 10px; margin: 0;">ORDEN DE SERVICIO N° ${formData.numeroOrden}</h2>
+<h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">DESCRIPCIÓN DEL TRABAJO</h3>
+<p style="padding: 10px; background-color: #ecf0f1; margin: 0;">${formData.descripcion || 'Sin descripción'}</p>
+<h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">INFORMACIÓN DEL SERVICIO</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <tr><td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Tipos de servicio:</td><td style="padding: 8px; border: 1px solid #bdc3c7;">${tiposServicio || 'N/A'}</td></tr>
+  <tr><td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Ubicación:</td><td style="padding: 8px; border: 1px solid #bdc3c7;">${ubicacionServicio || 'N/A'}</td></tr>
+  <tr><td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Modalidad de cobro:</td><td style="padding: 8px; border: 1px solid #bdc3c7;">${modalidadCobro || 'N/A'}</td></tr>
+</table>
+</div>`.trim()
+
+    // Limpiar campos undefined del objeto
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key]
+      }
+    })
+
+    console.log('📝 Actualizando tarea en Odoo con datos:', JSON.stringify(updateData, null, 2))
+    const updateResult = await client.update('project.task', taskId, updateData)
+
+    if (!updateResult.success) {
+      return { success: false, error: updateResult.error }
+    }
+
+    console.log(`✅ Tarea ${taskId} actualizada en Odoo: "${newTaskName}" → etapa Registro (107)`)
+
+    // Actualizar firmas
+    await updateSignatureFields(taskId, formData)
+
+    // Adjuntar imágenes
+    await attachImagesToTask(taskId, formData)
+
+    return { success: true, orderId: taskId }
+  } catch (error) {
+    console.error('❌ Error actualizando tarea en Odoo:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    }
+  }
+}
+
+/**
  * Descarga imágenes de firma desde ImgBB y las guarda como base64 en los campos x_studio_firma_*
  */
 async function updateSignatureFields(

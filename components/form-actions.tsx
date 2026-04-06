@@ -773,15 +773,28 @@ export function FormActions({
               
               try {
                 const { isOdooConfigured } = await import('@/lib/odoo-client')
-                const { syncServiceOrderToOdoo } = await import('@/lib/odoo-service')
+                const { syncServiceOrderToOdoo, updateServiceOrderInOdoo } = await import('@/lib/odoo-service')
                 
                 const odooConfigured = isOdooConfigured()
                 console.log(`🔍 Verificando configuración de Odoo: ${odooConfigured}`)
                 
                 if (odooConfigured) {
-                  console.log('🔄 Sincronizando con Odoo FSM')
-                  console.log('📋 Datos para Odoo con aux1:', formDataWithImage.aux1?.substring(0, 80))
-                  const odooResult = await syncServiceOrderToOdoo(formDataWithImage)
+                  let odooResult: { success: boolean; orderId?: number; error?: string }
+
+                  // Detectar si es una tarea existente de Odoo (tomada desde "Pendientes")
+                  if (formDataWithImage.odooTaskId && formDataWithImage.odooTaskName) {
+                    console.log(`🔄 ACTUALIZANDO tarea existente en Odoo: ID ${formDataWithImage.odooTaskId}`)
+                    console.log(`📋 Nombre original: "${formDataWithImage.odooTaskName}" → se prefijará con OS ${formDataWithImage.numeroOrden}`)
+                    odooResult = await updateServiceOrderInOdoo(
+                      formDataWithImage,
+                      formDataWithImage.odooTaskId,
+                      formDataWithImage.odooTaskName
+                    )
+                  } else {
+                    console.log('🔄 Creando nueva tarea en Odoo FSM')
+                    console.log('📋 Datos para Odoo con aux1:', formDataWithImage.aux1?.substring(0, 80))
+                    odooResult = await syncServiceOrderToOdoo(formDataWithImage)
+                  }
                   
                   if (odooResult.success) {
                     // 📊 MARCAR ODOO COMO COMPLETADO
@@ -796,9 +809,10 @@ export function FormActions({
                       console.error('❌ Error actualizando BD local:', dbError)
                     }
                     
-                    console.log(`✅ PASO 5B COMPLETADO: Orden sincronizada con Odoo FSM: ID ${odooResult.orderId}`)
-                    toast.success("✅ Sincronizado con Odoo", {
-                      description: `Orden registrada en Odoo (ID: ${odooResult.orderId})`,
+                    const actionLabel = formDataWithImage.odooTaskId ? 'actualizada' : 'registrada'
+                    console.log(`✅ PASO 5B COMPLETADO: Orden ${actionLabel} en Odoo FSM: ID ${odooResult.orderId}`)
+                    toast.success(`✅ ${formDataWithImage.odooTaskId ? 'Actualizado' : 'Sincronizado'} con Odoo`, {
+                      description: `Orden ${actionLabel} en Odoo (ID: ${odooResult.orderId})`,
                       duration: 3000
                     })
                   } else {

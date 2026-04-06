@@ -20,6 +20,12 @@ export default function HomePage() {
     }
   }
 
+  const handleLoadFromOdoo = (data: FormData) => {
+    if (loadFormDataRef.current) {
+      loadFormDataRef.current(data)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-background">
       <ServiceOrderForm 
@@ -32,6 +38,7 @@ export default function HomePage() {
         <OrdersDatabaseViewer
           onClose={() => setShowDatabase(false)}
           onEditOrder={handleEditOrder}
+          onLoadFormData={handleLoadFromOdoo}
         />
       )}
     </main>
