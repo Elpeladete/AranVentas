@@ -19,7 +19,7 @@ import {
   type OrderRecord 
 } from "@/lib/local-database"
 import { toast } from "@/lib/toast"
-import { sendServiceOrderToWhatsApp } from "@/lib/wazzup-api"
+import { sendServiceOrderToWhatsApp, sendServiceOrderToGroup } from "@/lib/wazzup-api"
 import { submitFormToGoogle } from "@/lib/google-forms"
 import { syncServiceOrderToOdoo } from "@/lib/odoo-service"
 import { isOdooConfigured } from "@/lib/odoo-client"
@@ -291,6 +291,18 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder }: OrdersDatabaseVie
           console.error('❌ Error enviando por WhatsApp:', error)
           errorMessages.push('WhatsApp: ' + (error instanceof Error ? error.message : 'Error'))
         }
+      }
+
+      // 4. Enviar al grupo de WhatsApp
+      try {
+        const groupResult = await sendServiceOrderToGroup(processedFormData, imageUrl)
+        if (groupResult.success) {
+          console.log('✅ Orden enviada al grupo de WhatsApp')
+        } else {
+          console.warn('⚠️ No se pudo enviar al grupo:', groupResult.error)
+        }
+      } catch (error) {
+        console.warn('⚠️ Error enviando al grupo:', error)
       }
 
       // Mostrar resultado

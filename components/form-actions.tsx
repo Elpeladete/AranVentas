@@ -10,7 +10,7 @@ import { toast } from "@/lib/toast"
 import { validateForm, validateRequiredFields } from "@/lib/validations"
 import { CompletionConfirmationDialog } from "@/components/completion-confirmation-dialog"
 import { uploadImageToImgBB } from "@/lib/imgbb-upload"
-import { sendServiceOrderToWhatsApp, sendSatisfactionSurvey } from "@/lib/wazzup-api"
+import { sendServiceOrderToWhatsApp, sendSatisfactionSurvey, sendServiceOrderToGroup } from "@/lib/wazzup-api"
 import { submitFormToGoogle } from "@/lib/google-forms"
 import { addPendingSubmission } from "@/lib/offline-storage"
 import { syncManager } from "@/lib/offline-sync"
@@ -1098,6 +1098,21 @@ export function FormActions({
           description: "WhatsApp requiere teléfono e imagen pública",
           duration: 2000
         })
+      }
+
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // 📢 PASO 7: ENVÍO AL GRUPO DE WHATSAPP
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      console.log('\n📢 === PASO 7: ENVÍO AL GRUPO DE WHATSAPP ===')
+      try {
+        const groupResult = await sendServiceOrderToGroup(formData, imageUrl)
+        if (groupResult.success) {
+          console.log('✅ Orden enviada al grupo de WhatsApp')
+        } else {
+          console.warn('⚠️ No se pudo enviar al grupo:', groupResult.error)
+        }
+      } catch (groupError) {
+        console.warn('⚠️ Error enviando al grupo de WhatsApp:', groupError)
       }
       
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

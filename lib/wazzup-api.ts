@@ -56,6 +56,9 @@ const DEFAULT_CONFIG: WazzupConfig = {
   baseUrl: 'https://api.wazzup24.com'
 }
 
+// ChatId del grupo de WhatsApp "ARÁN (OS) Órdenes de servicio"
+const WHATSAPP_GROUP_CHAT_ID = '5493493444444-1633389785'
+
 // Variable para cachear el canal activo
 let cachedActiveChannel: WazzupChannel | null = null
 let cacheTimestamp: number = 0
@@ -580,6 +583,99 @@ ${descripcion || 'No especificado'}
 ---
 🏢 *ARAN Tecnologías*
 Sistema de Órdenes de Servicio`
+}
+
+/**
+ * Envía la orden de servicio al grupo de WhatsApp de ARÁN
+ */
+export async function sendServiceOrderToGroup(
+  orderData: any,
+  imageUrl?: string,
+  config: WazzupConfig = DEFAULT_CONFIG
+): Promise<WazzupApiResponse> {
+  try {
+    console.log('👥 Enviando orden de servicio al grupo de WhatsApp...')
+
+    if (!isWazzupConfigured(config)) {
+      console.warn('⚠️ Wazzup no configurado, no se puede enviar al grupo')
+      return { success: false, error: 'Wazzup no configurado' }
+    }
+
+    const channelCheck = await checkChannelAvailability(config)
+    if (!channelCheck.available) {
+      console.warn('⚠️ No hay canal activo:', channelCheck.message)
+      return { success: false, error: channelCheck.message }
+    }
+
+    const activeChannelId = channelCheck.channel!.id
+    const orderText = createOrderMessage(orderData)
+
+    // Enviar texto al grupo
+    const textPayload = {
+      channelId: activeChannelId,
+      chatType: 'whatsgroup',
+      chatId: WHATSAPP_GROUP_CHAT_ID,
+      text: orderText
+    }
+
+    console.log('📤 Enviando texto al grupo:', WHATSAPP_GROUP_CHAT_ID)
+
+    const textResponse = await fetch(`${config.baseUrl}/v3/message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify(textPayload)
+    })
+
+    if (!textResponse.ok) {
+      const errorText = await textResponse.text()
+      console.error('❌ Error enviando texto al grupo:', textResponse.status, errorText)
+      return { success: false, error: `HTTP ${textResponse.status}: ${errorText}` }
+    }
+
+    console.log('✅ Texto enviado al grupo exitosamente')
+
+    // Enviar imagen si existe
+    if (imageUrl) {
+      console.log('📎 Enviando imagen al grupo...')
+      const imagePayload = {
+        channelId: activeChannelId,
+        chatType: 'whatsgroup',
+        chatId: WHATSAPP_GROUP_CHAT_ID,
+        type: 'image',
+        contentUri: imageUrl
+      }
+
+      const imageResponse = await fetch(`${config.baseUrl}/v3/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify(imagePayload)
+      })
+
+      if (!imageResponse.ok) {
+        const errorText = await imageResponse.text()
+        console.error('❌ Error enviando imagen al grupo:', errorText)
+        return { success: false, error: `Texto enviado al grupo, pero falló la imagen: ${errorText}` }
+      }
+
+      console.log('✅ Imagen enviada al grupo exitosamente')
+    }
+
+    console.log('✅ Orden enviada al grupo completamente')
+    return { success: true }
+
+  } catch (error) {
+    console.error('❌ Error enviando al grupo:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    }
+  }
 }
 
 /**
