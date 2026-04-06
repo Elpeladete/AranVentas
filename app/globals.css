@@ -321,8 +321,8 @@
   }
 }
 
-/* Landscape tablet (1280x800) */
-@media (min-width: 1200px) and (max-width: 1300px) and (orientation: landscape) {
+/* Landscape tablet (general) */
+@media (min-width: 768px) and (max-width: 1400px) and (orientation: landscape) {
   /* Aprovechar al máximo el ancho */
   .max-w-7xl, .max-w-\[1240px\] {
     max-width: calc(100vw - 2rem);
