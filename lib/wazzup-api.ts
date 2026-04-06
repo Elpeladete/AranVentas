@@ -610,61 +610,61 @@ export async function sendServiceOrderToGroup(
     const activeChannelId = channelCheck.channel!.id
     const orderText = createOrderMessage(orderData)
 
-    // Si hay imagen, enviar como imagen con el texto como caption (1 solo mensaje)
-    // Si no hay imagen, enviar solo texto
+    // Wazzup no permite enviar text + contentUri juntos, se envían por separado
+    // Primero la imagen, luego el texto (así en el grupo se ve foto + info)
     if (imageUrl) {
-      console.log('📤 Enviando imagen con caption al grupo:', WHATSAPP_GROUP_CHAT_ID)
-      const payload = {
+      console.log('📤 Enviando imagen al grupo:', WHATSAPP_GROUP_CHAT_ID)
+      const imagePayload = {
         channelId: activeChannelId,
         chatType: 'whatsgroup',
         chatId: WHATSAPP_GROUP_CHAT_ID,
-        text: orderText,
         type: 'image',
         contentUri: imageUrl
       }
 
-      const response = await fetch(`${config.baseUrl}/v3/message`, {
+      const imageResponse = await fetch(`${config.baseUrl}/v3/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.apiKey}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(imagePayload)
       })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ Error enviando imagen con caption al grupo:', response.status, errorText)
-        return { success: false, error: `HTTP ${response.status}: ${errorText}` }
+      if (!imageResponse.ok) {
+        const errorText = await imageResponse.text()
+        console.error('❌ Error enviando imagen al grupo:', imageResponse.status, errorText)
+        return { success: false, error: `HTTP ${imageResponse.status}: ${errorText}` }
       }
 
-      console.log('✅ Imagen con caption enviada al grupo exitosamente')
-    } else {
-      console.log('📤 Enviando solo texto al grupo:', WHATSAPP_GROUP_CHAT_ID)
-      const payload = {
-        channelId: activeChannelId,
-        chatType: 'whatsgroup',
-        chatId: WHATSAPP_GROUP_CHAT_ID,
-        text: orderText
-      }
-
-      const response = await fetch(`${config.baseUrl}/v3/message`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`
-        },
-        body: JSON.stringify(payload)
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ Error enviando texto al grupo:', response.status, errorText)
-        return { success: false, error: `HTTP ${response.status}: ${errorText}` }
-      }
-
-      console.log('✅ Texto enviado al grupo exitosamente')
+      console.log('✅ Imagen enviada al grupo exitosamente')
     }
+
+    // Enviar texto
+    console.log('📤 Enviando texto al grupo:', WHATSAPP_GROUP_CHAT_ID)
+    const textPayload = {
+      channelId: activeChannelId,
+      chatType: 'whatsgroup',
+      chatId: WHATSAPP_GROUP_CHAT_ID,
+      text: orderText
+    }
+
+    const textResponse = await fetch(`${config.baseUrl}/v3/message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify(textPayload)
+    })
+
+    if (!textResponse.ok) {
+      const errorText = await textResponse.text()
+      console.error('❌ Error enviando texto al grupo:', textResponse.status, errorText)
+      return { success: false, error: `HTTP ${textResponse.status}: ${errorText}` }
+    }
+
+    console.log('✅ Texto enviado al grupo exitosamente')
 
     console.log('✅ Orden enviada al grupo completamente')
     return { success: true }
