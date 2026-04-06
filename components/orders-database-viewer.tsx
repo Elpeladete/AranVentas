@@ -566,7 +566,7 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: O
         'project.task',
         [
           ['stage_id', '=', 105],
-          ['x_studio_aclaracion_del_tecnico', 'ilike', tecnicoNombre]
+          ['x_studio_tecnico_asignado', 'ilike', tecnicoNombre]
         ],
         [
           'id', 'name', 'partner_id',
@@ -576,7 +576,7 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: O
           'x_studio_localidad',
           'x_studio_provincia', 'x_studio_maquina', 'x_studio_equipo',
           'x_studio_descripcion_de_lo_acontecido',
-          'x_studio_aclaracion_del_tecnico',
+          'x_studio_tecnico_asignado', 'x_studio_aclaracion_del_tecnico',
           'x_studio_servicio_tecnico', 'x_studio_instalacion',
           'x_studio_puesta_en_marcha', 'x_studio_capacitacion',
           'x_studio_calibracion', 'x_studio_tercero',
@@ -1329,11 +1329,10 @@ function PendingTaskDetailModal({ task, onClose }: { task: any; onClose: () => v
   if (cobroRows.length > 0) sections.push({ title: 'Modalidad de cobro', icon: '💰', rows: cobroRows })
 
   // Técnico
-  if (str(task.x_studio_aclaracion_del_tecnico)) {
-    sections.push({ title: 'Técnico asignado', icon: '👷', rows: [
-      { label: 'Nombre', value: str(task.x_studio_aclaracion_del_tecnico) }
-    ]})
-  }
+  const tecnicoRows: { label: string; value: string }[] = []
+  if (str(task.x_studio_tecnico_asignado)) tecnicoRows.push({ label: 'Técnico asignado', value: str(task.x_studio_tecnico_asignado) })
+  if (str(task.x_studio_aclaracion_del_tecnico)) tecnicoRows.push({ label: 'Aclaración del técnico', value: str(task.x_studio_aclaracion_del_tecnico) })
+  if (tecnicoRows.length > 0) sections.push({ title: 'Técnico', icon: '👷', rows: tecnicoRows })
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80] p-0 sm:p-4">
