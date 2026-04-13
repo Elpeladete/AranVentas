@@ -83,12 +83,31 @@ const getStatusIcon = (status: OrderRecord['status']) => {
 }
 
 /**
+ * Formatea CUIT argentino de "XXXXXXXXXXX" o "ARXXXXXXXXXXX" a "XX-XXXXXXXX-X"
+ */
+function formatCuit(raw: string): string {
+  if (!raw) return ''
+  // Quitar prefijo AR, espacios, puntos y guiones existentes
+  const digits = raw.replace(/^AR/i, '').replace(/[\s.\-]/g, '')
+  if (digits.length === 11 && /^\d{11}$/.test(digits)) {
+    return `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}`
+  }
+  return raw // devolver original si no matchea el formato
+}
+
+/**
  * Convierte una tarea pendiente de Odoo a FormData para cargar en el formulario
  * Nota: Odoo devuelve `false` para campos vacíos en lugar de null/""
  */
 function mapOdooTaskToFormData(task: any, tecnicoNombre: string, tecnicoFirma: string, tecnicoPhone: string): FormData {
   // Helper: Odoo devuelve false para campos char vacíos
   const str = (val: any): string => (typeof val === 'string' ? val : '')
+
+  // Helper: obtener valor del partner con fallback a x_studio_*
+  const partnerStr = (partnerVal: any, studioVal: any): string => {
+    const pv = str(partnerVal)
+    return pv || str(studioVal)
+  }
 
   // Convertir fecha YYYY-MM-DD a DD-MM-YYYY
   let fecha = ''
@@ -114,13 +133,72 @@ function mapOdooTaskToFormData(task: any, tecnicoNombre: string, tecnicoFirma: s
     }
   }
 
+  // Extraer datos del partner con jerarquía empresa/contacto
+  const p = task._partner
+  const parent = p?._parent
+
+  // Razón social: empresa padre > parent_id[1] > partner name > x_studio
+  // Razón social: si tiene padre → nombre del padre (empresa); sino → nombre del partner → x_studio
+  const razonSocial = partnerStr(
+    parent?.name || (p?.parent_id && Array.isArray(p.parent_id) ? p.parent_id[1] : null) || p?.name,
+    task.x_studio_razon_social
+  )
+
+  // CUIT: empresa padre vat > partner vat > x_studio (formateado con guiones)
+  const cuit = formatCuit(partnerStr(
+    parent?.vat || p?.vat,
+    task.x_studio_cuit
+  ))
+
+  // Contacto: si partner tiene padre (es contacto hijo de empresa), su nombre es el contacto
+  // Si partner ES empresa, buscar en _child (contacto hijo) > x_studio
+  // Si no tiene datos, queda vacío
+  const hasParent = p?.parent_id && (Array.isArray(p.parent_id) || parent)
+  const child = p?._child
+  const contacto = hasParent
+    ? partnerStr(p.name, task.x_studio_nombre_del_contacto)
+    : partnerStr(child?.name, task.x_studio_nombre_del_contacto)
+
+  // Teléfono: partner phone > padre phone > child phone > partner_phone de la tarea > x_studio
+  const telefono = partnerStr(
+    p?.phone || parent?.phone || child?.phone || task.partner_phone,
+    task.x_studio_telefono_del_contacto
+  )
+
+  // Localidad: partner city > padre city > x_studio
+  const localidad = partnerStr(
+    p?.city || parent?.city,
+    task.x_studio_localidad
+  )
+
+  // Provincia: partner state > padre state > x_studio
+  const stateFromPartner = p?.state_id && Array.isArray(p.state_id) ? p.state_id[1] : null
+  const stateFromParent = parent?.state_id && Array.isArray(parent.state_id) ? parent.state_id[1] : null
+  const provincia = partnerStr(
+    stateFromPartner || stateFromParent,
+    task.x_studio_provincia
+  )
+
+  // Dirección: partner street > padre street
+  const direccion = str(p?.street || parent?.street || '')
+
+  console.log('📋 Mapeo de tarea a FormData:', {
+    razonSocial, cuit, contacto, telefono, localidad, provincia, direccion,
+    partnerExists: !!p, parentExists: !!parent, hasParent: !!hasParent,
+    childExists: !!child, childName: child?.name,
+    partnerName: p?.name, partnerIsCompany: p?.is_company,
+    parentId: p?.parent_id, parentName: parent?.name,
+    partnerVat: p?.vat, parentVat: parent?.vat,
+    partnerPhone: p?.phone, partnerCity: p?.city,
+  })
+
   return {
     numeroOrden: generateOrderNumber(),
     fecha,
-    razonSocial: str(task.x_studio_razon_social),
-    cuit: str(task.x_studio_cuit),
-    contacto: str(task.x_studio_nombre_del_contacto),
-    telefono: str(task.x_studio_telefono_del_contacto),
+    razonSocial,
+    cuit,
+    contacto,
+    telefono,
     servicioTecnico: !!task.x_studio_servicio_tecnico,
     instalacion: !!task.x_studio_instalacion,
     puestaEnMarcha: !!task.x_studio_puesta_en_marcha,
@@ -137,8 +215,8 @@ function mapOdooTaskToFormData(task: any, tecnicoNombre: string, tecnicoFirma: s
     sinCargo: !!task.x_studio_sin_cargo,
     servicioEnGarantia: !!task.x_studio_servicio_en_garantia,
     aConvenir: !!task.x_studio_a_convenir,
-    localidad: str(task.x_studio_localidad),
-    provincia: str(task.x_studio_provincia),
+    localidad,
+    provincia,
     distancia: task.x_studio_distancia_km ? String(task.x_studio_distancia_km) : '',
     duracion: task.x_studio_duracion_hs ? String(task.x_studio_duracion_hs) : '',
     tipoCambio: '',
@@ -569,7 +647,7 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: O
           ['x_studio_tecnico_asignado', 'ilike', tecnicoNombre]
         ],
         [
-          'id', 'name', 'partner_id',
+          'id', 'name', 'partner_id', 'partner_phone',
           'x_studio_orden_de_servicio', 'x_studio_fecha',
           'x_studio_razon_social', 'x_studio_nombre_del_contacto',
           'x_studio_telefono_del_contacto', 'x_studio_cuit',
@@ -591,6 +669,109 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: O
 
       if (result.success && result.data) {
         const tasks = Array.isArray(result.data) ? result.data : []
+
+        // Obtener datos del partner (cliente) para cada tarea
+        const partnerIds = tasks
+          .map((t: any) => Array.isArray(t.partner_id) ? t.partner_id[0] : (typeof t.partner_id === 'number' ? t.partner_id : null))
+          .filter((id: number | null): id is number => id !== null)
+        const uniquePartnerIds = [...new Set(partnerIds)]
+        console.log('🔍 Partner IDs encontrados en tareas:', uniquePartnerIds)
+
+        if (uniquePartnerIds.length > 0) {
+          try {
+            const partnerResult = await client.searchRead(
+              'res.partner',
+              [['id', 'in', uniquePartnerIds]],
+              ['name', 'vat', 'phone', 'parent_id', 'is_company', 'city', 'state_id', 'street'],
+              { limit: uniquePartnerIds.length }
+            )
+            console.log('👥 Resultado partners:', JSON.stringify(partnerResult, null, 2))
+            if (partnerResult.success && Array.isArray(partnerResult.data)) {
+              const partnerMap: Record<number, any> = {}
+              for (const p of partnerResult.data) {
+                partnerMap[p.id] = p
+              }
+
+              // Si algún partner es contacto (tiene parent_id), traer también la empresa padre
+              const parentIds = partnerResult.data
+                .filter((p: any) => p.parent_id && Array.isArray(p.parent_id))
+                .map((p: any) => p.parent_id[0])
+                .filter((id: number) => !partnerMap[id]) // solo los que no tenemos ya
+              const uniqueParentIds = [...new Set(parentIds)]
+
+              if (uniqueParentIds.length > 0) {
+                const parentResult = await client.searchRead(
+                  'res.partner',
+                  [['id', 'in', uniqueParentIds]],
+                  ['name', 'vat', 'phone', 'city', 'state_id', 'street'],
+                  { limit: uniqueParentIds.length }
+                )
+                if (parentResult.success && Array.isArray(parentResult.data)) {
+                  const parentMap: Record<number, any> = {}
+                  for (const p of parentResult.data) {
+                    parentMap[p.id] = p
+                  }
+                  // Enriquecer partners hijos con datos de la empresa padre
+                  for (const p of partnerResult.data) {
+                    if (p.parent_id && Array.isArray(p.parent_id) && parentMap[p.parent_id[0]]) {
+                      p._parent = parentMap[p.parent_id[0]]
+                    }
+                  }
+                  console.log(`🏢 ${uniqueParentIds.length} empresas padre obtenidas`)
+                }
+              }
+
+              // Si algún partner es empresa (is_company), traer su primer contacto hijo
+              const companyIds = partnerResult.data
+                .filter((p: any) => p.is_company && !p.parent_id)
+                .map((p: any) => p.id)
+              if (companyIds.length > 0) {
+                try {
+                  const childResult = await client.searchRead(
+                    'res.partner',
+                    [['parent_id', 'in', companyIds], ['is_company', '=', false]],
+                    ['name', 'phone', 'parent_id'],
+                    { limit: companyIds.length * 3 }
+                  )
+                  if (childResult.success && Array.isArray(childResult.data)) {
+                    // Agrupar por parent_id, tomar el primero de cada empresa
+                    const childMap: Record<number, any> = {}
+                    for (const c of childResult.data) {
+                      const parentId = Array.isArray(c.parent_id) ? c.parent_id[0] : c.parent_id
+                      if (parentId && !childMap[parentId]) {
+                        childMap[parentId] = c
+                      }
+                    }
+                    for (const compId of companyIds) {
+                      if (childMap[compId]) {
+                        partnerMap[compId]._child = childMap[compId]
+                      }
+                    }
+                    console.log(`👶 Contactos hijos encontrados para ${Object.keys(childMap).length} empresas`)
+                  }
+                } catch (childError) {
+                  console.warn('⚠️ No se pudieron obtener contactos hijos:', childError)
+                }
+              }
+
+              // Enriquecer cada tarea con datos del partner
+              for (const task of tasks) {
+                const pid = Array.isArray(task.partner_id) ? task.partner_id[0] : task.partner_id
+                if (pid && partnerMap[pid]) {
+                  task._partner = partnerMap[pid]
+                }
+              }
+              console.log(`👥 ${Object.keys(partnerMap).length} partners mapeados a tareas`)
+            } else {
+              console.warn('⚠️ Partner result no exitoso o no es array:', partnerResult)
+            }
+          } catch (partnerError) {
+            console.warn('⚠️ No se pudieron obtener datos de partners:', partnerError)
+          }
+        } else {
+          console.log('⚠️ Ninguna tarea tiene partner_id asignado')
+        }
+
         setPendingTasks(tasks)
         setShowPending(true)
         console.log(`✅ ${tasks.length} OS asignadas encontradas`)
@@ -1067,8 +1248,8 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: O
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-orange-700 text-sm sm:text-base">
-                                OS {task.x_studio_orden_de_servicio || '—'}
+                              <span className="font-bold text-orange-700 text-sm sm:text-base truncate">
+                                {task.name || 'Sin nombre'}
                               </span>
                               {task.x_studio_fecha && (
                                 <Badge variant="outline" className="text-xs">
@@ -1082,21 +1263,27 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: O
                               )}
                             </div>
                             <p className="text-sm font-medium text-gray-800 mt-1 truncate">
-                              {task.x_studio_razon_social || task.name || 'Sin razón social'}
+                              {task._partner
+                                ? (task._partner._parent?.name || (task._partner.parent_id ? task._partner.parent_id[1] : task._partner.name))
+                                : (task.x_studio_razon_social || task.name || 'Sin razón social')}
                             </p>
                           </div>
                         </div>
 
                         {/* Datos del contacto */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs sm:text-sm text-gray-600">
-                          {task.x_studio_nombre_del_contacto && (
-                            <div>👤 {task.x_studio_nombre_del_contacto}</div>
+                          {(task._partner?.parent_id ? task._partner.name : (task._partner?._child?.name || task.x_studio_nombre_del_contacto)) && (
+                            <div>👤 {task._partner?.parent_id ? task._partner.name : (task._partner?._child?.name || task.x_studio_nombre_del_contacto)}</div>
                           )}
-                          {task.x_studio_telefono_del_contacto && (
-                            <div>📞 {task.x_studio_telefono_del_contacto}</div>
+                          {(task._partner?.phone || task._partner?._parent?.phone || task.partner_phone || task.x_studio_telefono_del_contacto) && (
+                            <div>📞 {task._partner?.phone || task._partner?._parent?.phone || task.partner_phone || task.x_studio_telefono_del_contacto}</div>
                           )}
-                          {task.x_studio_localidad && (
-                            <div>📍 {task.x_studio_localidad}{task.x_studio_provincia ? `, ${task.x_studio_provincia}` : ''}</div>
+                          {(task._partner?.city || task._partner?._parent?.city || task.x_studio_localidad) && (
+                            <div>📍 {(() => {
+                              const loc = task._partner?.city || task._partner?._parent?.city || task.x_studio_localidad
+                              const prov = (task._partner?.state_id && Array.isArray(task._partner.state_id) ? task._partner.state_id[1] : '') || (task._partner?._parent?.state_id && Array.isArray(task._partner._parent.state_id) ? task._partner._parent.state_id[1] : '') || task.x_studio_provincia
+                              return prov ? `${loc}, ${prov}` : loc
+                            })()}</div>
                           )}
                         </div>
 
@@ -1163,8 +1350,11 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: O
                                 onLoadFormData(formData)
                                 setShowPending(false)
                                 if (onClose) onClose()
+                                const clienteNombreToast = task._partner
+                                  ? (task._partner._parent?.name || (task._partner.parent_id ? task._partner.parent_id[1] : task._partner.name))
+                                  : (task.x_studio_razon_social || task.name || 'Odoo')
                                 toast.success('📋 Tarea cargada', {
-                                  description: `OS de ${task.x_studio_razon_social || task.name || 'Odoo'} lista para completar. Al enviar se actualizará en Odoo.`
+                                  description: `OS de ${clienteNombreToast} lista para completar. Al enviar se actualizará en Odoo.`
                                 })
                               } else {
                                 toast.error('Error', { description: 'No se puede cargar la tarea en el formulario' })
@@ -1277,16 +1467,35 @@ function PendingTaskDetailModal({ task, onClose }: { task: any; onClose: () => v
   // Cliente / Contacto
   const contactRows: { label: string; value: string }[] = []
   if (task.partner_id) contactRows.push({ label: 'Partner (Odoo)', value: formatPartner(task.partner_id) })
-  if (str(task.x_studio_razon_social)) contactRows.push({ label: 'Razón Social', value: str(task.x_studio_razon_social) })
-  if (str(task.x_studio_cuit)) contactRows.push({ label: 'CUIT', value: str(task.x_studio_cuit) })
-  if (str(task.x_studio_nombre_del_contacto)) contactRows.push({ label: 'Contacto', value: str(task.x_studio_nombre_del_contacto) })
-  if (str(task.x_studio_telefono_del_contacto)) contactRows.push({ label: 'Teléfono', value: str(task.x_studio_telefono_del_contacto) })
+  // Datos del cliente desde el partner (res.partner)
+  const partnerRazon = task._partner
+    ? (task._partner._parent?.name || (task._partner.parent_id ? str(task._partner.parent_id[1]) : str(task._partner.name)))
+    : str(task.x_studio_razon_social)
+  const partnerCuit = task._partner
+    ? formatCuit(str(task._partner._parent?.vat || task._partner.vat || ''))
+    : formatCuit(str(task.x_studio_cuit))
+  const partnerContacto = task._partner?.parent_id
+    ? str(task._partner.name)
+    : str(task._partner?._child?.name || task.x_studio_nombre_del_contacto)
+  const partnerTelefono = task._partner
+    ? str(task._partner.phone || task._partner._parent?.phone || task.partner_phone || '')
+    : str(task.x_studio_telefono_del_contacto || task.partner_phone || '')
+  if (partnerRazon) contactRows.push({ label: 'Razón Social', value: partnerRazon })
+  if (partnerCuit) contactRows.push({ label: 'CUIT', value: partnerCuit })
+  if (partnerContacto) contactRows.push({ label: 'Contacto', value: partnerContacto })
+  if (partnerTelefono) contactRows.push({ label: 'Teléfono', value: partnerTelefono })
   if (contactRows.length > 0) sections.push({ title: 'Cliente / Contacto', icon: '👤', rows: contactRows })
 
   // Ubicación
   const ubicRows: { label: string; value: string }[] = []
-  if (str(task.x_studio_localidad)) ubicRows.push({ label: 'Localidad', value: str(task.x_studio_localidad) })
-  if (str(task.x_studio_provincia)) ubicRows.push({ label: 'Provincia', value: str(task.x_studio_provincia) })
+  const partnerLocalidad = task._partner
+    ? str(task._partner.city || task._partner._parent?.city || task.x_studio_localidad || '')
+    : str(task.x_studio_localidad)
+  const partnerProvincia = task._partner
+    ? str((task._partner.state_id && Array.isArray(task._partner.state_id) ? task._partner.state_id[1] : '') || (task._partner._parent?.state_id && Array.isArray(task._partner._parent.state_id) ? task._partner._parent.state_id[1] : '') || task.x_studio_provincia || '')
+    : str(task.x_studio_provincia)
+  if (partnerLocalidad) ubicRows.push({ label: 'Localidad', value: partnerLocalidad })
+  if (partnerProvincia) ubicRows.push({ label: 'Provincia', value: partnerProvincia })
   if (task.x_studio_distancia_km) ubicRows.push({ label: 'Distancia', value: `${task.x_studio_distancia_km} km` })
   if (task.x_studio_duracion_hs) ubicRows.push({ label: 'Duración', value: `${task.x_studio_duracion_hs} hs` })
   if (ubicRows.length > 0) sections.push({ title: 'Ubicación', icon: '📍', rows: ubicRows })
@@ -1343,10 +1552,10 @@ function PendingTaskDetailModal({ task, onClose }: { task: any; onClose: () => v
             <span className="text-xl">📄</span>
             <div className="min-w-0">
               <h3 className="text-base sm:text-lg font-bold text-orange-800 truncate">
-                Detalle OS {str(task.x_studio_orden_de_servicio) || '—'}
+                {str(task.name) || 'Sin nombre'}
               </h3>
               <p className="text-xs text-orange-600 truncate">
-                {str(task.x_studio_razon_social) || str(task.name) || 'Sin razón social'}
+                {str(task.x_studio_orden_de_servicio) ? `OS ${str(task.x_studio_orden_de_servicio)}` : ''} {str(task.x_studio_razon_social) || ''}
               </p>
             </div>
           </div>
