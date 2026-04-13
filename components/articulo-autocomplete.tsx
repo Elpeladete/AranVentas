@@ -189,8 +189,13 @@ export function ArticuloAutocomplete({
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
                       <span className="bg-gray-100 px-2 py-0.5 rounded text-sm font-mono">
-                        {insumo.codigoOriginal}
+                        {insumo.codigoOriginal || '—'}
                       </span>
+                      {insumo.numeroSerie && (
+                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-mono">
+                          SN: {insumo.numeroSerie}
+                        </span>
+                      )}
                     </div>
                     <div className="text-gray-700 text-sm">
                       {insumo.descripcion}

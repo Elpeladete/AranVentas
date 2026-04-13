@@ -99,7 +99,11 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
         row.articulo.trim() || 
         row.precioNeto.trim()
       )
-      .map(row => `${row.cantidad};${row.numeroSerie};${row.codigo};${row.articulo};${row.precioNeto}`)
+      .map(row => {
+        // Asegurar cantidad mínima de 1 para filas con datos
+        const cantidad = (parseInt(row.cantidad) || 0) < 1 ? '1' : row.cantidad
+        return `${cantidad};${row.numeroSerie};${row.codigo};${row.articulo};${row.precioNeto}`
+      })
       .join('|')
     
     // Log para verificar el envío de datos
@@ -208,11 +212,14 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
   const handleInsumoSelect = (rowIndex: number, insumo: InsumoData) => {
     setRows(prevRows => {
       const newRows = [...prevRows]
+      const currentCantidad = newRows[rowIndex].cantidad.trim()
       newRows[rowIndex] = {
         ...newRows[rowIndex],
+        cantidad: (!currentCantidad || parseInt(currentCantidad) < 1) ? '1' : currentCantidad,
         codigo: insumo.codigoOriginal,
         articulo: insumo.descripcion,
-        precioNeto: insumo.precioEstimado.toString()
+        precioNeto: insumo.precioEstimado.toString(),
+        ...(insumo.numeroSerie ? { numeroSerie: insumo.numeroSerie } : {})
       }
       return newRows
     })
@@ -221,18 +228,22 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
       rowIndex,
       codigo: insumo.codigoOriginal,
       descripcion: insumo.descripcion,
-      precio: insumo.precioEstimado
+      precio: insumo.precioEstimado,
+      serie: insumo.numeroSerie
     })
   }
 
   const handleArticuloSelect = (rowIndex: number, insumo: InsumoData) => {
     setRows(prevRows => {
       const newRows = [...prevRows]
+      const currentCantidad = newRows[rowIndex].cantidad.trim()
       newRows[rowIndex] = {
         ...newRows[rowIndex],
+        cantidad: (!currentCantidad || parseInt(currentCantidad) < 1) ? '1' : currentCantidad,
         codigo: insumo.codigoOriginal,
         articulo: insumo.descripcion,
-        precioNeto: insumo.precioEstimado.toString()
+        precioNeto: insumo.precioEstimado.toString(),
+        ...(insumo.numeroSerie ? { numeroSerie: insumo.numeroSerie } : {})
       }
       return newRows
     })
@@ -241,7 +252,8 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
       rowIndex,
       codigo: insumo.codigoOriginal,
       descripcion: insumo.descripcion,
-      precio: insumo.precioEstimado
+      precio: insumo.precioEstimado,
+      serie: insumo.numeroSerie
     })
   }
 

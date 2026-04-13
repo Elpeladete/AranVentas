@@ -388,7 +388,13 @@ ${formData.aux1 ? `
 
 /**
  * Busca un CLIENTE (partner) existente en Odoo por CUIT o razón social.
- * NO crea contactos automáticamente - la creación solo se hace desde el UI explícitamente.
+ * Estrategia de búsqueda escalonada:
+ *   1. CUIT exacto (limpiando guiones/espacios)
+ *   2. CUIT normalizado (solo dígitos)
+ *   3. Razón social exacta en empresas (is_company = true)
+ *   4. Razón social parcial en empresas
+ *   5. Razón social parcial en todos los partners
+ * NO crea contactos automáticamente.
  */
 export async function findPartner(
   formData: AranFormData
@@ -396,31 +402,88 @@ export async function findPartner(
   const client = getOdooClient()
 
   try {
-    // Buscar CLIENTE existente por CUIT o nombre
-    const searchDomain = []
-    
-    if (formData.cuit) {
-      searchDomain.push(['vat', '=', formData.cuit])
-    } else if (formData.razonSocial) {
-      searchDomain.push(['name', 'ilike', formData.razonSocial])
-    } else {
+    // Normalizar CUIT: quitar guiones, espacios y puntos
+    const cuitRaw = formData.cuit?.trim() || ''
+    const cuitClean = cuitRaw.replace(/[-.\s]/g, '')
+
+    // --- Paso 1: Buscar por CUIT (más confiable) ---
+    if (cuitClean.length >= 8) {
+      // 1a. Buscar CUIT tal cual fue ingresado
+      const exactResult = await client.search('res.partner', [
+        ['vat', '=', cuitRaw]
+      ], { limit: 1 })
+
+      if (exactResult.success && exactResult.data?.length > 0) {
+        console.log(`✅ CLIENTE encontrado por CUIT exacto "${cuitRaw}": ID ${exactResult.data[0]}`)
+        return { success: true, partnerId: exactResult.data[0] }
+      }
+
+      // 1b. Buscar CUIT normalizado (solo dígitos)
+      if (cuitClean !== cuitRaw) {
+        const cleanResult = await client.search('res.partner', [
+          ['vat', '=', cuitClean]
+        ], { limit: 1 })
+
+        if (cleanResult.success && cleanResult.data?.length > 0) {
+          console.log(`✅ CLIENTE encontrado por CUIT normalizado "${cuitClean}": ID ${cleanResult.data[0]}`)
+          return { success: true, partnerId: cleanResult.data[0] }
+        }
+      }
+
+      // 1c. Buscar CUIT con ilike (por si tiene formato diferente en Odoo)
+      const ilikeResult = await client.search('res.partner', [
+        ['vat', 'ilike', cuitClean]
+      ], { limit: 1 })
+
+      if (ilikeResult.success && ilikeResult.data?.length > 0) {
+        console.log(`✅ CLIENTE encontrado por CUIT parcial "${cuitClean}": ID ${ilikeResult.data[0]}`)
+        return { success: true, partnerId: ilikeResult.data[0] }
+      }
+
+      console.log(`⚠️ No se encontró partner con CUIT: "${cuitRaw}" / "${cuitClean}"`)
+    }
+
+    // --- Paso 2: Buscar por razón social ---
+    const razonSocial = formData.razonSocial?.trim() || ''
+    if (razonSocial.length >= 3) {
+      // 2a. Buscar match exacto en empresas (is_company = true) — más preciso
+      const companyExactResult = await client.search('res.partner', [
+        ['name', '=', razonSocial],
+        ['is_company', '=', true]
+      ], { limit: 1 })
+
+      if (companyExactResult.success && companyExactResult.data?.length > 0) {
+        console.log(`✅ EMPRESA encontrada por nombre exacto "${razonSocial}": ID ${companyExactResult.data[0]}`)
+        return { success: true, partnerId: companyExactResult.data[0] }
+      }
+
+      // 2b. Buscar match parcial en empresas
+      const companyIlikeResult = await client.search('res.partner', [
+        ['name', 'ilike', razonSocial],
+        ['is_company', '=', true]
+      ], { limit: 1 })
+
+      if (companyIlikeResult.success && companyIlikeResult.data?.length > 0) {
+        console.log(`✅ EMPRESA encontrada por nombre parcial "${razonSocial}": ID ${companyIlikeResult.data[0]}`)
+        return { success: true, partnerId: companyIlikeResult.data[0] }
+      }
+
+      // 2c. Último recurso: buscar en todos los partners (incluye contactos)
+      const anyResult = await client.search('res.partner', [
+        ['name', 'ilike', razonSocial]
+      ], { limit: 1 })
+
+      if (anyResult.success && anyResult.data?.length > 0) {
+        console.log(`✅ PARTNER encontrado por nombre "${razonSocial}": ID ${anyResult.data[0]} (podría ser contacto)`)
+        return { success: true, partnerId: anyResult.data[0] }
+      }
+    }
+
+    // No se encontró por ningún método
+    if (!cuitClean && !razonSocial) {
       return { success: false, error: 'Faltan datos del CLIENTE (CUIT o Razón Social)' }
     }
 
-    const searchResult = await client.search('res.partner', searchDomain, { limit: 1 })
-
-    if (!searchResult.success) {
-      return { success: false, error: searchResult.error }
-    }
-
-    // Si encontró el CLIENTE, retornar su ID
-    if (searchResult.data && searchResult.data.length > 0) {
-      const partnerId = searchResult.data[0]
-      console.log(`✅ CLIENTE encontrado en Odoo: ID ${partnerId}`)
-      return { success: true, partnerId }
-    }
-
-    // Si no existe, NO crear - retornar que no se encontró
     console.log('⚠️ CLIENTE no encontrado en Odoo. No se creará automáticamente.')
     return { 
       success: false, 
@@ -696,15 +759,133 @@ export async function updateServiceOrderInOdoo(
 
     updateData.description = `<div style="font-family: Arial, sans-serif;">
 <h2 style="background-color: #2c3e50; color: white; padding: 10px; margin: 0;">ORDEN DE SERVICIO N° ${formData.numeroOrden}</h2>
+
 <h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">DESCRIPCIÓN DEL TRABAJO</h3>
 <p style="padding: 10px; background-color: #ecf0f1; margin: 0;">${formData.descripcion || 'Sin descripción'}</p>
+
 <h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">INFORMACIÓN DEL SERVICIO</h3>
 <table style="width: 100%; border-collapse: collapse;">
-  <tr><td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Tipos de servicio:</td><td style="padding: 8px; border: 1px solid #bdc3c7;">${tiposServicio || 'N/A'}</td></tr>
-  <tr><td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Ubicación:</td><td style="padding: 8px; border: 1px solid #bdc3c7;">${ubicacionServicio || 'N/A'}</td></tr>
-  <tr><td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Modalidad de cobro:</td><td style="padding: 8px; border: 1px solid #bdc3c7;">${modalidadCobro || 'N/A'}</td></tr>
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold; width: 40%;">Tipos de servicio:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${tiposServicio || 'N/A'}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Ubicación:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${ubicacionServicio || 'N/A'}</td>
+  </tr>
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Modalidad de cobro:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${modalidadCobro || 'N/A'}</td>
+  </tr>
 </table>
-</div>`.trim()
+
+<h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">EQUIPO Y UBICACIÓN</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold; width: 40%;">Máquina:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.maquina || 'N/A'}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Equipo:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.equipo || 'N/A'}</td>
+  </tr>
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Localidad:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.localidad || 'N/A'}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Provincia:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.provincia || 'N/A'}</td>
+  </tr>
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Distancia:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.distancia || 'N/A'} km</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Duración estimada:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.duracion || 'N/A'} hs</td>
+  </tr>
+</table>
+
+<h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">CONTACTO</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold; width: 40%;">Contacto:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.contacto || 'N/A'}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Teléfono:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.telefono || 'N/A'}</td>
+  </tr>
+</table>
+${formData.insumos ? `
+<h3 style="background-color: #3498db; color: white; padding: 8px; margin: 15px 0 5px 0;">INSUMOS UTILIZADOS</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <thead>
+    <tr style="background-color: #2c3e50; color: white;">
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: center; width: 8%;">Cant.</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: left; width: 18%;">N° Serie</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: left; width: 20%;">Código</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: left; width: 39%;">Descripción</th>
+      <th style="padding: 8px; border: 1px solid #bdc3c7; text-align: right; width: 15%;">Precio</th>
+    </tr>
+  </thead>
+  <tbody>
+${formData.insumos.split('|').filter((line: string) => line.trim()).map((line: string, index: number) => {
+  const parts = line.split(';')
+  const cantidad = parts[0] || ''
+  const numeroSerie = parts[1] || ''
+  const codigo = parts[2] || ''
+  const descripcion = parts[3] || ''
+  const precio = parts[4] || ''
+  const bgColor = index % 2 === 0 ? '#ecf0f1' : '#ffffff'
+  return `    <tr style="background-color: ${bgColor};">
+      <td style="padding: 8px; border: 1px solid #bdc3c7; text-align: center;">${cantidad}</td>
+      <td style="padding: 8px; border: 1px solid #bdc3c7;">${numeroSerie}</td>
+      <td style="padding: 8px; border: 1px solid #bdc3c7;">${codigo}</td>
+      <td style="padding: 8px; border: 1px solid #bdc3c7;">${descripcion}</td>
+      <td style="padding: 8px; border: 1px solid #bdc3c7; text-align: right;">${precio}</td>
+    </tr>`
+}).join('\n')}
+  </tbody>
+</table>
+` : ''}
+<h3 style="background-color: #27ae60; color: white; padding: 8px; margin: 15px 0 5px 0;">TÉCNICO</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold; width: 40%;">Nombre:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.tecnicoNombre || 'N/A'}</td>
+  </tr>${formData.tecnicoFirma ? `
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Firma:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;"><a href="${formData.tecnicoFirma}" target="_blank" style="color: #2980b9;">Ver firma del técnico</a></td>
+  </tr>` : ''}
+</table>
+
+<h3 style="background-color: #e67e22; color: white; padding: 8px; margin: 15px 0 5px 0;">CLIENTE</h3>
+<table style="width: 100%; border-collapse: collapse;">
+  <tr style="background-color: #ecf0f1;">
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold; width: 40%;">Nombre:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;">${formData.clienteNombre || 'N/A'}</td>
+  </tr>${formData.clienteFirma ? `
+  <tr>
+    <td style="padding: 8px; border: 1px solid #bdc3c7; font-weight: bold;">Firma:</td>
+    <td style="padding: 8px; border: 1px solid #bdc3c7;"><a href="${formData.clienteFirma}" target="_blank" style="color: #2980b9;">Ver firma del cliente</a></td>
+  </tr>` : ''}
+</table>
+${formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada' ? `
+<h3 style="background-color: #16a085; color: white; padding: 8px; margin: 15px 0 5px 0;">📍 UBICACIÓN DE FIRMA</h3>
+<div style="padding: 10px; background-color: #ecf0f1;">
+  <p style="margin: 0 0 8px 0;"><strong>Coordenadas:</strong> ${formData.aux2}</p>
+  <p style="margin: 0;"><a href="https://www.google.com/maps?q=${formData.aux2}" target="_blank" style="color: #2980b9; font-weight: bold;">📍 Ver en Google Maps</a></p>
+</div>
+` : ''}
+${formData.aux1 ? `
+<h3 style="background-color: #8e44ad; color: white; padding: 8px; margin: 15px 0 5px 0;">IMAGEN DE LA ORDEN</h3>
+<div style="padding: 10px; background-color: #ecf0f1;">
+  <a href="${formData.aux1}" target="_blank" style="color: #2980b9; font-weight: bold;">Ver imagen completa de la orden de servicio</a>
+</div>
+` : ''}</div>`.trim()
 
     // Limpiar campos undefined del objeto
     Object.keys(updateData).forEach(key => {
@@ -727,6 +908,24 @@ export async function updateServiceOrderInOdoo(
 
     // Adjuntar imágenes
     await attachImagesToTask(taskId, formData)
+
+    // Agregar líneas de insumos a la orden de venta asociada
+    if (formData.insumos && formData.insumos.trim()) {
+      let saleOrderId = formData.odooSaleOrderId
+
+      // Si no hay orden de venta asociada, crear una nueva
+      if (!saleOrderId) {
+        console.log(`🛒 No hay orden de venta asociada a la tarea ${taskId}. Creando una nueva...`)
+        saleOrderId = await createSaleOrderForTask(taskId, partnerId || undefined, formData)
+      }
+
+      if (saleOrderId) {
+        console.log(`📦 Agregando insumos a la orden de venta ${saleOrderId}...`)
+        await addServiceOrderLines(saleOrderId, formData)
+      } else {
+        console.warn('⚠️ No se pudo crear la orden de venta. Los insumos no fueron agregados.')
+      }
+    }
 
     return { success: true, orderId: taskId }
   } catch (error) {
@@ -933,48 +1132,146 @@ async function attachImagesToTask(
 }
 
 /**
- * Agrega líneas de orden (repuestos/insumos) a una orden de servicio
+ * Crea una nueva orden de venta (sale.order) y la vincula a la tarea (project.task)
  */
-async function addServiceOrderLines(
-  orderId: number,
+async function createSaleOrderForTask(
+  taskId: number,
+  partnerId: number | undefined,
+  formData: AranFormData
+): Promise<number | null> {
+  const client = getOdooClient()
+
+  try {
+    // Necesitamos un partner_id para crear la orden de venta
+    if (!partnerId) {
+      console.warn('⚠️ No hay partner_id para crear la orden de venta')
+      return null
+    }
+
+    // Convertir fecha
+    let orderDate = new Date().toISOString().split('T')[0]
+    if (formData.fecha) {
+      const [day, month, year] = formData.fecha.split('-')
+      orderDate = `${year}-${month}-${day}`
+    }
+
+    const saleOrderData: Record<string, any> = {
+      partner_id: partnerId,
+      date_order: `${orderDate} 00:00:00`,
+      origin: `OS ${formData.numeroOrden}`,
+    }
+
+    console.log('🛒 Creando orden de venta:', JSON.stringify(saleOrderData, null, 2))
+    const createResult = await client.create('sale.order', saleOrderData)
+
+    if (!createResult.success || !createResult.data) {
+      console.error('❌ Error creando orden de venta:', createResult.error)
+      return null
+    }
+
+    const saleOrderId = createResult.data as number
+    console.log(`✅ Orden de venta creada: ID ${saleOrderId}`)
+
+    // Vincular la orden de venta a la tarea
+    const linkResult = await client.update('project.task', taskId, {
+      sale_order_id: saleOrderId,
+    })
+
+    if (linkResult.success) {
+      console.log(`🔗 Orden de venta ${saleOrderId} vinculada a la tarea ${taskId}`)
+    } else {
+      console.warn(`⚠️ No se pudo vincular la OV ${saleOrderId} a la tarea ${taskId}:`, linkResult.error)
+    }
+
+    return saleOrderId
+  } catch (error) {
+    console.error('❌ Error creando orden de venta:', error)
+    return null
+  }
+}
+
+/**
+ * Agrega líneas de insumos a una orden de venta existente en Odoo
+ * Parsea el formato pipe/semicolon: "cantidad;serie;codigo;articulo;precio|..."
+ */
+export async function addServiceOrderLines(
+  saleOrderId: number,
   formData: AranFormData
 ): Promise<void> {
   const client = getOdooClient()
 
   try {
-    // Parsear insumos (si vienen en formato texto)
-    // Formato esperado: "Producto 1 x 2, Producto 2 x 1"
-    const insumos = formData.insumos?.split(',').map(i => i.trim()) || []
+    if (!formData.insumos || !formData.insumos.trim()) {
+      console.log('📦 Sin insumos para agregar a la orden de venta')
+      return
+    }
 
-    for (const insumo of insumos) {
-      // Intentar parsear cantidad y nombre
-      const match = insumo.match(/(.+?)\s*x\s*(\d+)/)
-      const name = match ? match[1].trim() : insumo
-      const qty = match ? parseInt(match[2]) : 1
+    // Parsear formato: "cantidad;serie;codigo;articulo;precio|..."
+    const lines = formData.insumos.split('|').filter(l => l.trim())
+    console.log(`📦 Procesando ${lines.length} líneas de insumos para orden de venta ${saleOrderId}`)
 
-      // Buscar producto en Odoo (simplificado)
-      const productResult = await client.search('product.product', [['name', 'ilike', name]], {
-        limit: 1,
-      })
+    for (const line of lines) {
+      const parts = line.split(';')
+      const cantidad = parseInt(parts[0]) || 1
+      const codigo = parts[2]?.trim() || ''
+      const articulo = parts[3]?.trim() || ''
+      const precio = parseFloat(parts[4]?.replace(',', '.') || '0') || 0
 
-      if (productResult.success && productResult.data && productResult.data.length > 0) {
-        const productId = productResult.data[0]
+      if (!articulo && !codigo) continue // Skip empty lines
 
-        // Crear línea de orden
-        await client.create('sale.order.line', {
-          order_id: orderId,
-          product_id: productId,
-          product_uom_qty: qty,
-          name: name,
-        })
+      // Buscar producto por código interno (default_code) o por nombre
+      let productId: number | null = null
 
-        console.log(`✅ Línea agregada: ${name} x ${qty}`)
+      if (codigo) {
+        const byCode = await client.searchRead(
+          'product.product',
+          [['default_code', '=', codigo]],
+          ['id'],
+          { limit: 1 }
+        )
+        if (byCode.success && Array.isArray(byCode.data) && byCode.data.length > 0) {
+          productId = byCode.data[0].id
+        }
+      }
+
+      if (!productId && articulo) {
+        const byName = await client.searchRead(
+          'product.product',
+          [['name', 'ilike', articulo]],
+          ['id'],
+          { limit: 1 }
+        )
+        if (byName.success && Array.isArray(byName.data) && byName.data.length > 0) {
+          productId = byName.data[0].id
+        }
+      }
+
+      // Crear la línea de orden de venta
+      const lineData: Record<string, any> = {
+        order_id: saleOrderId,
+        product_uom_qty: cantidad,
+        name: articulo || codigo || 'Producto',
+      }
+
+      if (productId) {
+        lineData.product_id = productId
+      }
+
+      if (precio > 0) {
+        lineData.price_unit = precio
+      }
+
+      const createResult = await client.create('sale.order.line', lineData)
+      if (createResult.success) {
+        console.log(`✅ Línea agregada a OV ${saleOrderId}: ${articulo || codigo} x ${cantidad}`)
       } else {
-        console.warn(`⚠️ Producto no encontrado en Odoo: ${name}`)
+        console.warn(`⚠️ Error creando línea para ${articulo || codigo}:`, createResult.error)
       }
     }
+
+    console.log(`📦 Líneas de insumos procesadas para OV ${saleOrderId}`)
   } catch (error) {
-    console.error('❌ Error agregando líneas de orden:', error)
+    console.error('❌ Error agregando líneas a la orden de venta:', error)
   }
 }
 

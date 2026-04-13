@@ -208,7 +208,11 @@ function mapOdooTaskToFormData(task: any, tecnicoNombre: string, tecnicoFirma: s
     maquina: str(task.x_studio_maquina),
     equipo: str(task.x_studio_equipo),
     descripcion: str(task.x_studio_descripcion_de_lo_acontecido),
-    insumos: '',
+    insumos: task._saleOrderLines && task._saleOrderLines.length > 0
+      ? task._saleOrderLines.map((line: any) =>
+          `${Math.round(line.quantity)};;${line.productCode};${line.productName};${line.priceUnit}`
+        ).join('|')
+      : '',
     servicioACampo: !!task.x_studio_servicio_a_campo,
     servicioEnOficina: !!task.x_studio_servicio_en_oficina,
     conCargo: !!task.x_studio_con_cargo,
@@ -233,6 +237,9 @@ function mapOdooTaskToFormData(task: any, tecnicoNombre: string, tecnicoFirma: s
     odooPartnerId,
     odooTaskId: task.id,
     odooTaskName: str(task.name),
+    odooSaleOrderId: task.sale_order_id
+      ? (Array.isArray(task.sale_order_id) ? task.sale_order_id[0] : task.sale_order_id)
+      : null,
   }
 }
 
@@ -662,7 +669,8 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: O
           'x_studio_con_cargo', 'x_studio_sin_cargo',
           'x_studio_servicio_en_garantia', 'x_studio_a_convenir',
           'x_studio_distancia_km', 'x_studio_duracion_hs',
-          'stage_id', 'date_deadline', 'planned_date_begin'
+          'stage_id', 'date_deadline', 'planned_date_begin',
+          'sale_order_id', 'sale_line_id'
         ],
         { order: 'x_studio_fecha desc', limit: 50 }
       )
@@ -770,6 +778,75 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: O
           }
         } else {
           console.log('⚠️ Ninguna tarea tiene partner_id asignado')
+        }
+
+        // Obtener líneas de orden de venta para cada tarea que tenga sale_order_id
+        const saleOrderIds = tasks
+          .map((t: any) => Array.isArray(t.sale_order_id) ? t.sale_order_id[0] : (typeof t.sale_order_id === 'number' ? t.sale_order_id : null))
+          .filter((id: number | null): id is number => id !== null)
+        const uniqueSaleOrderIds = [...new Set(saleOrderIds)]
+
+        if (uniqueSaleOrderIds.length > 0) {
+          try {
+            const linesResult = await client.searchRead(
+              'sale.order.line',
+              [['order_id', 'in', uniqueSaleOrderIds]],
+              ['order_id', 'product_id', 'product_uom_qty', 'name', 'price_unit', 'product_template_id'],
+              { limit: 200 }
+            )
+            if (linesResult.success && Array.isArray(linesResult.data)) {
+              // Obtener default_code de los productos
+              const productIds = linesResult.data
+                .map((l: any) => Array.isArray(l.product_id) ? l.product_id[0] : l.product_id)
+                .filter((id: number | null): id is number => !!id)
+              const uniqueProductIds = [...new Set(productIds)]
+
+              let productCodeMap: Record<number, string> = {}
+              if (uniqueProductIds.length > 0) {
+                const prodResult = await client.searchRead(
+                  'product.product',
+                  [['id', 'in', uniqueProductIds]],
+                  ['id', 'default_code'],
+                  { limit: uniqueProductIds.length }
+                )
+                if (prodResult.success && Array.isArray(prodResult.data)) {
+                  for (const p of prodResult.data) {
+                    productCodeMap[p.id] = p.default_code || ''
+                  }
+                }
+              }
+
+              // Agrupar líneas por order_id
+              const linesByOrder: Record<number, any[]> = {}
+              for (const line of linesResult.data) {
+                const orderId = Array.isArray(line.order_id) ? line.order_id[0] : line.order_id
+                if (orderId) {
+                  if (!linesByOrder[orderId]) linesByOrder[orderId] = []
+                  linesByOrder[orderId].push(line)
+                }
+              }
+
+              // Enriquecer tareas con líneas de la orden de venta
+              for (const task of tasks) {
+                const soId = Array.isArray(task.sale_order_id) ? task.sale_order_id[0] : task.sale_order_id
+                if (soId && linesByOrder[soId]) {
+                  task._saleOrderLines = linesByOrder[soId].map((line: any) => {
+                    const prodId = Array.isArray(line.product_id) ? line.product_id[0] : line.product_id
+                    return {
+                      productName: Array.isArray(line.product_id) ? line.product_id[1] : (line.name || ''),
+                      productCode: prodId ? (productCodeMap[prodId] || '') : '',
+                      quantity: line.product_uom_qty || 0,
+                      priceUnit: line.price_unit || 0,
+                      description: line.name || ''
+                    }
+                  })
+                }
+              }
+              console.log(`🛒 Líneas de venta obtenidas para ${Object.keys(linesByOrder).length} órdenes`)
+            }
+          } catch (saleError) {
+            console.warn('⚠️ No se pudieron obtener líneas de orden de venta:', saleError)
+          }
         }
 
         setPendingTasks(tasks)
@@ -1301,6 +1378,22 @@ export function OrdersDatabaseViewer({ onClose, onEditOrder, onLoadFormData }: O
                           </div>
                         )}
 
+                        {/* Insumos de la orden de venta */}
+                        {task._saleOrderLines && task._saleOrderLines.length > 0 && (
+                          <div className="text-xs sm:text-sm text-gray-700 bg-amber-50 rounded px-2 py-1">
+                            <div className="font-medium text-amber-800 mb-1">📦 Insumos ({task._saleOrderLines.length})</div>
+                            {task._saleOrderLines.slice(0, 3).map((line: any, i: number) => (
+                              <div key={i} className="text-xs text-gray-600 truncate">
+                                {line.productCode && <span className="font-mono text-gray-500">[{line.productCode}] </span>}
+                                {line.productName} × {Math.round(line.quantity)}
+                              </div>
+                            ))}
+                            {task._saleOrderLines.length > 3 && (
+                              <div className="text-xs text-amber-600">...y {task._saleOrderLines.length - 3} más</div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Badges de tipo de servicio */}
                         <div className="flex flex-wrap gap-1">
                           {task.x_studio_servicio_tecnico && <Badge className="bg-blue-100 text-blue-800 text-[10px]">Servicio Técnico</Badge>}
@@ -1511,6 +1604,19 @@ function PendingTaskDetailModal({ task, onClose }: { task: any; onClose: () => v
     sections.push({ title: 'Descripción', icon: '📝', rows: [
       { label: '', value: str(task.x_studio_descripcion_de_lo_acontecido) }
     ]})
+  }
+
+  // Insumos de la orden de venta
+  if (task._saleOrderLines && task._saleOrderLines.length > 0) {
+    const insumoRows = task._saleOrderLines.map((line: any) => ({
+      label: line.productCode ? `[${line.productCode}]` : '',
+      value: `${line.productName} × ${Math.round(line.quantity)} — $${line.priceUnit.toLocaleString('es-AR')}`
+    }))
+    if (task.sale_order_id) {
+      const soName = Array.isArray(task.sale_order_id) ? task.sale_order_id[1] : `#${task.sale_order_id}`
+      insumoRows.unshift({ label: 'Orden de Venta', value: soName })
+    }
+    sections.push({ title: 'Insumos', icon: '📦', rows: insumoRows })
   }
 
   // Tipos de servicio
