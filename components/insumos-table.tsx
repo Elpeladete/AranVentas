@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Camera } from 'lucide-react'
 import { InsumoAutocomplete } from "@/components/insumo-autocomplete"
 import { ArticuloAutocomplete } from "@/components/articulo-autocomplete"
+import { SerieAutocomplete } from "@/components/serie-autocomplete"
 import { BarcodeScanner } from "@/components/barcode-scanner"
 import type { InsumoData } from "@/lib/insumos-search"
 
@@ -27,6 +28,20 @@ interface InsumosTableProps {
 export function InsumosTable({ value, onChange, className = "", descripcionText = "" }: InsumosTableProps) {
   const [scannerOpen, setScannerOpen] = useState(false)
   const [scanningRowIndex, setScanningRowIndex] = useState<number | null>(null)
+  // Set de filas con búsqueda suprimida (recién autocompletadas)
+  const [suppressedRows, setSuppressedRows] = useState<Set<number>>(new Set())
+
+  // Suprimir búsqueda en una fila durante 1 segundo después de autocompletar
+  const suppressRowSearch = (rowIndex: number) => {
+    setSuppressedRows(prev => new Set(prev).add(rowIndex))
+    setTimeout(() => {
+      setSuppressedRows(prev => {
+        const next = new Set(prev)
+        next.delete(rowIndex)
+        return next
+      })
+    }, 1000)
+  }
   
   // Función para extraer códigos SN de la descripción
   const extractSerialNumbers = (text: string): string[] => {
@@ -210,6 +225,7 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
   }
 
   const handleInsumoSelect = (rowIndex: number, insumo: InsumoData) => {
+    suppressRowSearch(rowIndex)
     setRows(prevRows => {
       const newRows = [...prevRows]
       const currentCantidad = newRows[rowIndex].cantidad.trim()
@@ -234,6 +250,7 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
   }
 
   const handleArticuloSelect = (rowIndex: number, insumo: InsumoData) => {
+    suppressRowSearch(rowIndex)
     setRows(prevRows => {
       const newRows = [...prevRows]
       const currentCantidad = newRows[rowIndex].cantidad.trim()
@@ -254,6 +271,31 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
       descripcion: insumo.descripcion,
       precio: insumo.precioEstimado,
       serie: insumo.numeroSerie
+    })
+  }
+
+  const handleSerieSelect = (rowIndex: number, insumo: InsumoData) => {
+    suppressRowSearch(rowIndex)
+    setRows(prevRows => {
+      const newRows = [...prevRows]
+      const currentCantidad = newRows[rowIndex].cantidad.trim()
+      newRows[rowIndex] = {
+        ...newRows[rowIndex],
+        cantidad: (!currentCantidad || parseInt(currentCantidad) < 1) ? '1' : currentCantidad,
+        numeroSerie: insumo.numeroSerie || '',
+        codigo: insumo.codigoOriginal,
+        articulo: insumo.descripcion,
+        precioNeto: insumo.precioEstimado.toString()
+      }
+      return newRows
+    })
+    
+    console.log('🎯 Insumo seleccionado desde serie:', {
+      rowIndex,
+      serie: insumo.numeroSerie,
+      codigo: insumo.codigoOriginal,
+      descripcion: insumo.descripcion,
+      precio: insumo.precioEstimado
     })
   }
 
@@ -353,13 +395,13 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
                 />
               </div>
               <div className="border-r border-gray-200 flex items-stretch">
-                <Input
+                <SerieAutocomplete
                   value={row.numeroSerie}
-                  onChange={(e) => updateCell(rowIndex, 'numeroSerie', e.target.value)}
-                  placeholder="ABC123"
-                  className="border-0 rounded-none text-xs min-h-7 focus:ring-1 focus:ring-blue-500 flex-1"
-                  type="text"
-                  title="Número de serie (alfanumérico)"
+                  onChange={(value) => updateCell(rowIndex, 'numeroSerie', value)}
+                  onSelect={(insumo) => handleSerieSelect(rowIndex, insumo)}
+                  placeholder="Buscar serie..."
+                  className="border-0 rounded-none text-xs min-h-7 focus:ring-1 focus:ring-green-500 flex-1"
+                  suppressSearch={suppressedRows.has(rowIndex)}
                 />
                 <Button
                   type="button"
@@ -379,6 +421,7 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
                   onSelect={(insumo) => handleInsumoSelect(rowIndex, insumo)}
                   placeholder="Buscar código..."
                   className="border-0 rounded-none text-xs focus:ring-1 focus:ring-blue-500 text-right w-full"
+                  suppressSearch={suppressedRows.has(rowIndex)}
                 />
               </div>
               <div className="border-r border-gray-200">
@@ -388,6 +431,7 @@ export function InsumosTable({ value, onChange, className = "", descripcionText 
                   onSelect={(insumo) => handleArticuloSelect(rowIndex, insumo)}
                   placeholder="Buscar descripción..."
                   className="border-0 rounded-none text-xs p-1 focus:ring-1 focus:ring-blue-500 text-left resize-none overflow-hidden w-full"
+                  suppressSearch={suppressedRows.has(rowIndex)}
                 />
               </div>
               <div className="flex items-start">

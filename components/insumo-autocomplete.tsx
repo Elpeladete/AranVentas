@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { searchInsumos, type InsumoData } from '@/lib/insumos-search'
+import { searchByCodigo, type InsumoData } from '@/lib/insumos-search'
 
 interface InsumoAutocompleteProps {
   value: string
@@ -8,6 +8,7 @@ interface InsumoAutocompleteProps {
   placeholder?: string
   className?: string
   disabled?: boolean
+  suppressSearch?: boolean
 }
 
 export function InsumoAutocomplete({ 
@@ -16,37 +17,45 @@ export function InsumoAutocomplete({
   onSelect, 
   placeholder = "Buscar código...",
   className = "",
-  disabled = false
+  disabled = false,
+  suppressSearch = false
 }: InsumoAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<InsumoData[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const [, forceUpdate] = useState(0) // Para forzar actualización de posición
-  const [justSelected, setJustSelected] = useState(false) // Flag para evitar reabrir
+  const [searchTrigger, setSearchTrigger] = useState(0) // Se incrementa solo cuando el usuario escribe
   
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
+  const userTypingRef = useRef(false) // true solo cuando el usuario está escribiendo manualmente
   
-  // Buscar sugerencias cuando cambia el valor
+  // Handler para cambios manuales del usuario (no programáticos)
+  const handleUserInput = (newValue: string) => {
+    userTypingRef.current = true
+    onChange(newValue)
+    setSearchTrigger(prev => prev + 1)
+  }
+  
+  // Buscar sugerencias solo cuando el usuario escribe manualmente
   useEffect(() => {
+    if (searchTrigger === 0) return // No buscar en el render inicial
+    
     const performSearch = async () => {
-      if (value.length < 3) {
-        setSuggestions([])
-        setShowSuggestions(false)
-        // Resetear flag cuando el usuario borra el texto
-        setJustSelected(false)
+      if (!userTypingRef.current || suppressSearch) {
         return
       }
       
-      // No mostrar sugerencias si acabamos de seleccionar
-      if (justSelected) {
-        return // No resetear el flag, se mantiene hasta que el usuario escriba
+      if (value.length < 3) {
+        setSuggestions([])
+        setShowSuggestions(false)
+        return
       }
       
       setLoading(true)
       try {
-        const results = await searchInsumos(value)
+        const results = await searchByCodigo(value)
         setSuggestions(results)
         setShowSuggestions(results.length > 0)
         setSelectedIndex(-1)
@@ -62,7 +71,7 @@ export function InsumoAutocomplete({
     // Debounce la búsqueda
     const timeoutId = setTimeout(performSearch, 300)
     return () => clearTimeout(timeoutId)
-  }, [value, justSelected])
+  }, [searchTrigger])
   
   // Manejar selección con teclado
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -94,7 +103,7 @@ export function InsumoAutocomplete({
   
   // Manejar selección de sugerencia
   const handleSelectSuggestion = (insumo: InsumoData) => {
-    setJustSelected(true) // Marcar que acabamos de seleccionar
+    userTypingRef.current = false
     onSelect(insumo)
     setShowSuggestions(false)
     setSelectedIndex(-1)
@@ -140,7 +149,7 @@ export function InsumoAutocomplete({
       <textarea
         ref={inputRef}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => handleUserInput(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className={`${className} ${loading ? 'pr-8' : ''} resize-none overflow-hidden`}
@@ -193,19 +202,32 @@ export function InsumoAutocomplete({
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                    <div className="font-semibold text-gray-900 mb-1 flex items-center gap-2 flex-wrap">
                       <span className="bg-gray-100 px-2 py-0.5 rounded text-sm font-mono">
                         {insumo.codigoOriginal || '—'}
                       </span>
-                      {insumo.numeroSerie && (
-                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-mono">
-                          SN: {insumo.numeroSerie}
+                      {insumo.codigoProveedor && (
+                        <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-xs font-mono">
+                          Prov: {insumo.codigoProveedor}
                         </span>
                       )}
                     </div>
                     <div className="text-gray-700 text-sm">
                       {insumo.descripcion}
                     </div>
+                    {insumo.seriesDisponibles && insumo.seriesDisponibles.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <span className="text-xs text-gray-500">Series:</span>
+                        {insumo.seriesDisponibles.slice(0, 5).map((sn, i) => (
+                          <span key={i} className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-xs font-mono">
+                            {sn}
+                          </span>
+                        ))}
+                        {insumo.seriesDisponibles.length > 5 && (
+                          <span className="text-xs text-gray-400">+{insumo.seriesDisponibles.length - 5} más</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex-shrink-0 text-right">
                     <div className="text-green-600 font-semibold text-base">

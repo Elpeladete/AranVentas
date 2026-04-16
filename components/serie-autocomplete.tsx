@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { searchByArticulo, type InsumoData } from '@/lib/insumos-search'
+import { searchBySerialNumber, type InsumoData } from '@/lib/insumos-search'
 
-interface ArticuloAutocompleteProps {
+interface SerieAutocompleteProps {
   value: string
   onChange: (value: string) => void
   onSelect: (insumo: InsumoData) => void
@@ -11,23 +11,23 @@ interface ArticuloAutocompleteProps {
   suppressSearch?: boolean
 }
 
-export function ArticuloAutocomplete({ 
+export function SerieAutocomplete({ 
   value, 
   onChange, 
   onSelect, 
-  placeholder = "Buscar descripción...",
+  placeholder = "Buscar serie...",
   className = "",
   disabled = false,
   suppressSearch = false
-}: ArticuloAutocompleteProps) {
+}: SerieAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<InsumoData[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
-  const [, forceUpdate] = useState(0) // Para forzar actualización de posición
+  const [, forceUpdate] = useState(0)
   const [searchTrigger, setSearchTrigger] = useState(0) // Se incrementa solo cuando el usuario escribe
   
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
   const userTypingRef = useRef(false) // true solo cuando el usuario está escribiendo manualmente
   
@@ -55,12 +55,12 @@ export function ArticuloAutocomplete({
       
       setLoading(true)
       try {
-        const results = await searchByArticulo(value)
+        const results = await searchBySerialNumber(value)
         setSuggestions(results)
         setShowSuggestions(results.length > 0)
         setSelectedIndex(-1)
       } catch (error) {
-        console.error('Error buscando insumos por descripción:', error)
+        console.error('Error buscando por serie:', error)
         setSuggestions([])
         setShowSuggestions(false)
       } finally {
@@ -68,12 +68,10 @@ export function ArticuloAutocomplete({
       }
     }
     
-    // Debounce la búsqueda
     const timeoutId = setTimeout(performSearch, 300)
     return () => clearTimeout(timeoutId)
   }, [searchTrigger])
   
-  // Manejar selección con teclado
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!showSuggestions || suggestions.length === 0) return
     
@@ -101,7 +99,6 @@ export function ArticuloAutocomplete({
     }
   }
   
-  // Manejar selección de sugerencia
   const handleSelectSuggestion = (insumo: InsumoData) => {
     userTypingRef.current = false
     onSelect(insumo)
@@ -114,8 +111,8 @@ export function ArticuloAutocomplete({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        textareaRef.current && 
-        !textareaRef.current.contains(event.target as Node) &&
+        inputRef.current && 
+        !inputRef.current.contains(event.target as Node) &&
         suggestionsRef.current &&
         !suggestionsRef.current.contains(event.target as Node)
       ) {
@@ -145,59 +142,58 @@ export function ArticuloAutocomplete({
   }, [showSuggestions])
   
   return (
-    <div className="relative">
-      <div className="relative">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => handleUserInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          className={`${className} ${loading ? 'pr-8' : ''}`}
-          disabled={disabled}
-          rows={1}
-          style={{ 
-            lineHeight: '1.2',
-            whiteSpace: 'normal',
-            wordWrap: 'break-word'
-          }}
-        />
-        
-        {loading && (
-          <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-      </div>
+    <div className="relative flex-1">
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => handleUserInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className={`${className} ${loading ? 'pr-8' : ''}`}
+        disabled={disabled}
+        type="text"
+        style={{ 
+          minHeight: '1.75rem'
+        }}
+      />
+      
+      {loading && (
+        <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+          <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      )}
       
       {showSuggestions && suggestions.length > 0 && (
         <div
           ref={suggestionsRef}
-          className="fixed z-[9999] bg-white border-2 border-purple-400 rounded-lg shadow-2xl overflow-y-auto"
+          className="fixed z-[9999] bg-white border-2 border-green-400 rounded-lg shadow-2xl overflow-y-auto"
           style={{
             left: '2rem',
             right: '2rem',
-            top: textareaRef.current ? `${textareaRef.current.getBoundingClientRect().bottom + 4}px` : '0',
+            top: inputRef.current ? `${inputRef.current.getBoundingClientRect().bottom + 4}px` : '0',
             maxHeight: '50vh',
             minWidth: '300px'
           }}
         >
-          <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-purple-500 text-white px-4 py-2 text-sm font-semibold shadow-md z-10">
-            📝 {suggestions.length} resultado{suggestions.length !== 1 ? 's' : ''} encontrado{suggestions.length !== 1 ? 's' : ''}
+          <div className="sticky top-0 bg-gradient-to-r from-green-600 to-green-500 text-white px-4 py-2 text-sm font-semibold shadow-md z-10">
+            🔢 {suggestions.length} serie{suggestions.length !== 1 ? 's' : ''} encontrada{suggestions.length !== 1 ? 's' : ''}
           </div>
           <div className="divide-y divide-gray-100">
             {suggestions.map((insumo, index) => (
               <button
-                key={`${insumo.codigoOriginal}-${index}`}
+                key={`${insumo.numeroSerie}-${index}`}
                 onClick={() => handleSelectSuggestion(insumo)}
-                className={`w-full text-left px-4 py-3 hover:bg-purple-50 focus:bg-purple-50 focus:outline-none transition-colors ${
-                  index === selectedIndex ? 'bg-purple-100 border-l-4 border-purple-600' : ''
+                className={`w-full text-left px-4 py-3 hover:bg-green-50 focus:bg-green-50 focus:outline-none transition-colors ${
+                  index === selectedIndex ? 'bg-green-100 border-l-4 border-green-600' : ''
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-gray-900 mb-1 flex items-center gap-2 flex-wrap">
-                      <span className="bg-gray-100 px-2 py-0.5 rounded text-sm font-mono">
+                      <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-sm font-mono">
+                        SN: {insumo.numeroSerie}
+                      </span>
+                      <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono">
                         {insumo.codigoOriginal || '—'}
                       </span>
                       {insumo.codigoProveedor && (
@@ -209,19 +205,6 @@ export function ArticuloAutocomplete({
                     <div className="text-gray-700 text-sm">
                       {insumo.descripcion}
                     </div>
-                    {insumo.seriesDisponibles && insumo.seriesDisponibles.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        <span className="text-xs text-gray-500">Series:</span>
-                        {insumo.seriesDisponibles.slice(0, 5).map((sn, i) => (
-                          <span key={i} className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-xs font-mono">
-                            {sn}
-                          </span>
-                        ))}
-                        {insumo.seriesDisponibles.length > 5 && (
-                          <span className="text-xs text-gray-400">+{insumo.seriesDisponibles.length - 5} más</span>
-                        )}
-                      </div>
-                    )}
                   </div>
                   <div className="flex-shrink-0 text-right">
                     <div className="text-green-600 font-semibold text-base">
@@ -248,14 +231,14 @@ export function ArticuloAutocomplete({
           style={{
             left: '2rem',
             right: '2rem',
-            top: textareaRef.current ? `${textareaRef.current.getBoundingClientRect().bottom + 4}px` : '0',
+            top: inputRef.current ? `${inputRef.current.getBoundingClientRect().bottom + 4}px` : '0',
             minWidth: '300px'
           }}
         >
           <div className="text-center">
             <div className="text-4xl mb-2">🔍</div>
             <div className="text-sm text-gray-600 font-medium">
-              No se encontraron artículos para <span className="font-bold text-gray-900">"{value}"</span>
+              No se encontraron series para <span className="font-bold text-gray-900">"{value}"</span>
             </div>
           </div>
         </div>
