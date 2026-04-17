@@ -386,7 +386,7 @@ ${formData.aux1 ? `
       : undefined,
 
     // Versión de la app
-    x_studio_version_de_app: buildInfo.version,
+    x_studio_version_de_app: `${buildInfo.version}-[${buildInfo.buildId}&${buildInfo.buildDate}]`,
   }
 
   return taskData
