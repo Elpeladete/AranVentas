@@ -5,6 +5,7 @@
 
 import { type FormData as AranFormData } from '@/hooks/use-form-data'
 import { getOdooClient } from './odoo-client'
+import { buildInfo } from './build-info'
 
 export interface OdooServiceOrder {
   id?: number
@@ -81,6 +82,8 @@ export interface OdooServiceOrder {
   // Geoposición
   x_studio_geoposicion?: string               // char - URL de Google Maps
   x_studio_geoposicion_1?: string             // html - Link clicable a Google Maps
+  // Versión de la app
+  x_studio_version_de_app?: string            // char - Versión de la app que reportó la OS
 }
 
 export interface OdooPartner {
@@ -381,6 +384,9 @@ ${formData.aux1 ? `
     x_studio_geoposicion_1: (formData.aux2 && formData.aux2 !== 'Geolocalización no disponible' && formData.aux2 !== 'Geolocalización no soportada')
       ? `<a href="https://www.google.com/maps?q=${formData.aux2}" target="_blank">📍 Ver ubicación de la firma en Google Maps</a>`
       : undefined,
+
+    // Versión de la app
+    x_studio_version_de_app: buildInfo.version,
   }
 
   return taskData
