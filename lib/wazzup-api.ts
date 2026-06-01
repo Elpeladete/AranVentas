@@ -521,10 +521,10 @@ export async function sendServiceOrderToWhatsApp(
   imageUrl?: string
 ): Promise<WazzupApiResponse> {
   try {
-    // ⛔ Verificar si WhatsApp está desactivado temporalmente
+    // ⛔ Wazzup suspendido: usar WhatsApp local (wa.me abre la app nativa en celular/tablet)
     if (isWhatsAppDisabled()) {
-      console.warn('⛔ WhatsApp desactivado (NEXT_PUBLIC_DISABLE_WHATSAPP=true). Saltando envío.')
-      return { success: false, error: 'WhatsApp desactivado temporalmente' }
+      console.warn('⛔ Wazzup suspendido. Usando WhatsApp local (wa.me) como fallback.')
+      return sendWhatsAppWebFallback(phoneNumber, orderData, imageUrl)
     }
 
     console.log('📱 Iniciando envío por WhatsApp:', { 
@@ -620,33 +620,57 @@ export async function sendServiceOrderToWhatsApp(
 }
 
 /**
- * Fallback que abre WhatsApp Web cuando Wazzup no está configurado
+ * Fallback que abre WhatsApp local (app nativa en celular/tablet, WhatsApp Web en desktop)
+ * usando el deep link público https://wa.me/<numero>?text=<mensaje>
  */
 async function sendWhatsAppWebFallback(
   phoneNumber: string,
   orderData: any,
   imageUrl?: string
 ): Promise<WazzupApiResponse> {
-  console.log('📱 Usando fallback de WhatsApp Web')
-  
+  console.log('📱 Usando fallback de WhatsApp local (wa.me)')
+
   const orderText = createOrderMessage(orderData)
   let message = orderText
-  
+
   if (imageUrl) {
     message += `\n\n🖼️ Ver imagen de la orden:\n${imageUrl}`
   }
-  
-  // Formatear número para WhatsApp Web
-  const cleanPhone = phoneNumber.replace(/\D/g, '')
-  const whatsappUrl = `https://wa.me/54${cleanPhone}?text=${encodeURIComponent(message)}`
-  
-  // Abrir WhatsApp Web en nueva ventana
+
+  // Formatear número (agregar 54 si no está)
+  let cleanPhone = phoneNumber.replace(/\D/g, '')
+  if (!cleanPhone.startsWith('54')) cleanPhone = '54' + cleanPhone
+  const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+
+  if (typeof window === 'undefined') {
+    console.warn('⚠️ sendWhatsAppWebFallback llamado en server; devolviendo URL sin abrir.')
+    return { success: false, error: 'WhatsApp local sólo disponible en cliente', messageId: whatsappUrl }
+  }
+
+  // Abrir WhatsApp (app nativa si está instalada, sino WhatsApp Web)
   window.open(whatsappUrl, '_blank')
-  
+
   return {
     success: true,
-    messageId: 'whatsapp-web-fallback'
+    messageId: 'whatsapp-local-fallback'
   }
+}
+
+/**
+ * Abre WhatsApp local con la encuesta de satisfacción pre-cargada.
+ */
+function sendSurveyViaLocalWhatsApp(phoneNumber: string): WazzupApiResponse {
+  const surveyText = createSurveyMessage()
+  let cleanPhone = phoneNumber.replace(/\D/g, '')
+  if (!cleanPhone.startsWith('54')) cleanPhone = '54' + cleanPhone
+  const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(surveyText)}`
+
+  if (typeof window === 'undefined') {
+    return { success: false, error: 'WhatsApp local sólo disponible en cliente', messageId: whatsappUrl }
+  }
+
+  window.open(whatsappUrl, '_blank')
+  return { success: true, messageId: 'whatsapp-local-survey' }
 }
 
 /**
@@ -671,10 +695,10 @@ export async function sendSatisfactionSurvey(
   phoneNumber: string
 ): Promise<WazzupApiResponse> {
   try {
-    // ⛔ Verificar si WhatsApp está desactivado temporalmente
+    // ⛔ Wazzup suspendido: abrir WhatsApp local con la encuesta pre-cargada
     if (isWhatsAppDisabled()) {
-      console.warn('⛔ WhatsApp desactivado. Saltando encuesta de satisfacción.')
-      return { success: false, error: 'WhatsApp desactivado temporalmente' }
+      console.warn('⛔ Wazzup suspendido. Abriendo encuesta vía WhatsApp local (wa.me).')
+      return sendSurveyViaLocalWhatsApp(phoneNumber)
     }
 
     console.log('📝 Enviando encuesta de satisfacción a:', phoneNumber)
@@ -756,10 +780,10 @@ export async function sendServiceOrderToGroup(
   config: WazzupConfig = DEFAULT_CONFIG
 ): Promise<WazzupApiResponse> {
   try {
-    // ⛔ Verificar si WhatsApp está desactivado temporalmente
+    // ⛔ Wazzup suspendido: no hay deep-link público para grupos, envío al grupo queda deshabilitado
     if (isWhatsAppDisabled()) {
-      console.warn('⛔ WhatsApp desactivado. Saltando envío al grupo.')
-      return { success: false, error: 'WhatsApp desactivado temporalmente' }
+      console.warn('⛔ Wazzup suspendido. El envío al grupo no tiene fallback local (wa.me no soporta grupos).')
+      return { success: false, error: 'Envío al grupo suspendido (Wazzup deshabilitado, sin fallback para grupos)' }
     }
 
     console.log('👥 Enviando orden de servicio al grupo de WhatsApp...')
