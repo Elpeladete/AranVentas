@@ -64,12 +64,162 @@ let cachedActiveChannel: WazzupChannel | null = null
 let cacheTimestamp: number = 0
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos en milisegundos
 
+// ⏱️ Timeout para llamadas a la API de Wazzup (evita bloqueos si la API no responde)
+const WAZZUP_TIMEOUT_MS = 8000 // 8 segundos
+
+/**
+ * Fetch con timeout para evitar que llamadas colgadas bloqueen el proceso de envío
+ */
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = WAZZUP_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Verifica si WhatsApp está desactivado temporalmente.
+ * ⛔ SUSPENDIDO MANUALMENTE: envíos de WhatsApp deshabilitados por problemas con la cuenta de Wazzup.
+ *    Para reactivar: poner WHATSAPP_SUSPENDED en false (o eliminar la constante y volver a leer la env var).
+ * Fallback: si WHATSAPP_SUSPENDED es false, respeta NEXT_PUBLIC_DISABLE_WHATSAPP=true en .env.local
+ */
+const WHATSAPP_SUSPENDED = true
+export function isWhatsAppDisabled(): boolean {
+  if (WHATSAPP_SUSPENDED) return true
+  return process.env.NEXT_PUBLIC_DISABLE_WHATSAPP === 'true'
+}
+
 // Función para verificar si Wazzup está configurado correctamente
 function isWazzupConfigured(config: WazzupConfig = DEFAULT_CONFIG): boolean {
   return config.apiKey !== 'YOUR_WAZZUP_API_KEY' && 
          config.channelId !== 'YOUR_CHANNEL_ID' &&
          config.apiKey.length > 10 && 
          config.channelId.length > 10
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Diagnóstico de WhatsApp
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type WhatsAppDiagnosticStatus =
+  | 'ok'
+  | 'disabled'
+  | 'not_configured'
+  | 'timeout'
+  | 'auth_error'
+  | 'blocked'
+  | 'rate_limit'
+  | 'server_error'
+  | 'no_channels'
+  | 'unknown'
+
+export interface WhatsAppDiagnostic {
+  status: WhatsAppDiagnosticStatus
+  /** Mensaje corto para mostrar al usuario */
+  message: string
+  /** Detalle técnico adicional (para logs/consola) */
+  detail?: string
+  /** Canales disponibles con su estado */
+  channels?: Array<{ name: string; status: string }>
+}
+
+/**
+ * Verifica el estado completo de WhatsApp / Wazzup y devuelve un diagnóstico
+ * detallado indicando exactamente por qué no se pueden enviar mensajes.
+ *
+ * Se puede llamar antes de enviar para informar al usuario, o después de un
+ * fallo para mostrar la causa real del error.
+ */
+export async function diagnoseWhatsApp(config: WazzupConfig = DEFAULT_CONFIG): Promise<WhatsAppDiagnostic> {
+  // 1. Flag de desactivación manual
+  if (isWhatsAppDisabled()) {
+    return {
+      status: 'disabled',
+      message: 'WhatsApp desactivado manualmente',
+      detail: 'Variable NEXT_PUBLIC_DISABLE_WHATSAPP=true en .env.local'
+    }
+  }
+
+  // 2. Configuración básica
+  if (!isWazzupConfigured(config)) {
+    return {
+      status: 'not_configured',
+      message: 'Wazzup no está configurado',
+      detail: 'Falta API key o channel ID válidos'
+    }
+  }
+
+  // 3. Intentar conectar con la API
+  let rawChannels: any[] = []
+  try {
+    const response = await fetchWithTimeout(`${config.baseUrl}/v3/channels`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    }, 6000)
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '')
+      if (response.status === 401) {
+        return { status: 'auth_error', message: 'API key inválida o expirada', detail: `HTTP 401 — ${body}` }
+      }
+      if (response.status === 403) {
+        return { status: 'blocked', message: 'Cuenta bloqueada o sin permisos en Wazzup', detail: `HTTP 403 — ${body}` }
+      }
+      if (response.status === 429) {
+        return { status: 'rate_limit', message: 'Demasiadas solicitudes (rate limit)', detail: `HTTP 429 — ${body}` }
+      }
+      if (response.status >= 500) {
+        return { status: 'server_error', message: `Error interno de Wazzup (${response.status})`, detail: `HTTP ${response.status} — ${body}` }
+      }
+      return { status: 'unknown', message: `Respuesta inesperada de la API (${response.status})`, detail: `HTTP ${response.status}` }
+    }
+
+    const rawData = await response.json()
+    rawChannels = Array.isArray(rawData) ? rawData : (rawData.channels || rawData.data || [])
+
+  } catch (err) {
+    const isAbort = err instanceof Error && (err.name === 'AbortError' || err.message.includes('abort'))
+    if (isAbort) {
+      return { status: 'timeout', message: 'La API de Wazzup no respondió (timeout 6s)', detail: 'La solicitud fue cancelada por tiempo de espera' }
+    }
+    return {
+      status: 'unknown',
+      message: 'Error de red al conectar con Wazzup',
+      detail: err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  // 4. Verificar canales activos
+  const channelsSummary = rawChannels.map((ch: any) => ({
+    name: ch.name || ch.id || 'Sin nombre',
+    status: ch.status || ch.state || (ch.active ? 'active' : 'inactive')
+  }))
+
+  const activeStatuses = ['active', 'online', 'connected', 'ready']
+  const activeChannels = channelsSummary.filter(ch => activeStatuses.includes(ch.status))
+
+  if (activeChannels.length === 0) {
+    return {
+      status: 'no_channels',
+      message: channelsSummary.length === 0
+        ? 'No hay canales registrados en Wazzup'
+        : `Sin canales activos (${channelsSummary.length} canal(es) inactivo(s))`,
+      detail: channelsSummary.map(ch => `${ch.name}: ${ch.status}`).join(' | '),
+      channels: channelsSummary
+    }
+  }
+
+  return {
+    status: 'ok',
+    message: `${activeChannels.length} canal(es) activo(s): ${activeChannels.map(c => c.name).join(', ')}`,
+    channels: channelsSummary
+  }
 }
 
 /**
@@ -79,7 +229,7 @@ export async function getWazzupChannels(config: WazzupConfig = DEFAULT_CONFIG): 
   try {
     console.log('🔍 Obteniendo canales de Wazzup...')
 
-    const response = await fetch(`${config.baseUrl}/v3/channels`, {
+    const response = await fetchWithTimeout(`${config.baseUrl}/v3/channels`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${config.apiKey}`,
@@ -252,7 +402,7 @@ export async function sendWhatsAppText(
 
     console.log('📤 Payload para Wazzup:', payload)
 
-    const response = await fetch(`${config.baseUrl}/v3/message`, {
+    const response = await fetchWithTimeout(`${config.baseUrl}/v3/message`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -327,7 +477,7 @@ export async function sendWhatsAppImage(
 
     console.log('📤 Payload para imagen:', payload)
 
-    const response = await fetch(`${config.baseUrl}/v3/message`, {
+    const response = await fetchWithTimeout(`${config.baseUrl}/v3/message`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -371,6 +521,12 @@ export async function sendServiceOrderToWhatsApp(
   imageUrl?: string
 ): Promise<WazzupApiResponse> {
   try {
+    // ⛔ Verificar si WhatsApp está desactivado temporalmente
+    if (isWhatsAppDisabled()) {
+      console.warn('⛔ WhatsApp desactivado (NEXT_PUBLIC_DISABLE_WHATSAPP=true). Saltando envío.')
+      return { success: false, error: 'WhatsApp desactivado temporalmente' }
+    }
+
     console.log('📱 Iniciando envío por WhatsApp:', { 
       phoneNumber,
       orderNumber: orderData.numeroOrden,
@@ -515,6 +671,12 @@ export async function sendSatisfactionSurvey(
   phoneNumber: string
 ): Promise<WazzupApiResponse> {
   try {
+    // ⛔ Verificar si WhatsApp está desactivado temporalmente
+    if (isWhatsAppDisabled()) {
+      console.warn('⛔ WhatsApp desactivado. Saltando encuesta de satisfacción.')
+      return { success: false, error: 'WhatsApp desactivado temporalmente' }
+    }
+
     console.log('📝 Enviando encuesta de satisfacción a:', phoneNumber)
 
     // Verificar si Wazzup está configurado
@@ -594,6 +756,12 @@ export async function sendServiceOrderToGroup(
   config: WazzupConfig = DEFAULT_CONFIG
 ): Promise<WazzupApiResponse> {
   try {
+    // ⛔ Verificar si WhatsApp está desactivado temporalmente
+    if (isWhatsAppDisabled()) {
+      console.warn('⛔ WhatsApp desactivado. Saltando envío al grupo.')
+      return { success: false, error: 'WhatsApp desactivado temporalmente' }
+    }
+
     console.log('👥 Enviando orden de servicio al grupo de WhatsApp...')
 
     if (!isWazzupConfigured(config)) {
@@ -622,7 +790,7 @@ export async function sendServiceOrderToGroup(
         contentUri: imageUrl
       }
 
-      const imageResponse = await fetch(`${config.baseUrl}/v3/message`, {
+      const imageResponse = await fetchWithTimeout(`${config.baseUrl}/v3/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -649,7 +817,7 @@ export async function sendServiceOrderToGroup(
       text: orderText
     }
 
-    const textResponse = await fetch(`${config.baseUrl}/v3/message`, {
+    const textResponse = await fetchWithTimeout(`${config.baseUrl}/v3/message`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
