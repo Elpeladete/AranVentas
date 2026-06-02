@@ -30,14 +30,16 @@ export interface OdooConnectionResult {
 }
 
 /**
- * Verificar si Odoo está configurado
+ * Verificar si Odoo está configurado.
+ * En el navegador no exponemos credenciales: confiamos en que el servidor
+ * (rutas /api/odoo/*) tenga las env vars y devuelva el error si faltan.
  */
 export function isOdooConfigured(): boolean {
-  const url = process.env.NEXT_PUBLIC_ODOO_URL
-  const db = process.env.NEXT_PUBLIC_ODOO_DB
-  const username = process.env.NEXT_PUBLIC_ODOO_USERNAME
-  const password = process.env.NEXT_PUBLIC_ODOO_PASSWORD
-
+  if (typeof window !== 'undefined') return true
+  const url = process.env.ODOO_URL || process.env.NEXT_PUBLIC_ODOO_URL
+  const db = process.env.ODOO_DB || process.env.NEXT_PUBLIC_ODOO_DB
+  const username = process.env.ODOO_USERNAME || process.env.NEXT_PUBLIC_ODOO_USERNAME
+  const password = process.env.ODOO_PASSWORD || process.env.NEXT_PUBLIC_ODOO_PASSWORD
   return !!(url && db && username && password)
 }
 
@@ -45,11 +47,15 @@ export function isOdooConfigured(): boolean {
  * Obtener estado de configuración de Odoo
  */
 export function getOdooConfigStatus() {
+  const hasUrl = !!(process.env.ODOO_URL || process.env.NEXT_PUBLIC_ODOO_URL)
+  const hasDb = !!(process.env.ODOO_DB || process.env.NEXT_PUBLIC_ODOO_DB)
+  const hasUser = !!(process.env.ODOO_USERNAME || process.env.NEXT_PUBLIC_ODOO_USERNAME)
+  const hasPwd = !!(process.env.ODOO_PASSWORD || process.env.NEXT_PUBLIC_ODOO_PASSWORD)
   return {
-    url: !!process.env.NEXT_PUBLIC_ODOO_URL,
-    db: !!process.env.NEXT_PUBLIC_ODOO_DB,
-    username: !!process.env.NEXT_PUBLIC_ODOO_USERNAME,
-    password: !!process.env.NEXT_PUBLIC_ODOO_PASSWORD,
+    url: hasUrl,
+    db: hasDb,
+    username: hasUser,
+    password: hasPwd,
     configured: isOdooConfigured()
   }
 }
