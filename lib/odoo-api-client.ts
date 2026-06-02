@@ -396,6 +396,60 @@ export async function getContactAfipResponsibility(contactId: number): Promise<s
   }
 }
 
+/**
+ * Busca el ID de un estado/provincia en Odoo por nombre (res.country.state).
+ * Hace búsqueda ilike y devuelve el primero. Devuelve null si no encuentra.
+ */
+export async function findOdooStateId(name: string): Promise<number | null> {
+  const term = (name || '').trim()
+  if (!term) return null
+  try {
+    const response = await fetch('/api/odoo/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'res.country.state',
+        method: 'search_read',
+        args: [[['name', 'ilike', term]]],
+        kwargs: { fields: ['id', 'name'], limit: 1 },
+      }),
+    })
+    if (!response.ok) return null
+    const data = await response.json()
+    const row = Array.isArray(data?.result) ? data.result[0] : null
+    return row?.id ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Busca el ID del Tipo de Responsabilidad ARCA (ex AFIP) por nombre.
+ * Acepta 'Responsable Inscripto', 'IVA Responsable Inscripto', 'Monotributo', etc.
+ */
+export async function findOdooArcaResponsibilityId(name: string): Promise<number | null> {
+  const term = (name || '').trim()
+  if (!term) return null
+  try {
+    const response = await fetch('/api/odoo/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'l10n_ar.afip.responsibility.type',
+        method: 'search_read',
+        args: [[['name', 'ilike', term]]],
+        kwargs: { fields: ['id', 'name'], limit: 1 },
+      }),
+    })
+    if (!response.ok) return null
+    const data = await response.json()
+    const row = Array.isArray(data?.result) ? data.result[0] : null
+    return row?.id ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function createOdooContact(params: CreateContactParams): Promise<CreateContactResult> {
   try {
     console.log('📝 Creando nuevo contacto en Odoo:', params)
@@ -547,6 +601,10 @@ export interface CreateCompanyParams {
   vat?: string           // CUIT
   phone?: string         // Teléfono
   contactName?: string   // Nombre del contacto principal (opcional)
+  street?: string        // Domicilio
+  city?: string          // Ciudad (raro en AR; preferir state_id)
+  state_id?: number      // ID de res.country.state (lo que llamamos "Localidad")
+  l10n_ar_afip_responsibility_type_id?: number // ID del Tipo de Responsabilidad ARCA
 }
 
 export interface CreateCompanyResult {
@@ -599,6 +657,10 @@ export async function createOdooCompany(params: CreateCompanyParams): Promise<Cr
           name: params.name.trim(),
           vat: params.vat?.trim() || false,
           phone: params.phone?.trim() || false,
+          street: params.street?.trim() || false,
+          city: params.city?.trim() || false,
+          state_id: params.state_id || false,
+          l10n_ar_afip_responsibility_type_id: params.l10n_ar_afip_responsibility_type_id || false,
           is_company: true,
           type: 'contact'
         }]

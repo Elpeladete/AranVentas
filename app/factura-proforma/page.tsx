@@ -7,8 +7,21 @@ import { Button } from "@/components/ui/button"
 import {
   searchOdooContacts,
   getContactAfipResponsibility,
+  createOdooCompany,
+  findOdooStateId,
+  findOdooArcaResponsibilityId,
   type OdooContact,
 } from "@/lib/odoo-api-client"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 const TEMPLATE_WIDTH = 2550
 const TEMPLATE_HEIGHT = 3300
@@ -66,6 +79,72 @@ export default function FacturaProformaPage() {
   const [calibrating, setCalibrating] = useState(false)
   const [calibToolsVisible, setCalibToolsVisible] = useState(false)
   const [coords, setCoords] = useState<Coords>(() => ({ ...DEFAULT_COORDS } as Coords))
+
+  // Modal de alta de cliente
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createBusy, setCreateBusy] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [newCli, setNewCli] = useState({
+    name: "",
+    vat: "",
+    iva: "",
+    street: "",
+    city: "",
+    state: "",
+  })
+
+  const openCreateDialog = (prefillName: string) => {
+    setNewCli({ name: prefillName, vat: "", iva: "", street: "", city: "", state: "" })
+    setCreateError(null)
+    setCreateOpen(true)
+  }
+
+  const handleCreateCliente = async () => {
+    if (!newCli.name.trim() || newCli.name.trim().length < 2) {
+      setCreateError("La Razón Social es requerida (mín 2 caracteres)")
+      return
+    }
+    setCreateBusy(true)
+    setCreateError(null)
+    try {
+      // Lookups en Odoo: Provincia = state_id; IVA = Tipo Resp. ARCA
+      const [stateId, arcaId] = await Promise.all([
+        newCli.state.trim() ? findOdooStateId(newCli.state.trim()) : Promise.resolve(null),
+        newCli.iva.trim() ? findOdooArcaResponsibilityId(newCli.iva.trim()) : Promise.resolve(null),
+      ])
+
+      const res = await createOdooCompany({
+        name: newCli.name.trim(),
+        vat: newCli.vat.trim() || undefined,
+        street: newCli.street.trim() || undefined,
+        city: newCli.city.trim() || undefined,
+        state_id: stateId || undefined,
+        l10n_ar_afip_responsibility_type_id: arcaId || undefined,
+      })
+      if (!res.success) {
+        setCreateError(res.error || "No se pudo crear el cliente")
+        return
+      }
+      // Rellenar el formulario con lo ingresado
+      setCliente(newCli.name.trim())
+      setCuit(newCli.vat.trim())
+      setIva(newCli.iva.trim())
+      setDomicilio(newCli.street.trim())
+      setLocalidad(newCli.city.trim())
+      setProvincia(newCli.state.trim())
+      setCreateOpen(false)
+      if (newCli.state.trim() && !stateId) {
+        console.warn('Provincia no encontrada en Odoo (state):', newCli.state)
+      }
+      if (newCli.iva.trim() && !arcaId) {
+        console.warn('Tipo de Responsabilidad ARCA no encontrado:', newCli.iva)
+      }
+    } catch (e: any) {
+      setCreateError(e?.message || "Error inesperado")
+    } finally {
+      setCreateBusy(false)
+    }
+  }
 
   // Atajo oculto: Ctrl+Shift+C para mostrar/ocultar herramientas de calibración
   useEffect(() => {
@@ -150,7 +229,7 @@ export default function FacturaProformaPage() {
       }, 0),
     [items]
   )
-  const ivaMonto = subtotal * 0.21
+  const ivaMonto = subtotal * 0.105
   const total = subtotal + ivaMonto
 
   const fmt = (n: number) =>
@@ -224,6 +303,7 @@ export default function FacturaProformaPage() {
                 value={cliente}
                 onChange={setCliente}
                 onSelect={handleClienteSelect}
+                onCreateNew={openCreateDialog}
                 disabled={calibrating}
               />
             </FieldBox>
@@ -252,6 +332,9 @@ export default function FacturaProformaPage() {
               const desc = { ...coords.itemDescripcion, top: coords.itemDescripcion.top + offset }
               const neto = { ...coords.itemNeto, top: coords.itemNeto.top + offset }
               const onlyFirst = i === 0
+              const hasCant = row.cantidad.trim() !== ""
+              const missingDesc = hasCant && row.descripcion.trim() === ""
+              const missingNeto = hasCant && row.neto.trim() === ""
               return (
                 <div key={i}>
                   <FieldBox
@@ -278,6 +361,7 @@ export default function FacturaProformaPage() {
                       value={row.descripcion}
                       onChange={(v) => updateItem(i, "descripcion", v)}
                       disabled={calibrating}
+                      invalid={!calibrating && missingDesc}
                     />
                   </FieldBox>
                   <FieldBox
@@ -292,6 +376,7 @@ export default function FacturaProformaPage() {
                       align="right"
                       inputMode="decimal"
                       disabled={calibrating}
+                      invalid={!calibrating && missingNeto}
                     />
                   </FieldBox>
                 </div>
@@ -323,6 +408,85 @@ export default function FacturaProformaPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nuevo cliente</DialogTitle>
+            <DialogDescription>
+              Se creará en Odoo. Provincia se busca como State y la Resp. ARCA por nombre (ej. "Responsable Inscripto").
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="nc-name">Razón Social *</Label>
+              <Input
+                id="nc-name"
+                value={newCli.name}
+                onChange={(e) => setNewCli({ ...newCli, name: e.target.value })}
+                autoFocus
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="nc-vat">CUIT</Label>
+                <Input
+                  id="nc-vat"
+                  value={newCli.vat}
+                  onChange={(e) => setNewCli({ ...newCli, vat: e.target.value })}
+                  placeholder="20XXXXXXXXX"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="nc-iva">IVA / Resp. AFIP</Label>
+                <Input
+                  id="nc-iva"
+                  value={newCli.iva}
+                  onChange={(e) => setNewCli({ ...newCli, iva: e.target.value })}
+                  placeholder="Responsable Inscripto / Monotributo / ..."
+                />
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="nc-street">Domicilio</Label>
+              <Input
+                id="nc-street"
+                value={newCli.street}
+                onChange={(e) => setNewCli({ ...newCli, street: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="nc-city">Localidad</Label>
+                <Input
+                  id="nc-city"
+                  value={newCli.city}
+                  onChange={(e) => setNewCli({ ...newCli, city: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="nc-state">Provincia</Label>
+                <Input
+                  id="nc-state"
+                  value={newCli.state}
+                  onChange={(e) => setNewCli({ ...newCli, state: e.target.value })}
+                />
+              </div>
+            </div>
+            {createError && (
+              <p className="text-sm text-red-600">{createError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createBusy}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateCliente} disabled={createBusy}>
+              {createBusy ? "Creando..." : "Crear y usar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }
@@ -420,12 +584,14 @@ function Field({
   align = "left",
   inputMode,
   disabled,
+  invalid,
 }: {
   value: string
   onChange: (v: string) => void
   align?: "left" | "center" | "right"
   inputMode?: "text" | "decimal"
   disabled?: boolean
+  invalid?: boolean
 }) {
   return (
     <input
@@ -434,7 +600,7 @@ function Field({
       onChange={(e) => onChange(e.target.value)}
       inputMode={inputMode}
       disabled={disabled}
-      className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+      className={`h-full w-full rounded-[2px] border bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"}`}
       style={{ textAlign: align }}
     />
   )
@@ -444,24 +610,33 @@ function ClienteAutocomplete({
   value,
   onChange,
   onSelect,
+  onCreateNew,
   disabled,
 }: {
   value: string
   onChange: (v: string) => void
   onSelect: (c: OdooContact) => void
+  onCreateNew: (prefillName: string) => void
   disabled?: boolean
 }) {
   const [suggestions, setSuggestions] = useState<OdooContact[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [searched, setSearched] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const skipNextSearchRef = useRef(false)
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false
+      return
+    }
     const term = value.trim()
     if (term.length < 4) {
       setSuggestions([])
+      setSearched(false)
       setOpen(false)
       return
     }
@@ -469,13 +644,9 @@ function ClienteAutocomplete({
       setLoading(true)
       try {
         const res = await searchOdooContacts(term)
-        if (res.success) {
-          setSuggestions(res.contacts)
-          setOpen(true)
-        } else {
-          setSuggestions([])
-          setOpen(false)
-        }
+        setSuggestions(res.success ? res.contacts : [])
+        setSearched(true)
+        setOpen(true)
       } finally {
         setLoading(false)
       }
@@ -494,26 +665,31 @@ function ClienteAutocomplete({
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
+  const term = value.trim()
+  const canShowCreate = searched && term.length >= 4 && !loading
+
   return (
     <div ref={wrapRef} className="relative h-full w-full">
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        onFocus={() => (suggestions.length > 0 || canShowCreate) && setOpen(true)}
         disabled={disabled}
         placeholder="Escribí al menos 4 caracteres..."
         className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
       />
-      {open && (suggestions.length > 0 || loading) && (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-auto rounded-md border border-slate-300 bg-white text-sm shadow-lg">
+      {open && (loading || suggestions.length > 0 || canShowCreate) && (
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-auto rounded-md border border-slate-300 bg-white text-sm shadow-lg">
           {loading && <div className="px-2 py-1 text-xs text-muted-foreground">Buscando...</div>}
           {suggestions.map((c) => (
             <button
               key={c.id}
               type="button"
               onClick={() => {
+                skipNextSearchRef.current = true
                 onSelect(c)
+                setSuggestions([])
                 setOpen(false)
               }}
               className="block w-full border-b border-slate-100 px-2 py-1.5 text-left last:border-b-0 hover:bg-slate-50"
@@ -528,6 +704,18 @@ function ClienteAutocomplete({
               </div>
             </button>
           ))}
+          {canShowCreate && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onCreateNew(term)
+              }}
+              className="block w-full border-t border-slate-200 bg-blue-50 px-2 py-2 text-left text-sm font-medium text-blue-700 hover:bg-blue-100"
+            >
+              + Crear cliente nuevo {suggestions.length === 0 ? `"${term}"` : ""}
+            </button>
+          )}
         </div>
       )}
     </div>
