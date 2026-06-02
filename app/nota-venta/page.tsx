@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { FinalizeDialog } from "@/components/finalize-dialog"
+import { SignatureCanvas } from "@/components/signature-canvas"
 import {
   type Box,
   ClienteAutocomplete,
@@ -83,6 +84,9 @@ const DEFAULT_COORDS = {
 
   observaciones:      { top: 68.8, left: 33.5, width: 61.5, height: 9.5 },
   fechaPactada:       { top: 86.0, left: 12.5, width: 19.5, height: 2.3 },
+  firmaComprador:     { top: 79.7, left: 61.6, width: 12.0, height: 6.3 },
+  aclaracionComprador:{ top: 81.5, left: 73.0, width: 12.0, height: 2.3 },
+  dniComprador:       { top: 83.8, left: 85.0, width: 10.0, height: 2.3 },
 } as const
 
 type CoordsKey = keyof typeof DEFAULT_COORDS
@@ -128,6 +132,10 @@ export default function NotaVentaPage() {
 
   const [observaciones, setObservaciones] = useState("")
   const [fechaPactada, setFechaPactada] = useState("")
+  const [firmaComprador, setFirmaComprador] = useState("")
+  const [aclaracionComprador, setAclaracionComprador] = useState("")
+  const [dniComprador, setDniComprador] = useState("")
+  const [firmaOpen, setFirmaOpen] = useState(false)
 
   const [showGrid, setShowGrid] = useState(false)
   const [calibrating, setCalibrating] = useState(false)
@@ -544,6 +552,18 @@ export default function NotaVentaPage() {
             <FieldBox name="fechaPactada" box={coords.fechaPactada} calibrating={calibrating} onChange={(b) => updateBox("fechaPactada", b)}>
               <DateField value={fechaPactada} onChange={setFechaPactada} disabled={calibrating} fontSize="small" />
             </FieldBox>
+
+            <FieldBox name="firmaComprador" box={coords.firmaComprador} calibrating={calibrating} onChange={(b) => updateBox("firmaComprador", b)}>
+              <FirmaBox value={firmaComprador} onOpen={() => setFirmaOpen(true)} onClear={() => setFirmaComprador("")} disabled={calibrating} />
+            </FieldBox>
+
+            <FieldBox name="aclaracionComprador" box={coords.aclaracionComprador} calibrating={calibrating} onChange={(b) => updateBox("aclaracionComprador", b)}>
+              <Field value={aclaracionComprador} onChange={setAclaracionComprador} disabled={calibrating} fontSize="small" />
+            </FieldBox>
+
+            <FieldBox name="dniComprador" box={coords.dniComprador} calibrating={calibrating} onChange={(b) => updateBox("dniComprador", b)}>
+              <Field value={dniComprador} onChange={setDniComprador} disabled={calibrating} fontSize="small" />
+            </FieldBox>
           </div>
         </div>
 
@@ -605,6 +625,30 @@ export default function NotaVentaPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={firmaOpen} onOpenChange={setFirmaOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Firma del comprador</DialogTitle>
+            <DialogDescription>Firmá en el recuadro. La firma se guardará en la nota de venta.</DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <SignatureCanvas
+              value={firmaComprador}
+              onChange={(sig) => setFirmaComprador(sig)}
+              width={640}
+              height={260}
+              orderNumber={numero}
+              signatureType="cliente"
+              autoUpload={true}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFirmaOpen(false)}>Cerrar</Button>
+            <Button onClick={() => setFirmaOpen(false)} disabled={!firmaComprador}>Listo</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <FinalizeDialog
         open={finalizeOpen}
         onOpenChange={setFinalizeOpen}
@@ -615,6 +659,58 @@ export default function NotaVentaPage() {
         baseFilename={baseFilename}
       />
     </main>
+  )
+}
+
+function FirmaBox({
+  value,
+  onOpen,
+  onClear,
+  disabled,
+}: {
+  value: string
+  onOpen: () => void
+  onClear: () => void
+  disabled?: boolean
+}) {
+  if (value) {
+    return (
+      <div className="group relative h-full w-full rounded-[2px] border border-slate-700 bg-white">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={value} alt="Firma del comprador" className="h-full w-full object-contain" />
+        {!disabled && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 bg-white/70 opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              type="button"
+              onClick={onOpen}
+              data-capture-skip="1"
+              className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white shadow hover:bg-blue-700"
+            >
+              Editar
+            </button>
+            <button
+              type="button"
+              onClick={onClear}
+              data-capture-skip="1"
+              className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white shadow hover:bg-red-700"
+            >
+              Borrar
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onOpen}
+      disabled={disabled}
+      data-capture-skip="1"
+      className="flex h-full w-full items-center justify-center rounded-[2px] border border-slate-700 bg-white/40 text-[clamp(10px,1.2vw,14px)] text-slate-600 transition-colors hover:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+    >
+      ✍️ Firmar
+    </button>
   )
 }
 
