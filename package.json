@@ -1,6 +1,6 @@
 {
-  "name": "aran-services",
-  "version": "1.2.0",
+  "name": "aran-ventas",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "prebuild": "node scripts/generate-build-info.js",

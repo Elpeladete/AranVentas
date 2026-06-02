@@ -1,7 +1,7 @@
 {
-  "name": "ARAN Tecnologías - Órdenes de Servicio",
-  "short_name": "ARAN OS",
-  "description": "Sistema digital para la gestión de órdenes de servicio técnico",
+  "name": "ARAN Tecnologías - Notas de Venta",
+  "short_name": "ARAN Ventas",
+  "description": "Sistema digital para la generación de Notas de Venta y Facturas Proforma",
   "icons": [
     {
       "src": "/favicon-96x96.png",

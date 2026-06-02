@@ -1,30 +1,36 @@
-# Form app with image
+# AranVentas
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+Aplicación web/PWA para la generación de **Notas de Venta** y **Facturas Proforma** de ARAN Tecnologías.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/arantecnologias/v0-form-app-with-image)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/projects/NksaJvZMJ5a)
+Este proyecto está basado en [AranServices](https://github.com/Elpeladete/AranServices) (sistema de órdenes de servicio técnico) y comparte buena parte de la infraestructura: Next.js 14 (App Router), TypeScript, Tailwind, integración con Odoo, almacenamiento offline (IndexedDB) y soporte PWA.
 
-## Overview
+> Estado: en desarrollo inicial. Se está partiendo del esqueleto de AranServices y se adaptarán los flujos a Notas de Venta / Facturas Proforma.
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+## Stack
 
-## Deployment
+- Next.js 14 (App Router) + TypeScript
+- Tailwind CSS + shadcn/ui (Radix)
+- Odoo (JSON-RPC) para datos maestros y persistencia
+- IndexedDB para modo offline
+- PWA instalable en celular/tablet
 
-Your project is live at:
+## Scripts
 
-**[https://vercel.com/arantecnologias/v0-form-app-with-image](https://vercel.com/arantecnologias/v0-form-app-with-image)**
+```bash
+pnpm install
+pnpm dev            # desarrollo local
+pnpm dev-network    # exponer en LAN (host 0.0.0.0)
+pnpm build          # build de produccion
+pnpm start          # servir build
+```
 
-## Build your app
+## Variables de entorno
 
-Continue building your app on:
+Copiar `.env.example` (si existe) a `.env.local` y configurar credenciales de Odoo, ImgBB, etc.
+Las variables específicas heredadas de AranServices se irán limpiando a medida que se adapte el flujo.
 
-**[https://v0.app/chat/projects/NksaJvZMJ5a](https://v0.app/chat/projects/NksaJvZMJ5a)**
+## Diferencias con AranServices
 
-## How It Works
-
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+- Dominio: notas de venta / proformas en lugar de órdenes de servicio.
+- Sin integración con Wazzup/WhatsApp por ahora (se decidirá según necesidad).
+- Modelos de Odoo distintos (a definir: `sale.order`, `account.move`, etc.).

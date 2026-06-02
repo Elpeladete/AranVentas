@@ -15,10 +15,10 @@ import { UpdateNotification } from '@/components/update-notification'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'ARAN Tecnologías - Sistema de Órdenes de Servicio',
-  description: 'Sistema digital para la gestión de órdenes de servicio técnico de ARAN Tecnologías',
-  generator: 'AranServices',
-  keywords: ['ARAN', 'tecnologías', 'servicio técnico', 'órdenes', 'formulario'],
+  title: 'ARAN Tecnologías - Notas de Venta / Facturas Proforma',
+  description: 'Sistema digital para la generación de Notas de Venta y Facturas Proforma de ARAN Tecnologías',
+  generator: 'AranVentas',
+  keywords: ['ARAN', 'tecnologías', 'notas de venta', 'facturas proforma', 'ventas'],
 
   icons: {
     icon: [
