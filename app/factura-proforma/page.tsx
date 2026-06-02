@@ -675,7 +675,7 @@ function FieldBox({
   return (
     <div
       ref={ref}
-      className={`absolute ${calibrating && onChange ? "ring-2 ring-blue-400 ring-offset-1" : ""} ${elevated ? "z-20 hover:z-40 focus-within:z-40" : ""}`}
+      className={`absolute ${calibrating && onChange ? "ring-2 ring-blue-400 ring-offset-1" : ""} ${elevated ? "z-30 hover:z-40 focus-within:z-40" : ""}`}
       style={{
         top: `${box.top}%`,
         left: `${box.left}%`,
@@ -734,6 +734,9 @@ function Field({
   prefix?: string
   multiline?: boolean
 }) {
+  const isEmpty = !value
+  // Celdas vacías: sin fondo ni borde para no tapar campos vecinos (p.ej. descripción larga)
+  const emptyCls = isEmpty ? "border-transparent bg-transparent hover:border-slate-300/70 hover:bg-white/60 focus:border-primary focus:bg-white focus-within:border-primary focus-within:bg-white" : ""
   if (multiline) {
     return (
       <textarea
@@ -743,11 +746,10 @@ function Field({
         rows={1}
         ref={(el) => {
           if (!el) return
-          // auto-resize: la celda fija marca el min, el contenido lo expande
           el.style.height = "auto"
           el.style.height = el.scrollHeight + "px"
         }}
-        className={`relative z-10 block w-full resize-none rounded-[2px] border bg-white/60 px-1.5 py-0 text-[clamp(10px,1.35vw,15px)] leading-[1.15] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"}`}
+        className={`relative z-20 block w-full resize-none rounded-[2px] border bg-white/60 px-1.5 py-0 text-[clamp(10px,1.35vw,15px)] leading-[1.15] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
         style={{ textAlign: align, minHeight: "100%", whiteSpace: "pre-wrap", wordBreak: "break-word", overflow: "hidden" }}
       />
     )
@@ -755,9 +757,9 @@ function Field({
   if (prefix) {
     return (
       <div
-        className={`flex h-full w-full items-center rounded-[2px] border bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] transition-colors focus-within:border-primary focus-within:bg-white ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"}`}
+        className={`flex h-full w-full items-center rounded-[2px] border bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] transition-colors focus-within:border-primary focus-within:bg-white ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
       >
-        <span className="mr-1 select-none text-slate-500">{prefix}</span>
+        {!isEmpty && <span className="mr-1 select-none text-slate-500">{prefix}</span>}
         <input
           type="text"
           value={value}
@@ -777,7 +779,7 @@ function Field({
       onChange={(e) => onChange(e.target.value)}
       inputMode={inputMode}
       disabled={disabled}
-      className={`h-full w-full rounded-[2px] border bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"}`}
+      className={`h-full w-full rounded-[2px] border bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
       style={{ textAlign: align }}
     />
   )
