@@ -9,7 +9,6 @@ import { ClientOnly } from '@/components/client-only'
 import { OfflineStatus } from '@/components/offline-status'
 import { OfflineDataInitializer } from '@/components/offline-data-initializer'
 import { SyncStatusLogger } from '@/components/sync-status-logger'
-import { InstallPrompt } from '@/components/install-prompt'
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration'
 import { UpdateNotification } from '@/components/update-notification'
 import './globals.css'
@@ -77,7 +76,6 @@ export default function RootLayout({
           <OfflineStatus />
           <OfflineDataInitializer />
           <SyncStatusLogger />
-          <InstallPrompt />
           <ServiceWorkerRegistration />
           <UpdateNotification />
         </ClientOnly>

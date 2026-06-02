@@ -1,121 +1,58 @@
-"use client"
-import { ServiceOrderForm } from "@/components/service-order-form"
-import { OrdersDatabaseViewer } from "@/components/orders-database-viewer"
-import { Button } from "@/components/ui/button"
-import { useState, useRef, useEffect } from "react"
-import type { FormData } from "@/hooks/use-form-data"
-import type { OrderRecord } from "@/lib/local-database"
-import { getOdooClient, isOdooConfigured } from "@/lib/odoo-client"
+import Link from "next/link"
+import { Card } from "@/components/ui/card"
+import { FileText, Receipt } from "lucide-react"
+
+const options = [
+  {
+    href: "/nota-venta",
+    title: "Nota de Venta",
+    description: "Generar una nueva nota de venta",
+    Icon: Receipt,
+  },
+  {
+    href: "/factura-proforma",
+    title: "Factura Proforma",
+    description: "Generar una nueva factura proforma",
+    Icon: FileText,
+  },
+] as const
 
 export default function HomePage() {
-  const [showDatabase, setShowDatabase] = useState(false)
-  const [assignedCount, setAssignedCount] = useState(0)
-  const [bannerDismissed, setBannerDismissed] = useState(false)
-  const loadFormDataRef = useRef<((data: FormData) => void) | null>(null)
-  
-  // Verificar tareas asignadas al iniciar la app
-  useEffect(() => {
-    const checkAssignedTasks = async () => {
-      try {
-        if (!isOdooConfigured()) return
-
-        let tecnicoNombre = ''
-        try {
-          const savedData = localStorage.getItem('aran-form-data')
-          if (savedData) {
-            const parsed = JSON.parse(savedData)
-            tecnicoNombre = parsed.tecnicoNombre || ''
-          }
-        } catch { }
-
-        if (!tecnicoNombre) return
-
-        const client = getOdooClient()
-        const result = await client.searchRead(
-          'project.task',
-          [
-            ['stage_id', '=', 105],
-            ['x_studio_tecnico_asignado', 'ilike', tecnicoNombre]
-          ],
-          ['id'],
-          { limit: 50 }
-        )
-
-        if (result.success && Array.isArray(result.data) && result.data.length > 0) {
-          setAssignedCount(result.data.length)
-          console.log(`📋 ${result.data.length} tarea(s) asignada(s) encontrada(s) para ${tecnicoNombre}`)
-        }
-      } catch (error) {
-        console.warn('No se pudieron verificar tareas asignadas:', error)
-      }
-    }
-
-    checkAssignedTasks()
-  }, [])
-
-  const handleLoadFormData = (loadFn: (data: FormData) => void) => {
-    loadFormDataRef.current = loadFn
-  }
-  
-  const handleEditOrder = (order: OrderRecord) => {
-    if (loadFormDataRef.current) {
-      loadFormDataRef.current(order.formData)
-    }
-  }
-
-  const handleLoadFromOdoo = (data: FormData) => {
-    if (loadFormDataRef.current) {
-      loadFormDataRef.current(data)
-    }
-  }
-
-  const handleOpenPending = () => {
-    setBannerDismissed(true)
-    setShowDatabase(true)
-  }
-
   return (
     <main className="min-h-screen bg-background">
-      {/* Banner de tareas asignadas */}
-      {assignedCount > 0 && !bannerDismissed && (
-        <div 
-          className="animate-pulse-green cursor-pointer bg-green-500 text-white px-4 py-3 flex items-center justify-between shadow-lg"
-          onClick={handleOpenPending}
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">📋</span>
-            <div>
-              <p className="font-bold text-sm sm:text-base">
-                {assignedCount === 1 
-                  ? '¡Tenés 1 nuevo Servicio Asignado!' 
-                  : `¡Tenés ${assignedCount} nuevos Servicios Asignados!`}
-              </p>
-              <p className="text-xs sm:text-sm opacity-90">Tocá aquí para ver las órdenes pendientes</p>
-            </div>
-          </div>
-          <button 
-            className="text-white/80 hover:text-white text-xl font-bold px-2"
-            onClick={(e) => { e.stopPropagation(); setBannerDismissed(true) }}
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
+      <div className="mx-auto flex max-w-5xl flex-col items-center px-4 py-10 sm:py-14">
+        <div className="mb-10 flex flex-col items-center text-center">
+          <p className="text-xs font-medium uppercase tracking-[0.35em] text-muted-foreground">
+            ARAN Tecnologías
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+            ¿Qué querés crear?
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            Seleccioná el tipo de documento que vas a generar
+          </p>
         </div>
-      )}
 
-      <ServiceOrderForm 
-        onShowDatabase={() => setShowDatabase(true)}
-        onLoadFormData={handleLoadFormData}
-      />
-      
-      {/* Visualizador de base de datos */}
-      {showDatabase && (
-        <OrdersDatabaseViewer
-          onClose={() => setShowDatabase(false)}
-          onEditOrder={handleEditOrder}
-          onLoadFormData={handleLoadFromOdoo}
-        />
-      )}
+        <div className="grid w-full grid-cols-1 gap-6 sm:grid-cols-2">
+          {options.map(({ href, title, description, Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className="group rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <Card className="flex h-full flex-col items-center gap-4 p-8 text-center transition-all hover:shadow-lg group-hover:-translate-y-0.5 group-hover:border-primary/40">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                  <Icon className="h-10 w-10" strokeWidth={1.5} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">{title}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </div>
     </main>
   )
 }

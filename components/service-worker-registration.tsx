@@ -10,6 +10,17 @@ import { useEffect } from 'react'
 export function ServiceWorkerRegistration() {
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      // En desarrollo: desregistrar SW y limpiar caches para evitar servir versiones viejas con HMR
+      if (process.env.NODE_ENV !== 'production') {
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((r) => r.unregister())
+        })
+        if ('caches' in window) {
+          caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)))
+        }
+        return
+      }
+
       // Registrar el Service Worker
       navigator.serviceWorker
         .register('/service-worker.js')
