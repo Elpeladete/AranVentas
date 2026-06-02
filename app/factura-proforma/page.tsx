@@ -478,7 +478,7 @@ export default function FacturaProformaPage() {
                     box={desc}
                     calibrating={calibrating && onlyFirst}
                     onChange={onlyFirst ? (b) => updateBox("itemDescripcion", b) : undefined}
-                    elevated
+                    zIndex={100 - i}
                   >
                     <Field
                       value={row.descripcion}
@@ -633,6 +633,7 @@ function FieldBox({
   onChange,
   children,
   elevated,
+  zIndex,
 }: {
   name: string
   box: Box
@@ -640,6 +641,7 @@ function FieldBox({
   onChange?: (b: Box) => void
   children: React.ReactNode
   elevated?: boolean
+  zIndex?: number
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState<null | { kind: "move" | "resize"; startX: number; startY: number; orig: Box; lockY: boolean }>(null)
@@ -682,6 +684,7 @@ function FieldBox({
         width: `${box.width}%`,
         height: `${box.height}%`,
         cursor: calibrating && onChange ? "move" : "auto",
+        ...(zIndex !== undefined ? { zIndex } : {}),
       }}
       onPointerDown={(e) => {
         if (!calibrating || !onChange) return
