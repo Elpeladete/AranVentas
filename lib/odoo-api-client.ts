@@ -377,6 +377,67 @@ export interface CreateContactResult {
 }
 
 /**
+ * Lee datos extra de un contacto/empresa que no están en OdooContact base:
+ * email, mobile, country, contacto adicional.
+ */
+export interface OdooContactExtra {
+  email: string
+  mobile: string
+  country: string
+  child_name: string // primer hijo (contacto) si la empresa tiene
+  child_phone: string
+}
+
+export async function getContactExtraData(contactId: number): Promise<OdooContactExtra> {
+  const empty: OdooContactExtra = { email: '', mobile: '', country: '', child_name: '', child_phone: '' }
+  try {
+    const response = await fetch('/api/odoo/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'res.partner',
+        method: 'read',
+        args: [[contactId], ['email', 'mobile', 'country_id', 'child_ids']],
+      }),
+    })
+    if (!response.ok) return empty
+    const result = await response.json()
+    const row = Array.isArray(result?.result) ? result.result[0] : null
+    if (!row) return empty
+    const out: OdooContactExtra = {
+      email: row.email || '',
+      mobile: row.mobile || '',
+      country: Array.isArray(row.country_id) ? (row.country_id[1] || '') : '',
+      child_name: '',
+      child_phone: '',
+    }
+    const childIds = Array.isArray(row.child_ids) ? row.child_ids : []
+    if (childIds.length > 0) {
+      const childRes = await fetch('/api/odoo/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'res.partner',
+          method: 'read',
+          args: [[childIds[0]], ['name', 'phone', 'mobile']],
+        }),
+      })
+      if (childRes.ok) {
+        const cd = await childRes.json()
+        const cr = Array.isArray(cd?.result) ? cd.result[0] : null
+        if (cr) {
+          out.child_name = cr.name || ''
+          out.child_phone = cr.phone || cr.mobile || ''
+        }
+      }
+    }
+    return out
+  } catch {
+    return empty
+  }
+}
+
+/**
  * Lee la responsabilidad AFIP (IVA) de un contacto Odoo (localización argentina).
  * Devuelve el nombre del tipo (p.ej. "Responsable Inscripto") o '' si no disponible.
  */
@@ -902,3 +963,67 @@ export async function attachFileToLead(params: {
   })
   return { attachmentId, messageId }
 }
+
+// ============================================================================
+// Productos (product.product) - usado en Nota de Venta
+// ============================================================================
+
+export interface OdooProduct {
+  id: number
+  default_code: string // código interno
+  name: string
+  list_price: number // precio de lista
+  uom_name?: string
+}
+
+export async function searchOdooProducts(term: string, limit = 20): Promise<OdooProduct[]> {
+  const t = term.trim()
+  if (t.length < 2) return []
+  const domain: any[] = ["|", ["default_code", "ilike", t], ["name", "ilike", t]]
+  const rows = await odooExecute<any[]>("product.product", "search_read", [domain], {
+    fields: ["id", "default_code", "name", "list_price", "uom_name"],
+    limit,
+    order: "default_code asc, name asc",
+  })
+  return (rows || []).map((r) => ({
+    id: r.id,
+    default_code: r.default_code || "",
+    name: r.name || "",
+    list_price: typeof r.list_price === "number" ? r.list_price : 0,
+    uom_name: r.uom_name || undefined,
+  }))
+}
+
+// ============================================================================
+// Empleados (hr.employee) - usado para Asesor comercial
+// ============================================================================
+
+export interface OdooEmployee {
+  id: number
+  name: string
+  work_email?: string
+  job_title?: string
+}
+
+let _employeesCache: { ts: number; rows: OdooEmployee[] } | null = null
+
+export async function listOdooEmployees(forceRefresh = false): Promise<OdooEmployee[]> {
+  const now = Date.now()
+  if (!forceRefresh && _employeesCache && now - _employeesCache.ts < 5 * 60_000) {
+    return _employeesCache.rows
+  }
+  const rows = await odooExecute<any[]>("hr.employee", "search_read", [[["active", "=", true]]], {
+    fields: ["id", "name", "work_email", "job_title"],
+    limit: 500,
+    order: "name asc",
+  })
+  const list = (rows || []).map((r) => ({
+    id: r.id,
+    name: r.name || "",
+    work_email: r.work_email || undefined,
+    job_title: r.job_title || undefined,
+  }))
+  _employeesCache = { ts: now, rows: list }
+  return list
+}
+

@@ -478,7 +478,7 @@ export default function FacturaProformaPage() {
                     box={desc}
                     calibrating={calibrating && onlyFirst}
                     onChange={onlyFirst ? (b) => updateBox("itemDescripcion", b) : undefined}
-                    zIndex={100 - i}
+                    zIndex={30 - i}
                   >
                     <Field
                       value={row.descripcion}
