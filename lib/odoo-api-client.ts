@@ -781,3 +781,118 @@ export async function createOdooCompany(params: CreateCompanyParams): Promise<Cr
 
 // Mantener compatibilidad con la API anterior
 export const authenticateOdoo = testOdooConnection
+
+// =====================================================================
+// CRM: Oportunidades (crm.lead) + Attachments al chatter
+// =====================================================================
+
+export interface OdooLead {
+  id: number
+  name: string
+  partner_id: number | false
+  partner_name?: string
+  stage_name?: string
+  expected_revenue?: number
+  probability?: number
+  date_open?: string | false
+  active: boolean
+  type: string // 'opportunity' | 'lead'
+  // estado calculado
+  status: "open" | "won" | "lost"
+}
+
+async function odooExecute<T = any>(model: string, method: string, args: any[] = [], kwargs: any = {}): Promise<T> {
+  const response = await fetch("/api/odoo/execute", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, method, args, kwargs }),
+  })
+  if (!response.ok) throw new Error(`Odoo HTTP ${response.status}`)
+  const data = await response.json()
+  if (data.error) throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error))
+  return data.result as T
+}
+
+/**
+ * Lista oportunidades del CRM relacionadas con un partner (cliente o sus contactos).
+ * Incluye won/lost. El llamador puede filtrar por status.
+ */
+export async function listOdooLeadsForPartner(partnerId: number): Promise<OdooLead[]> {
+  if (!partnerId) return []
+  // Incluir partners hijos: buscamos por commercial_partner_id si es empresa, o por partner_id directo.
+  const domain: any[] = [
+    "|",
+    ["partner_id", "=", partnerId],
+    ["partner_id.commercial_partner_id", "=", partnerId],
+  ]
+  const rows = await odooExecute<any[]>("crm.lead", "search_read", [domain], {
+    fields: ["id", "name", "partner_id", "stage_id", "expected_revenue", "probability", "date_open", "active", "type", "won_status"],
+    limit: 200,
+    order: "date_open desc, id desc",
+    context: { active_test: false }, // incluir lost (archived)
+  })
+  return (rows || []).map((r) => {
+    let status: OdooLead["status"] = "open"
+    // En Odoo 17+: won_status existe ('won'|'lost'|'pending'). Fallback: probability/active.
+    if (r.won_status === "won" || r.probability === 100) status = "won"
+    else if (r.won_status === "lost" || r.active === false) status = "lost"
+    return {
+      id: r.id,
+      name: r.name,
+      partner_id: Array.isArray(r.partner_id) ? r.partner_id[0] : r.partner_id,
+      partner_name: Array.isArray(r.partner_id) ? r.partner_id[1] : undefined,
+      stage_name: Array.isArray(r.stage_id) ? r.stage_id[1] : undefined,
+      expected_revenue: r.expected_revenue,
+      probability: r.probability,
+      date_open: r.date_open,
+      active: r.active,
+      type: r.type,
+      status,
+    }
+  })
+}
+
+/**
+ * Crea una nueva oportunidad asociada al partner.
+ */
+export async function createOdooLead(params: { name: string; partner_id: number; expected_revenue?: number }): Promise<number> {
+  const vals: any = {
+    name: params.name,
+    partner_id: params.partner_id,
+    type: "opportunity",
+  }
+  if (params.expected_revenue && params.expected_revenue > 0) vals.expected_revenue = params.expected_revenue
+  const id = await odooExecute<number>("crm.lead", "create", [vals])
+  return id
+}
+
+/**
+ * Adjunta un archivo (base64) al chatter de un crm.lead y publica un mensaje.
+ * `dataBase64` debe ser sólo el contenido base64 (sin prefijo "data:...;base64,").
+ */
+export async function attachFileToLead(params: {
+  leadId: number
+  filename: string
+  mimetype: string
+  dataBase64: string
+  message?: string
+}): Promise<{ attachmentId: number; messageId: number }> {
+  const attachmentId = await odooExecute<number>("ir.attachment", "create", [
+    {
+      name: params.filename,
+      datas: params.dataBase64,
+      res_model: "crm.lead",
+      res_id: params.leadId,
+      mimetype: params.mimetype,
+      type: "binary",
+    },
+  ])
+  const body = params.message || `Adjunto: ${params.filename}`
+  const messageId = await odooExecute<number>("crm.lead", "message_post", [[params.leadId]], {
+    body,
+    attachment_ids: [attachmentId],
+    message_type: "comment",
+    subtype_xmlid: "mail.mt_note",
+  })
+  return { attachmentId, messageId }
+}

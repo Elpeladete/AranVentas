@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { FinalizeDialog } from "@/components/finalize-dialog"
 
 const TEMPLATE_WIDTH = 2550
 const TEMPLATE_HEIGHT = 3300
@@ -80,6 +81,12 @@ export default function FacturaProformaPage() {
   const [calibToolsVisible, setCalibToolsVisible] = useState(false)
   const [coords, setCoords] = useState<Coords>(() => ({ ...DEFAULT_COORDS } as Coords))
 
+  // Cliente seleccionado en Odoo (id del partner para CRM/attachment)
+  const [selectedPartnerId, setSelectedPartnerId] = useState<number | null>(null)
+  // Finalizar
+  const [finalizeOpen, setFinalizeOpen] = useState(false)
+  const templateRef = useRef<HTMLDivElement>(null)
+
   // Modal de alta de cliente
   const [createOpen, setCreateOpen] = useState(false)
   const [createBusy, setCreateBusy] = useState(false)
@@ -132,6 +139,7 @@ export default function FacturaProformaPage() {
       setDomicilio(newCli.street.trim())
       setLocalidad(newCli.city.trim())
       setProvincia(newCli.state.trim())
+      if (res.company?.id) setSelectedPartnerId(res.company.id)
       setCreateOpen(false)
       if (newCli.state.trim() && !stateId) {
         console.warn('Provincia no encontrada en Odoo (state):', newCli.state)
@@ -215,6 +223,7 @@ export default function FacturaProformaPage() {
     const partnerId = c.is_company
       ? c.id
       : (Array.isArray(c.parent_id) ? (c.parent_id as [number, string])[0] : (c.parent_id as number)) || c.id
+    setSelectedPartnerId(partnerId)
     try {
       const resp = await getContactAfipResponsibility(partnerId)
       if (resp) setIva(resp)
@@ -235,6 +244,113 @@ export default function FacturaProformaPage() {
   const fmt = (n: number) =>
     n > 0 ? n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"
 
+  // Antes de capturar, html-to-image NO renderiza el value de inputs/textareas
+  // correctamente porque clona los nodos. Convertimos cada input/textarea en un
+  // <div> hermano con el texto y los mismos estilos visuales, luego restauramos.
+  const overlayInputValues = (root: HTMLElement): (() => void) => {
+    const swapped: Array<{ input: HTMLElement; replacement: HTMLElement; prevDisplay: string }> = []
+    root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea").forEach((el) => {
+      if ((el as HTMLElement).dataset?.captureSkip) return
+      const val = el.value
+      const cs = window.getComputedStyle(el)
+      const isTextarea = el.tagName === "TEXTAREA"
+      const rect = el.getBoundingClientRect()
+      const replacement = document.createElement("div")
+      replacement.textContent = val
+      replacement.setAttribute("data-capture-overlay", "1")
+      Object.assign(replacement.style, {
+        display: "flex",
+        boxSizing: "border-box",
+        width: rect.width + "px",
+        height: rect.height + "px",
+        alignItems: isTextarea ? "flex-start" : "center",
+        justifyContent:
+          cs.textAlign === "right" ? "flex-end" : cs.textAlign === "center" ? "center" : "flex-start",
+        padding: cs.padding,
+        margin: cs.margin,
+        font: cs.font,
+        color: cs.color,
+        lineHeight: cs.lineHeight,
+        letterSpacing: cs.letterSpacing,
+        textAlign: cs.textAlign,
+        background: cs.backgroundColor,
+        border: cs.border,
+        borderRadius: cs.borderRadius,
+        whiteSpace: isTextarea ? "pre-wrap" : "nowrap",
+        wordBreak: "break-word",
+        overflow: "hidden",
+      } as Partial<CSSStyleDeclaration>)
+      const prevDisplay = el.style.display
+      el.style.display = "none"
+      el.parentNode?.insertBefore(replacement, el)
+      swapped.push({ input: el as HTMLElement, replacement, prevDisplay })
+    })
+    return () => {
+      swapped.forEach(({ input, replacement, prevDisplay }) => {
+        replacement.parentNode?.removeChild(replacement)
+        input.style.display = prevDisplay
+      })
+    }
+  }
+
+  // Reemplaza colores modernos (oklch/oklab/color-mix) inline.
+  // html-to-image los maneja mejor que html2canvas, pero por si acaso.
+  // (sin uso por ahora — html-to-image los soporta nativamente vía foreignObject)
+  // const sanitizeModernColors = (rootClone: HTMLElement) => { ... }
+
+  const captureNode = async (): Promise<HTMLCanvasElement> => {
+    const node = templateRef.current
+    if (!node) throw new Error("Template no disponible")
+    const cleanup = overlayInputValues(node)
+    try {
+      const { toCanvas } = await import("html-to-image")
+      const scale = Math.min(2, (TEMPLATE_WIDTH / node.clientWidth) || 2)
+      return await toCanvas(node, {
+        cacheBust: true,
+        pixelRatio: scale,
+        backgroundColor: "#ffffff",
+        skipFonts: false,
+        filter: (n) => {
+          // Excluir handles de calibración y nodos marcados (ej. input type=date oculto)
+          const el = n as HTMLElement
+          if (el?.dataset?.handle === "resize") return false
+          if (el?.dataset?.captureSkip) return false
+          return true
+        },
+        // html-to-image acepta `style` extra; lo dejamos vacío.
+        style: {},
+      })
+    } finally {
+      cleanup()
+    }
+  }
+
+  const capturePng = async (): Promise<string> => {
+    const canvas = await captureNode()
+    return canvas.toDataURL("image/png")
+  }
+
+  const capturePdf = async (): Promise<string> => {
+    const canvas = await captureNode()
+    const { jsPDF } = await import("jspdf")
+    const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" })
+    const pageW = pdf.internal.pageSize.getWidth()
+    const pageH = pdf.internal.pageSize.getHeight()
+    const ratio = canvas.height / canvas.width
+    let w = pageW
+    let h = pageW * ratio
+    if (h > pageH) {
+      h = pageH
+      w = pageH / ratio
+    }
+    const x = (pageW - w) / 2
+    const y = (pageH - h) / 2
+    pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", x, y, w, h, undefined, "FAST")
+    return pdf.output("datauristring")
+  }
+
+  const baseFilename = `FacturaProforma_${(cliente || "SinCliente").replace(/[^\w\-]+/g, "_")}_${fecha || new Date().toISOString().slice(0, 10)}`
+
   return (
     <main className="min-h-screen bg-muted/30">
       <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
@@ -243,7 +359,11 @@ export default function FacturaProformaPage() {
             <Button variant="outline" size="sm">← Volver al menú</Button>
           </Link>
           <h1 className="text-sm font-medium sm:text-base">Factura Proforma</h1>
-          {calibToolsVisible ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => setFinalizeOpen(true)}>
+              Terminar y enviar
+            </Button>
+            {calibToolsVisible ? (
             <div className="flex flex-wrap gap-2">
               <Button
                 variant={showGrid ? "default" : "outline"}
@@ -267,8 +387,9 @@ export default function FacturaProformaPage() {
               )}
             </div>
           ) : (
-            <div className="w-[120px]" />
-          )}
+              <div className="w-[120px]" />
+            )}
+          </div>
         </div>
         {calibrating && (
           <div className="border-t bg-amber-50 px-4 py-2 text-xs text-amber-900">
@@ -279,6 +400,7 @@ export default function FacturaProformaPage() {
 
       <div className="mx-auto max-w-5xl px-2 py-4 sm:px-4 sm:py-6">
         <div
+          ref={templateRef}
           className="relative mx-auto w-full overflow-hidden rounded-md bg-white shadow-md"
           style={{ aspectRatio: `${TEMPLATE_WIDTH} / ${TEMPLATE_HEIGHT}` }}
         >
@@ -356,12 +478,14 @@ export default function FacturaProformaPage() {
                     box={desc}
                     calibrating={calibrating && onlyFirst}
                     onChange={onlyFirst ? (b) => updateBox("itemDescripcion", b) : undefined}
+                    elevated
                   >
                     <Field
                       value={row.descripcion}
                       onChange={(v) => updateItem(i, "descripcion", v)}
                       disabled={calibrating}
                       invalid={!calibrating && missingDesc}
+                      multiline
                     />
                   </FieldBox>
                   <FieldBox
@@ -377,6 +501,7 @@ export default function FacturaProformaPage() {
                       inputMode="decimal"
                       disabled={calibrating}
                       invalid={!calibrating && missingNeto}
+                      prefix="USD"
                     />
                   </FieldBox>
                 </div>
@@ -384,7 +509,7 @@ export default function FacturaProformaPage() {
             })}
 
             <FieldBox name="subtotal" box={coords.subtotal} calibrating={calibrating} onChange={(b) => updateBox("subtotal", b)}>
-              <Readonly value={fmt(subtotal)} />
+              <Readonly value={fmt(subtotal)} prefix="USD" />
             </FieldBox>
             <FieldBox name="ivaTotal" box={coords.ivaTotal} calibrating={calibrating} onChange={(b) => updateBox("ivaTotal", b)}>
               <Readonly value={fmt(ivaMonto)} />
@@ -487,6 +612,16 @@ export default function FacturaProformaPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <FinalizeDialog
+        open={finalizeOpen}
+        onOpenChange={setFinalizeOpen}
+        partnerId={selectedPartnerId}
+        partnerName={cliente}
+        capturePng={capturePng}
+        capturePdf={capturePdf}
+        baseFilename={baseFilename}
+      />
     </main>
   )
 }
@@ -497,12 +632,14 @@ function FieldBox({
   calibrating,
   onChange,
   children,
+  elevated,
 }: {
   name: string
   box: Box
   calibrating: boolean
   onChange?: (b: Box) => void
   children: React.ReactNode
+  elevated?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState<null | { kind: "move" | "resize"; startX: number; startY: number; orig: Box; lockY: boolean }>(null)
@@ -538,7 +675,7 @@ function FieldBox({
   return (
     <div
       ref={ref}
-      className={`absolute ${calibrating && onChange ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
+      className={`absolute ${calibrating && onChange ? "ring-2 ring-blue-400 ring-offset-1" : ""} ${elevated ? "z-10 hover:z-30 focus-within:z-30" : ""}`}
       style={{
         top: `${box.top}%`,
         left: `${box.left}%`,
@@ -585,6 +722,8 @@ function Field({
   inputMode,
   disabled,
   invalid,
+  prefix,
+  multiline,
 }: {
   value: string
   onChange: (v: string) => void
@@ -592,7 +731,45 @@ function Field({
   inputMode?: "text" | "decimal"
   disabled?: boolean
   invalid?: boolean
+  prefix?: string
+  multiline?: boolean
 }) {
+  if (multiline) {
+    return (
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        rows={1}
+        ref={(el) => {
+          if (!el) return
+          // auto-resize: la celda fija marca el min, el contenido lo expande
+          el.style.height = "auto"
+          el.style.height = el.scrollHeight + "px"
+        }}
+        className={`relative z-10 block w-full resize-none rounded-[2px] border bg-white/60 px-1.5 py-0 text-[clamp(10px,1.35vw,15px)] leading-[1.15] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"}`}
+        style={{ textAlign: align, minHeight: "100%", whiteSpace: "pre-wrap", wordBreak: "break-word", overflow: "hidden" }}
+      />
+    )
+  }
+  if (prefix) {
+    return (
+      <div
+        className={`flex h-full w-full items-center rounded-[2px] border bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] transition-colors focus-within:border-primary focus-within:bg-white ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"}`}
+      >
+        <span className="mr-1 select-none text-slate-500">{prefix}</span>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          inputMode={inputMode}
+          disabled={disabled}
+          className="h-full min-w-0 flex-1 bg-transparent outline-none disabled:cursor-move"
+          style={{ textAlign: align }}
+        />
+      </div>
+    )
+  }
   return (
     <input
       type="text"
@@ -600,7 +777,7 @@ function Field({
       onChange={(e) => onChange(e.target.value)}
       inputMode={inputMode}
       disabled={disabled}
-      className={`h-full w-full rounded-[2px] border bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"}`}
+      className={`h-full w-full rounded-[2px] border bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"}`}
       style={{ textAlign: align }}
     />
   )
@@ -677,7 +854,7 @@ function ClienteAutocomplete({
         onFocus={() => (suggestions.length > 0 || canShowCreate) && setOpen(true)}
         disabled={disabled}
         placeholder="Escribí al menos 4 caracteres..."
-        className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+        className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
       />
       {open && (loading || suggestions.length > 0 || canShowCreate) && (
         <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-auto rounded-md border border-slate-300 bg-white text-sm shadow-lg">
@@ -744,7 +921,7 @@ function DateField({
         value={formatted}
         readOnly
         disabled={disabled}
-        className="pointer-events-none h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] outline-none disabled:cursor-move disabled:bg-blue-50/40"
+        className="pointer-events-none h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] outline-none disabled:cursor-move disabled:bg-blue-50/40"
       />
       <input
         type="date"
@@ -753,17 +930,19 @@ function DateField({
         disabled={disabled}
         className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         aria-label="Fecha"
+        data-capture-skip="1"
       />
     </div>
   )
 }
 
-function Readonly({ value, bold = false }: { value: string; bold?: boolean }) {
+function Readonly({ value, bold = false, prefix }: { value: string; bold?: boolean; prefix?: string }) {
   return (
     <div
-      className={`flex h-full w-full items-center justify-end rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] ${bold ? "font-semibold" : ""}`}
+      className={`flex h-full w-full items-center rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] ${bold ? "font-semibold" : ""}`}
     >
-      {value}
+      {prefix && value !== "-" && <span className="mr-1 select-none text-slate-500">{prefix}</span>}
+      <span className="flex-1 text-right">{value}</span>
     </div>
   )
 }

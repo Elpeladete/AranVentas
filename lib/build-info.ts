@@ -54,7 +54,7 @@ export const getBuildInfo = (): BuildInfo => {
                       process.env.NODE_ENV || 
                       'development'
   
-  const version = process.env.npm_package_version || '1.2.0'
+  const version = generatedInfo?.version || '0.1.0'
   
   return {
     buildTime: generatedInfo?.buildTime || fallbackTime,
