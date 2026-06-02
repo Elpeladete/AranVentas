@@ -4,30 +4,35 @@ import Link from "next/link"
 import Image from "next/image"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
+import {
+  searchOdooContacts,
+  getContactAfipResponsibility,
+  type OdooContact,
+} from "@/lib/odoo-api-client"
 
 const TEMPLATE_WIDTH = 2550
 const TEMPLATE_HEIGHT = 3300
 const ROW_COUNT = 9
-const STORAGE_KEY = "aran-factura-proforma-coords-v1"
+const STORAGE_KEY = "aran-factura-proforma-coords-v2"
 
 type Box = { top: number; left: number; width: number; height: number }
 
 const DEFAULT_COORDS = {
-  fecha:           { top: 15.53, left: 65.42, width: 21.17, height: 3.00 },
-  cliente:         { top: 34.52, left: 40.44, width: 45.93, height: 2.09 },
-  cuit:            { top: 37.38, left: 40.44, width: 46.15, height: 2.00 },
-  iva:             { top: 40.34, left: 40.33, width: 46.49, height: 2.43 },
-  domicilio:       { top: 43.55, left: 40.33, width: 46.27, height: 2.17 },
-  localidad:       { top: 46.33, left: 40.33, width: 46.49, height: 2.26 },
-  provincia:       { top: 49.54, left: 40.10, width: 46.71, height: 2.35 },
-  condicionVenta:  { top: 52.32, left: 40.22, width: 46.27, height: 2.17 },
-  itemRow0:        { top: 57.85, left: 8.54,  width: 9.17,  height: 2.51 },
-  itemRowHeight:   2.7,
-  itemDescripcion: { top: 57.68, left: 18.99, width: 45.18, height: 2.43 },
-  itemNeto:        { top: 57.77, left: 64.68, width: 22.14, height: 2.34 },
-  subtotal:        { top: 82.79, left: 70.48, width: 15.78, height: 2.72 },
-  ivaTotal:        { top: 86.37, left: 70.48, width: 16.78, height: 3.33 },
-  total:           { top: 90.48, left: 70.71, width: 15.66, height: 3.50 },
+  fecha:           { top: 15.6, left: 65.4, width: 21.3, height: 2.50 },
+  cliente:         { top: 34, left: 40, width: 47, height: 2.50 },
+  cuit:            { top: 37, left: 40, width: 47, height: 2.50 },
+  iva:             { top: 40, left: 40, width: 47, height: 2.50 },
+  domicilio:       { top: 43, left: 40, width: 47, height: 2.50 },
+  localidad:       { top: 46, left: 40, width: 47, height: 2.50 },
+  provincia:       { top: 49, left: 40, width: 47, height: 2.50 },
+  condicionVenta:  { top: 52, left: 40, width: 47, height: 2.50 },
+  itemRow0:        { top: 57.5, left: 8.1, width: 10, height: 2.50 },
+  itemRowHeight:   2.76,
+  itemDescripcion: { top: 57.5, left: 18.5, width: 46, height: 2.5 },
+  itemNeto:        { top: 57.5, left: 65.3, width: 21.8, height: 2.5 },
+  subtotal:        { top: 83, left: 65.4, width: 21.3, height: 2.50 },
+  ivaTotal:        { top: 87, left: 65.4, width: 21.3, height: 2.50 },
+  total:           { top: 91, left: 65.4, width: 21.3, height: 2.50 },
 } as const
 
 type CoordsKey = keyof typeof DEFAULT_COORDS
@@ -44,14 +49,18 @@ const emptyRows = (): ItemRow[] =>
   Array.from({ length: ROW_COUNT }, () => ({ cantidad: "", descripcion: "", neto: "" }))
 
 export default function FacturaProformaPage() {
-  const [fecha, setFecha] = useState("")
+  const [fecha, setFecha] = useState<string>("")
+  useEffect(() => {
+    if (!fecha) setFecha(new Date().toISOString().slice(0, 10))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [cliente, setCliente] = useState("")
   const [cuit, setCuit] = useState("")
   const [iva, setIva] = useState("")
   const [domicilio, setDomicilio] = useState("")
   const [localidad, setLocalidad] = useState("")
   const [provincia, setProvincia] = useState("")
-  const [condicionVenta, setCondicionVenta] = useState("")
+  const [condicionVenta, setCondicionVenta] = useState("CONTADO")
   const [items, setItems] = useState<ItemRow[]>(emptyRows())
   const [showGrid, setShowGrid] = useState(false)
   const [calibrating, setCalibrating] = useState(false)
@@ -76,6 +85,7 @@ export default function FacturaProformaPage() {
   // Cargar coords guardadas
   useEffect(() => {
     try {
+      localStorage.removeItem("aran-factura-proforma-coords-v1")
       const raw = localStorage.getItem(STORAGE_KEY)
       if (raw) setCoords({ ...DEFAULT_COORDS, ...JSON.parse(raw) } as Coords)
     } catch {}
@@ -114,6 +124,22 @@ export default function FacturaProformaPage() {
       next[i] = { ...next[i], [key]: value }
       return next
     })
+  }
+
+  const handleClienteSelect = async (c: OdooContact) => {
+    setCliente(c.parent_name || c.name || "")
+    setCuit(c.vat || "")
+    setDomicilio(c.street || "")
+    setLocalidad(c.city || "")
+    setProvincia(c.state || "")
+    // El responsable AFIP suele estar a nivel empresa. Si el contacto tiene parent_id, usar ese.
+    const partnerId = c.is_company
+      ? c.id
+      : (Array.isArray(c.parent_id) ? (c.parent_id as [number, string])[0] : (c.parent_id as number)) || c.id
+    try {
+      const resp = await getContactAfipResponsibility(partnerId)
+      if (resp) setIva(resp)
+    } catch {}
   }
 
   const subtotal = useMemo(
@@ -190,11 +216,16 @@ export default function FacturaProformaPage() {
 
           <div className="absolute inset-0">
             <FieldBox name="fecha" box={coords.fecha} calibrating={calibrating} onChange={(b) => updateBox("fecha", b)}>
-              <Field value={fecha} onChange={setFecha} disabled={calibrating} />
+              <DateField value={fecha} onChange={setFecha} disabled={calibrating} />
             </FieldBox>
 
             <FieldBox name="cliente" box={coords.cliente} calibrating={calibrating} onChange={(b) => updateBox("cliente", b)}>
-              <Field value={cliente} onChange={setCliente} disabled={calibrating} />
+              <ClienteAutocomplete
+                value={cliente}
+                onChange={setCliente}
+                onSelect={handleClienteSelect}
+                disabled={calibrating}
+              />
             </FieldBox>
             <FieldBox name="cuit" box={coords.cuit} calibrating={calibrating} onChange={(b) => updateBox("cuit", b)}>
               <Field value={cuit} onChange={setCuit} disabled={calibrating} />
@@ -403,16 +434,146 @@ function Field({
       onChange={(e) => onChange(e.target.value)}
       inputMode={inputMode}
       disabled={disabled}
-      className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(10px,1.4vw,15px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+      className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
       style={{ textAlign: align }}
     />
+  )
+}
+
+function ClienteAutocomplete({
+  value,
+  onChange,
+  onSelect,
+  disabled,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onSelect: (c: OdooContact) => void
+  disabled?: boolean
+}) {
+  const [suggestions, setSuggestions] = useState<OdooContact[]>([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const term = value.trim()
+    if (term.length < 4) {
+      setSuggestions([])
+      setOpen(false)
+      return
+    }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const res = await searchOdooContacts(term)
+        if (res.success) {
+          setSuggestions(res.contacts)
+          setOpen(true)
+        } else {
+          setSuggestions([])
+          setOpen(false)
+        }
+      } finally {
+        setLoading(false)
+      }
+    }, 350)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [value])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!wrapRef.current) return
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  return (
+    <div ref={wrapRef} className="relative h-full w-full">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        disabled={disabled}
+        placeholder="Escribí al menos 4 caracteres..."
+        className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+      />
+      {open && (suggestions.length > 0 || loading) && (
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-auto rounded-md border border-slate-300 bg-white text-sm shadow-lg">
+          {loading && <div className="px-2 py-1 text-xs text-muted-foreground">Buscando...</div>}
+          {suggestions.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                onSelect(c)
+                setOpen(false)
+              }}
+              className="block w-full border-b border-slate-100 px-2 py-1.5 text-left last:border-b-0 hover:bg-slate-50"
+            >
+              <div className="font-medium">
+                {c.is_company ? "🏢" : "👤"} {c.name}
+                {c.parent_name && <span className="text-muted-foreground"> ({c.parent_name})</span>}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {c.vat && <span className="mr-2">CUIT: {c.vat}</span>}
+                {c.city && <span>{c.city}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DateField({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string
+  onChange: (v: string) => void
+  disabled?: boolean
+}) {
+  const formatted = value
+    ? (() => {
+        const [y, m, d] = value.split("-")
+        return d && m && y ? `${d}/${m}/${y}` : value
+      })()
+    : ""
+  return (
+    <div className="relative h-full w-full">
+      <input
+        type="text"
+        value={formatted}
+        readOnly
+        disabled={disabled}
+        className="pointer-events-none h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] outline-none disabled:cursor-move disabled:bg-blue-50/40"
+      />
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        aria-label="Fecha"
+      />
+    </div>
   )
 }
 
 function Readonly({ value, bold = false }: { value: string; bold?: boolean }) {
   return (
     <div
-      className={`flex h-full w-full items-center justify-end px-1.5 text-[clamp(10px,1.4vw,15px)] ${bold ? "font-semibold" : ""}`}
+      className={`flex h-full w-full items-center justify-end rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(13px,1.8vw,20px)] ${bold ? "font-semibold" : ""}`}
     >
       {value}
     </div>

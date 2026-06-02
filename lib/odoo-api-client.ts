@@ -370,6 +370,32 @@ export interface CreateContactResult {
   error?: string
 }
 
+/**
+ * Lee la responsabilidad AFIP (IVA) de un contacto Odoo (localización argentina).
+ * Devuelve el nombre del tipo (p.ej. "Responsable Inscripto") o '' si no disponible.
+ */
+export async function getContactAfipResponsibility(contactId: number): Promise<string> {
+  try {
+    const response = await fetch('/api/odoo/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'res.partner',
+        method: 'read',
+        args: [[contactId], ['l10n_ar_afip_responsibility_type_id']],
+      }),
+    })
+    if (!response.ok) return ''
+    const result = await response.json()
+    const row = Array.isArray(result?.result) ? result.result[0] : null
+    const val = row?.l10n_ar_afip_responsibility_type_id
+    if (Array.isArray(val) && val.length >= 2) return String(val[1] || '')
+    return ''
+  } catch {
+    return ''
+  }
+}
+
 export async function createOdooContact(params: CreateContactParams): Promise<CreateContactResult> {
   try {
     console.log('📝 Creando nuevo contacto en Odoo:', params)
