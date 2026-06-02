@@ -675,7 +675,7 @@ function FieldBox({
   return (
     <div
       ref={ref}
-      className={`absolute ${calibrating && onChange ? "ring-2 ring-blue-400 ring-offset-1" : ""} ${elevated ? "z-10 hover:z-30 focus-within:z-30" : ""}`}
+      className={`absolute ${calibrating && onChange ? "ring-2 ring-blue-400 ring-offset-1" : ""} ${elevated ? "z-20 hover:z-40 focus-within:z-40" : ""}`}
       style={{
         top: `${box.top}%`,
         left: `${box.left}%`,
