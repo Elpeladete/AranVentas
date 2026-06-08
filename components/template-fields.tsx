@@ -130,8 +130,8 @@ export function Field({
   const emptyCls = isEmpty
     ? "border-transparent bg-transparent hover:border-slate-300/70 hover:bg-white/60 focus:border-primary focus:bg-white focus-within:border-primary focus-within:bg-white"
     : ""
-  const fsRegular = fontSize === "small" ? "text-[clamp(10px,1.2vw,14px)]" : "text-[clamp(12px,1.62vw,18px)]"
-  const fsMulti = fontSize === "small" ? "text-[clamp(9px,1vw,12px)]" : "text-[clamp(10px,1.35vw,15px)]"
+  const fsRegular = fontSize === "small" ? "text-[clamp(6px,1.2cqw,14px)]" : "text-[clamp(7px,1.62cqw,18px)]"
+  const fsMulti = fontSize === "small" ? "text-[clamp(5px,1cqw,12px)]" : "text-[clamp(6px,1.35cqw,15px)]"
   if (multiline) {
     return (
       <textarea
@@ -197,7 +197,7 @@ export function DateField({
         return d && m && y ? `${d}/${m}/${y}` : value
       })()
     : ""
-  const fs = fontSize === "small" ? "text-[clamp(10px,1.2vw,14px)]" : "text-[clamp(12px,1.62vw,18px)]"
+  const fs = fontSize === "small" ? "text-[clamp(6px,1.2cqw,14px)]" : "text-[clamp(7px,1.62cqw,18px)]"
   return (
     <div className="relative h-full w-full">
       <input
@@ -233,7 +233,7 @@ export function Readonly({
   align?: "left" | "center" | "right"
   fontSize?: "regular" | "small"
 }) {
-  const fs = fontSize === "small" ? "text-[clamp(10px,1.2vw,14px)]" : "text-[clamp(12px,1.62vw,18px)]"
+  const fs = fontSize === "small" ? "text-[clamp(6px,1.2cqw,14px)]" : "text-[clamp(7px,1.62cqw,18px)]"
   const justify = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"
   return (
     <div

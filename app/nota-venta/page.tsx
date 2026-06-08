@@ -419,7 +419,7 @@ export default function NotaVentaPage() {
         <div
           ref={templateRef}
           className="relative mx-auto w-full overflow-hidden rounded-md bg-white shadow-md"
-          style={{ aspectRatio: `${TEMPLATE_WIDTH} / ${TEMPLATE_HEIGHT}` }}
+          style={{ aspectRatio: `${TEMPLATE_WIDTH} / ${TEMPLATE_HEIGHT}`, containerType: "inline-size" }}
         >
           <Image
             src="/images/nota-venta.jpg"
@@ -707,7 +707,7 @@ function FirmaBox({
       onClick={disabled ? undefined : onOpen}
       disabled={disabled}
       data-capture-skip="1"
-      className="flex h-full w-full items-center justify-center rounded-[2px] border border-slate-700 bg-white/40 text-[clamp(10px,1.2vw,14px)] text-slate-600 transition-colors hover:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+      className="flex h-full w-full items-center justify-center rounded-[2px] border border-slate-700 bg-white/40 text-[clamp(6px,1.2cqw,14px)] text-slate-600 transition-colors hover:bg-white disabled:cursor-move disabled:bg-blue-50/40"
     >
       ✍️ Firmar
     </button>
@@ -730,7 +730,7 @@ function AsesorSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1 text-[clamp(10px,1.2vw,14px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+      className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1 text-[clamp(6px,1.2cqw,14px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
     >
       <option value="">— Seleccionar asesor —</option>
       {employees.map((e) => (
@@ -755,7 +755,7 @@ function IvaSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className={`h-full w-full rounded-[2px] border bg-white/60 px-1 text-[clamp(10px,1.2vw,14px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${isEmpty ? "border-transparent bg-transparent" : "border-slate-300/70"}`}
+      className={`h-full w-full rounded-[2px] border bg-white/60 px-1 text-[clamp(6px,1.2cqw,14px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${isEmpty ? "border-transparent bg-transparent" : "border-slate-300/70"}`}
     >
       <option value="">—</option>
       <option value="21">21%</option>
@@ -830,7 +830,7 @@ function CodigoAutocomplete({
         onFocus={() => suggestions.length > 0 && setOpen(true)}
         disabled={disabled}
         placeholder="código…"
-        className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1 text-[clamp(10px,1.2vw,14px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+        className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1 text-[clamp(6px,1.2cqw,14px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
       />
       {open && (loading || suggestions.length > 0) && (
         <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-[280px] overflow-auto rounded-md border border-slate-300 bg-white text-sm shadow-lg">

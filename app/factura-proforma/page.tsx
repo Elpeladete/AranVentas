@@ -402,7 +402,7 @@ export default function FacturaProformaPage() {
         <div
           ref={templateRef}
           className="relative mx-auto w-full overflow-hidden rounded-md bg-white shadow-md"
-          style={{ aspectRatio: `${TEMPLATE_WIDTH} / ${TEMPLATE_HEIGHT}` }}
+          style={{ aspectRatio: `${TEMPLATE_WIDTH} / ${TEMPLATE_HEIGHT}`, containerType: "inline-size" }}
         >
           <Image
             src="/images/factura-proforma.jpg"
@@ -752,7 +752,7 @@ function Field({
           el.style.height = "auto"
           el.style.height = el.scrollHeight + "px"
         }}
-        className={`relative z-20 block w-full resize-none rounded-[2px] border bg-white/60 px-1.5 py-0 text-[clamp(10px,1.35vw,15px)] leading-[1.15] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
+        className={`relative z-20 block w-full resize-none rounded-[2px] border bg-white/60 px-1.5 py-0 text-[clamp(6px,1.35cqw,15px)] leading-[1.15] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
         style={{ textAlign: align, minHeight: "100%", whiteSpace: "pre-wrap", wordBreak: "break-word", overflow: "hidden" }}
       />
     )
@@ -760,7 +760,7 @@ function Field({
   if (prefix) {
     return (
       <div
-        className={`flex h-full w-full items-center rounded-[2px] border bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] transition-colors focus-within:border-primary focus-within:bg-white ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
+        className={`flex h-full w-full items-center rounded-[2px] border bg-white/60 px-1.5 text-[clamp(7px,1.62cqw,18px)] transition-colors focus-within:border-primary focus-within:bg-white ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
       >
         {!isEmpty && <span className="mr-1 select-none text-slate-500">{prefix}</span>}
         <input
@@ -782,7 +782,7 @@ function Field({
       onChange={(e) => onChange(e.target.value)}
       inputMode={inputMode}
       disabled={disabled}
-      className={`h-full w-full rounded-[2px] border bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
+      className={`h-full w-full rounded-[2px] border bg-white/60 px-1.5 text-[clamp(7px,1.62cqw,18px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
       style={{ textAlign: align }}
     />
   )
@@ -859,7 +859,7 @@ function ClienteAutocomplete({
         onFocus={() => (suggestions.length > 0 || canShowCreate) && setOpen(true)}
         disabled={disabled}
         placeholder="Escribí al menos 4 caracteres..."
-        className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+        className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(7px,1.62cqw,18px)] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
       />
       {open && (loading || suggestions.length > 0 || canShowCreate) && (
         <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-auto rounded-md border border-slate-300 bg-white text-sm shadow-lg">
@@ -926,7 +926,7 @@ function DateField({
         value={formatted}
         readOnly
         disabled={disabled}
-        className="pointer-events-none h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] outline-none disabled:cursor-move disabled:bg-blue-50/40"
+        className="pointer-events-none h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(7px,1.62cqw,18px)] outline-none disabled:cursor-move disabled:bg-blue-50/40"
       />
       <input
         type="date"
@@ -944,7 +944,7 @@ function DateField({
 function Readonly({ value, bold = false, prefix }: { value: string; bold?: boolean; prefix?: string }) {
   return (
     <div
-      className={`flex h-full w-full items-center rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(12px,1.62vw,18px)] ${bold ? "font-semibold" : ""}`}
+      className={`flex h-full w-full items-center rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 text-[clamp(7px,1.62cqw,18px)] ${bold ? "font-semibold" : ""}`}
     >
       {prefix && value !== "-" && <span className="mr-1 select-none text-slate-500">{prefix}</span>}
       <span className="flex-1 text-right">{value}</span>
