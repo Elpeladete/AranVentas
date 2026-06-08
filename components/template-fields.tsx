@@ -130,8 +130,12 @@ export function Field({
   const emptyCls = isEmpty
     ? "border-transparent bg-transparent hover:border-slate-300/70 hover:bg-white/60 focus:border-primary focus:bg-white focus-within:border-primary focus-within:bg-white"
     : ""
-  const fsRegular = fontSize === "small" ? "text-[clamp(6px,1.2cqw,14px)]" : "text-[clamp(7px,1.62cqw,18px)]"
-  const fsMulti = fontSize === "small" ? "text-[clamp(5px,1cqw,12px)]" : "text-[clamp(6px,1.35cqw,15px)]"
+  const fsRegular = fontSize === "small"
+    ? "text-[clamp(4px,0.9cqw,10px)] md:text-[clamp(5px,1.1cqw,12px)]"
+    : "text-[clamp(5px,1.2cqw,13px)] md:text-[clamp(6px,1.45cqw,16px)]"
+  const fsMulti = fontSize === "small"
+    ? "text-[clamp(3px,0.8cqw,9px)] md:text-[clamp(4px,0.9cqw,10px)]"
+    : "text-[clamp(4px,1cqw,11px)] md:text-[clamp(5px,1.2cqw,13px)]"
   if (multiline) {
     return (
       <textarea
@@ -144,7 +148,7 @@ export function Field({
           el.style.height = "auto"
           el.style.height = el.scrollHeight + "px"
         }}
-        className={`relative z-20 block w-full resize-none rounded-[2px] border bg-white/60 px-1.5 py-0 ${fsMulti} leading-[1.15] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
+        className={`relative z-20 block w-full resize-none rounded-[2px] border-[0.5px] md:border bg-white/60 px-1.5 py-0 ${fsMulti} leading-[1.15] outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
         style={{ textAlign: align, minHeight: "100%", whiteSpace: "pre-wrap", wordBreak: "break-word", overflow: "hidden" }}
       />
     )
@@ -152,7 +156,7 @@ export function Field({
   if (prefix) {
     return (
       <div
-        className={`flex h-full w-full items-center rounded-[2px] border bg-white/60 px-1.5 ${fsRegular} transition-colors focus-within:border-primary focus-within:bg-white ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
+        className={`flex h-full w-full items-center rounded-[2px] border-[0.5px] md:border bg-white/60 px-1.5 ${fsRegular} transition-colors focus-within:border-primary focus-within:bg-white ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
       >
         {!isEmpty && <span className="mr-1 select-none text-slate-500">{prefix}</span>}
         <input
@@ -174,7 +178,7 @@ export function Field({
       onChange={(e) => onChange(e.target.value)}
       inputMode={inputMode}
       disabled={disabled}
-      className={`h-full w-full rounded-[2px] border bg-white/60 px-1.5 ${fsRegular} outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
+      className={`h-full w-full rounded-[2px] border-[0.5px] md:border bg-white/60 px-1.5 ${fsRegular} outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${invalid ? "border-red-500 bg-red-50/60" : "border-slate-300/70"} ${emptyCls}`}
       style={{ textAlign: align }}
     />
   )
@@ -197,7 +201,9 @@ export function DateField({
         return d && m && y ? `${d}/${m}/${y}` : value
       })()
     : ""
-  const fs = fontSize === "small" ? "text-[clamp(6px,1.2cqw,14px)]" : "text-[clamp(7px,1.62cqw,18px)]"
+  const fs = fontSize === "small"
+    ? "text-[clamp(4px,0.9cqw,10px)] md:text-[clamp(5px,1.1cqw,12px)]"
+    : "text-[clamp(5px,1.2cqw,13px)] md:text-[clamp(6px,1.45cqw,16px)]"
   return (
     <div className="relative h-full w-full">
       <input
@@ -205,7 +211,7 @@ export function DateField({
         value={formatted}
         readOnly
         disabled={disabled}
-        className={`pointer-events-none h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 ${fs} outline-none disabled:cursor-move disabled:bg-blue-50/40`}
+        className={`pointer-events-none h-full w-full rounded-[2px] border-[0.5px] md:border border-slate-300/70 bg-white/60 px-1.5 ${fs} outline-none disabled:cursor-move disabled:bg-blue-50/40`}
       />
       <input
         type="date"
@@ -233,11 +239,13 @@ export function Readonly({
   align?: "left" | "center" | "right"
   fontSize?: "regular" | "small"
 }) {
-  const fs = fontSize === "small" ? "text-[clamp(6px,1.2cqw,14px)]" : "text-[clamp(7px,1.62cqw,18px)]"
+  const fs = fontSize === "small"
+    ? "text-[clamp(4px,0.9cqw,10px)] md:text-[clamp(5px,1.1cqw,12px)]"
+    : "text-[clamp(5px,1.2cqw,13px)] md:text-[clamp(6px,1.45cqw,16px)]"
   const justify = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"
   return (
     <div
-      className={`flex h-full w-full items-center ${justify} rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 ${fs} ${bold ? "font-semibold" : ""}`}
+      className={`flex h-full w-full items-center ${justify} rounded-[2px] border-[0.5px] md:border border-slate-300/70 bg-white/60 px-1.5 ${fs} ${bold ? "font-semibold" : ""}`}
     >
       {prefix && value !== "-" && <span className="mr-1 select-none text-slate-500">{prefix}</span>}
       <span className={align === "right" ? "flex-1 text-right" : ""}>{value}</span>
@@ -374,7 +382,9 @@ export function ClienteAutocomplete({
 
   const term = value.trim()
   const canShowCreate = searched && term.length >= 4 && !loading
-  const fs = fontSize === "small" ? "text-[clamp(10px,1.2vw,14px)]" : "text-[clamp(12px,1.62vw,18px)]"
+  const fs = fontSize === "small"
+    ? "text-[clamp(4px,0.9cqw,10px)] md:text-[clamp(5px,1.1cqw,12px)]"
+    : "text-[clamp(5px,1.2cqw,13px)] md:text-[clamp(6px,1.45cqw,16px)]"
 
   return (
     <div ref={wrapRef} className="relative h-full w-full">
@@ -385,7 +395,7 @@ export function ClienteAutocomplete({
         onFocus={() => (suggestions.length > 0 || canShowCreate) && setOpen(true)}
         disabled={disabled}
         placeholder="Escribí al menos 4 caracteres..."
-        className={`h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1.5 ${fs} outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40`}
+        className={`h-full w-full rounded-[2px] border-[0.5px] md:border border-slate-300/70 bg-white/60 px-1.5 ${fs} outline-none transition-colors focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40`}
       />
       {open && (loading || suggestions.length > 0 || canShowCreate) && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-auto rounded-md border border-slate-300 bg-white text-sm shadow-lg">

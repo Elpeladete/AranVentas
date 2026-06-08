@@ -42,55 +42,70 @@ import {
 const TEMPLATE_WIDTH = 3300
 const TEMPLATE_HEIGHT = 2550
 const ROW_COUNT = 8
-const STORAGE_KEY = "aran-nota-venta-coords-v1"
+const STORAGE_KEY = "aran-nota-venta-coords-v4"
 const AUTORIZA_FIJO = "Ing. Agr. Carlos Graffione"
 
 const DEFAULT_COORDS = {
-  numero:             { top: 14.5, left: 80.0, width: 15.0, height: 3.0 },
-  fecha:              { top: 18.5, left: 80.0, width: 15.0, height: 3.0 },
+  numero:             { top: 13.5, left: 80.0, width: 15.0, height: 3.0 },
+  fecha:              { top: 17.5, left: 80.0, width: 15.0, height: 3.0 },
 
-  razonSocial:        { top: 23.8, left: 12.0, width: 20.7, height: 2.0 },
-  domicilio:          { top: 25.7, left: 12.0, width: 20.7, height: 2.0 },
-  localidad:          { top: 27.6, left: 12.0, width: 20.7, height: 2.0 },
-  provincia:          { top: 29.5, left: 12.0, width: 20.7, height: 2.0 },
-  pais:               { top: 31.4, left: 12.0, width: 20.7, height: 2.0 },
+  razonSocial:        { top: 22.8, left: 12.0, width: 20.7, height: 2.0 },
+  domicilio:          { top: 24.7, left: 12.0, width: 20.7, height: 2.0 },
+  localidad:          { top: 26.6, left: 12.0, width: 20.7, height: 2.0 },
+  provincia:          { top: 28.5, left: 12.0, width: 20.7, height: 2.0 },
+  pais:               { top: 30.4, left: 12.0, width: 20.7, height: 2.0 },
 
-  cuit:               { top: 23.8, left: 46.8, width: 14.2, height: 2.0 },
-  telefono:           { top: 25.7, left: 46.8, width: 14.2, height: 2.0 },
-  contacto2:          { top: 27.6, left: 46.8, width: 14.2, height: 2.0 },
-  telefono2:          { top: 29.5, left: 46.8, width: 14.2, height: 2.0 },
-  email:              { top: 31.4, left: 46.8, width: 14.2, height: 2.0 },
+  cuit:               { top: 22.8, left: 46.8, width: 14.2, height: 2.0 },
+  telefono:           { top: 24.7, left: 46.8, width: 14.2, height: 2.0 },
+  contacto2:          { top: 26.6, left: 46.8, width: 14.2, height: 2.0 },
+  telefono2:          { top: 28.5, left: 46.8, width: 14.2, height: 2.0 },
+  email:              { top: 30.4, left: 46.8, width: 14.2, height: 2.0 },
 
-  condicionComercial: { top: 26.2, left: 61.4, width: 17.0, height: 3.0 },
-  recargoPct:         { top: 26.2, left: 80.0, width: 15.0, height: 3.0 },
-  asesor:             { top: 31.5, left: 61.4, width: 17.0, height: 2.5 },
+  condicionComercial: { top: 25.2, left: 61.4, width: 17.0, height: 3.0 },
+  recargoPct:         { top: 25.2, left: 80.0, width: 15.0, height: 3.0 },
+  asesor:             { top: 30.5, left: 61.4, width: 17.0, height: 2.5 },
 
-  itemRow0Codigo:     { top: 39.6, left: 3.6,  width: 8.5,  height: 3.3 },
+  itemRow0Codigo:     { top: 38.6, left: 3.6,  width: 8.5,  height: 3.3 },
   itemRowHeight:      3.3,
-  itemEquipo:         { top: 39.6, left: 11.9, width: 20.3, height: 3.3 },
-  itemCant:           { top: 39.6, left: 33.0, width: 4.0,  height: 3.3 },
-  itemPrecio:         { top: 39.6, left: 36.8, width: 9.9,  height: 3.3 },
-  itemIvaPct:         { top: 39.6, left: 56.5, width: 5.0,  height: 3.3 },
-  itemNeto:           { top: 39.6, left: 48.5, width: 7.7,  height: 3.3 },
-  itemIva:            { top: 39.6, left: 61.7, width: 7.7,  height: 3.3 },
-  itemFinal:          { top: 39.6, left: 69.9, width: 7.7,  height: 3.4 },
-  itemNetoFactura:    { top: 39.6, left: 78.7, width: 8.7,  height: 3.4 },
-  itemFinalFactura:   { top: 39.6, left: 87.3, width: 7.7,  height: 3.4 },
+  itemEquipo:         { top: 38.6, left: 11.9, width: 20.3, height: 3.3 },
+  itemCant:           { top: 38.6, left: 33.0, width: 4.0,  height: 3.3 },
+  itemPrecio:         { top: 38.6, left: 36.8, width: 9.9,  height: 3.3 },
+  itemIvaPct:         { top: 38.6, left: 56.5, width: 5.0,  height: 3.3 },
+  itemNeto:           { top: 38.6, left: 48.5, width: 7.7,  height: 3.3 },
+  itemIva:            { top: 38.6, left: 61.7, width: 7.7,  height: 3.3 },
+  itemFinal:          { top: 38.6, left: 69.9, width: 7.7,  height: 3.4 },
+  itemNetoFactura:    { top: 38.6, left: 78.7, width: 8.7,  height: 3.4 },
+  itemFinalFactura:   { top: 38.6, left: 87.3, width: 7.7,  height: 3.4 },
 
-  totalNeto:          { top: 65.8, left: 48.5, width: 7.7,  height: 3.0 },
-  totalFinal:         { top: 65.8, left: 61.7, width: 7.7,  height: 3.0 },
-  totalNetoFactura:   { top: 65.8, left: 78.7, width: 8.7,  height: 3.0 },
-  totalFinalFactura:  { top: 65.8, left: 87.3, width: 7.7,  height: 3.0 },
+  totalNeto:          { top: 64.8, left: 48.5, width: 7.7,  height: 3.0 },
+  totalFinal:         { top: 64.8, left: 61.7, width: 7.7,  height: 3.0 },
+  totalNetoFactura:   { top: 64.8, left: 78.7, width: 8.7,  height: 3.0 },
+  totalFinalFactura:  { top: 64.8, left: 87.3, width: 7.7,  height: 3.0 },
 
-  observaciones:      { top: 68.8, left: 33.5, width: 61.5, height: 9.5 },
-  fechaPactada:       { top: 86.0, left: 12.5, width: 19.5, height: 2.3 },
-  firmaComprador:     { top: 79.7, left: 61.6, width: 12.0, height: 6.3 },
-  aclaracionComprador:{ top: 81.5, left: 73.0, width: 12.0, height: 2.3 },
-  dniComprador:       { top: 83.8, left: 85.0, width: 10.0, height: 2.3 },
+  observaciones:      { top: 67.8, left: 33.5, width: 61.5, height: 9.5 },
+  fechaPactada:       { top: 85.0, left: 12.5, width: 19.5, height: 2.3 },
+  firmaComprador:     { top: 78.7, left: 61.6, width: 12.0, height: 6.3 },
+  aclaracionComprador:{ top: 80.5, left: 73.0, width: 12.0, height: 2.3 },
+  dniComprador:       { top: 82.8, left: 85.0, width: 10.0, height: 2.3 },
 } as const
 
 type CoordsKey = keyof typeof DEFAULT_COORDS
 type Coords = Record<Exclude<CoordsKey, "itemRowHeight">, Box> & { itemRowHeight: number }
+
+const DESKTOP_TABLET_TOP_OFFSET = 1
+
+const applyTopOffset = (base: Coords, topOffset: number): Coords => {
+  const next = { ...base } as Coords
+  ;(Object.keys(base) as CoordsKey[]).forEach((k) => {
+    if (k === "itemRowHeight") return
+    const b = base[k]
+    next[k] = {
+      ...b,
+      top: Math.max(0, Math.min(100 - b.height, b.top + topOffset)),
+    }
+  })
+  return next
+}
 
 type ItemRow = {
   codigo: string
@@ -180,7 +195,14 @@ export default function NotaVentaPage() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) setCoords({ ...DEFAULT_COORDS, ...JSON.parse(raw) } as Coords)
+      if (raw) {
+        setCoords({ ...DEFAULT_COORDS, ...JSON.parse(raw) } as Coords)
+        return
+      }
+
+      const isMobile = window.matchMedia("(max-width: 767px)").matches
+      const topOffset = isMobile ? 0 : DESKTOP_TABLET_TOP_OFFSET
+      setCoords(applyTopOffset({ ...DEFAULT_COORDS } as Coords, topOffset))
     } catch {}
   }, [])
 
@@ -198,7 +220,9 @@ export default function NotaVentaPage() {
   const resetCoords = () => {
     if (!confirm("¿Restablecer todas las posiciones a los valores por defecto?")) return
     localStorage.removeItem(STORAGE_KEY)
-    setCoords({ ...DEFAULT_COORDS } as Coords)
+    const isMobile = window.matchMedia("(max-width: 767px)").matches
+    const topOffset = isMobile ? 0 : DESKTOP_TABLET_TOP_OFFSET
+    setCoords(applyTopOffset({ ...DEFAULT_COORDS } as Coords, topOffset))
   }
 
   const copyCoords = async () => {
@@ -440,7 +464,7 @@ export default function NotaVentaPage() {
               <DateField value={fecha} onChange={setFecha} disabled={calibrating} fontSize="small" />
             </FieldBox>
 
-            <FieldBox name="razonSocial" box={coords.razonSocial} calibrating={calibrating} onChange={(b) => updateBox("razonSocial", b)}>
+            <FieldBox name="razonSocial" box={coords.razonSocial} calibrating={calibrating} onChange={(b) => updateBox("razonSocial", b)} elevated zIndex={80}>
               <ClienteAutocomplete value={cliente} onChange={setCliente} onSelect={handleClienteSelect} onCreateNew={openCreateDialog} disabled={calibrating} fontSize="small" />
             </FieldBox>
             <FieldBox name="domicilio" box={coords.domicilio} calibrating={calibrating} onChange={(b) => updateBox("domicilio", b)}>
@@ -707,7 +731,7 @@ function FirmaBox({
       onClick={disabled ? undefined : onOpen}
       disabled={disabled}
       data-capture-skip="1"
-      className="flex h-full w-full items-center justify-center rounded-[2px] border border-slate-700 bg-white/40 text-[clamp(6px,1.2cqw,14px)] text-slate-600 transition-colors hover:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+      className="flex h-full w-full items-center justify-center rounded-[2px] border-[0.5px] md:border border-slate-700 bg-white/40 text-[clamp(4px,0.9cqw,10px)] md:text-[clamp(5px,1.1cqw,12px)] text-slate-600 transition-colors hover:bg-white disabled:cursor-move disabled:bg-blue-50/40"
     >
       ✍️ Firmar
     </button>
@@ -730,7 +754,7 @@ function AsesorSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1 text-[clamp(6px,1.2cqw,14px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+      className="h-full w-full rounded-[2px] border-[0.5px] md:border border-slate-300/70 bg-white/60 px-1 text-[clamp(4px,0.9cqw,10px)] md:text-[clamp(5px,1.1cqw,12px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
     >
       <option value="">— Seleccionar asesor —</option>
       {employees.map((e) => (
@@ -755,7 +779,7 @@ function IvaSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className={`h-full w-full rounded-[2px] border bg-white/60 px-1 text-[clamp(6px,1.2cqw,14px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${isEmpty ? "border-transparent bg-transparent" : "border-slate-300/70"}`}
+      className={`h-full w-full rounded-[2px] border-[0.5px] md:border bg-white/60 px-1 text-[clamp(4px,0.9cqw,10px)] md:text-[clamp(5px,1.1cqw,12px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40 ${isEmpty ? "border-transparent bg-transparent" : "border-slate-300/70"}`}
     >
       <option value="">—</option>
       <option value="21">21%</option>
@@ -830,7 +854,7 @@ function CodigoAutocomplete({
         onFocus={() => suggestions.length > 0 && setOpen(true)}
         disabled={disabled}
         placeholder="código…"
-        className="h-full w-full rounded-[2px] border border-slate-300/70 bg-white/60 px-1 text-[clamp(6px,1.2cqw,14px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
+        className="h-full w-full rounded-[2px] border-[0.5px] md:border border-slate-300/70 bg-white/60 px-1 text-[clamp(4px,0.9cqw,10px)] md:text-[clamp(5px,1.1cqw,12px)] outline-none focus:border-primary focus:bg-white disabled:cursor-move disabled:bg-blue-50/40"
       />
       {open && (loading || suggestions.length > 0) && (
         <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-[280px] overflow-auto rounded-md border border-slate-300 bg-white text-sm shadow-lg">
